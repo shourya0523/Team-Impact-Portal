@@ -1,0 +1,30 @@
+{
+  "name": "@team-impact/portal",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@team-impact/contracts": "workspace:*",
+    "@team-impact/ui-tokens": "workspace:*",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.3.3",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "@vitejs/plugin-react": "^6.1.2",
+    "jsdom": "^30.1.2",
+    "vite": "^8.3.3",
+    "vitest": "^5.0.3"
+  }
+}
