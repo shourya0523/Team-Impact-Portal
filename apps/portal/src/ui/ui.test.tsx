@@ -1,10 +1,12 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { colors, contrastRatio } from '@team-impact/ui-tokens';
 import { sampleTeams } from '../fixtures';
 import { Button, Input, Logo, Sheet, TeamAvatar } from '.';
+
+afterEach(cleanup);
 
 describe('portal primitives', () => {
   it('Button fires onClick and respects disabled', () => {
@@ -33,7 +35,15 @@ describe('portal primitives', () => {
     render(<Logo size="lg" />);
     const img = screen.getByRole('img', { name: 'Team IMPACT' });
     expect(img.getAttribute('height')).toBe('96');
-    expect(img.getAttribute('width')).toBe('83');
+    expect(img.getAttribute('width')).toBe('84');
+    expect(img.getAttribute('src')).toBe('/logo.svg');
+  });
+
+  it('Logo dark variant uses the keyline file', () => {
+    render(<Logo variant="dark" />);
+    expect(screen.getByRole('img', { name: 'Team IMPACT' }).getAttribute('src')).toBe(
+      '/logo-dark.svg',
+    );
   });
 
   it('Sheet closes on Escape', () => {

@@ -39,6 +39,11 @@ export function TokenSample() {
           <Button label="Not now" variant="secondary" />
         </Card>
       </FadeSlideIn>
+      <FadeSlideIn delay={240}>
+        <Card variant="dark">
+          <Logo size="lg" variant="dark" />
+        </Card>
+      </FadeSlideIn>
       <Sheet visible={open} title="Request sent" onClose={() => setOpen(false)}>
         <Text variant="body" color="secondary">
           A coach will review it.

@@ -38,6 +38,11 @@ export const App = () => {
           </div>
         </Card>
       </FadeSlideIn>
+      <FadeSlideIn delay={240}>
+        <Card variant="dark">
+          <Logo size="lg" variant="dark" />
+        </Card>
+      </FadeSlideIn>
       <Sheet open={open} title="Request sent" onClose={() => setOpen(false)}>
         <Text variant="body" color="secondary">
           Staff will review it.

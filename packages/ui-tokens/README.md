@@ -41,12 +41,15 @@ Implemented per app (RN vs DOM), using only these tokens: `Text`, `Button`, `Inp
 
 ## Logo
 
-`apps/athlete/assets/logo.png` and `apps/portal/public/logo.png`: the official Team IMPACT logo,
-335 x 388 PNG with transparency, taken from Team IMPACT's own published PDF (the 2024 Game Day Gala
-sell sheet on teamimpact.org). Its colours are exactly `brand` navy and `red`. Render it with the
-`Logo` primitive (heights `layout.logo`, width from `layout.logoAspectRatio`). Use on light
-backgrounds only (no white keyline). Never recolour or redraw it; swap in the official SVG when
-Team IMPACT provides one.
+Official Team IMPACT logo, navy `brand` and `red` exactly. Render it with the `Logo` primitive:
+`size` (heights `layout.logo`) and `variant`:
+
+- `light`: the logo as supplied (it has a thin white outline). Light backgrounds, and dark ones at large sizes.
+- `dark`: adds a thicker white keyline. Use on dark or busy backgrounds and at small sizes.
+
+Both variants share one canvas (`layout.logoAspectRatio`), so swapping never shifts layout. The
+portal uses the SVGs in `apps/portal/public`; the Expo app uses 1x/2x/3x PNGs in `apps/athlete/assets`.
+Vector masters and how they were made: `docs/brand/README.md`. Never recolour or redraw the logo.
 
 ## Where things live
 

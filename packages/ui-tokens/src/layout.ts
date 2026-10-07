@@ -6,8 +6,8 @@ export const layout = {
   avatar: { sm: 32, md: 44, lg: 64 },
   /** Logo heights. Width follows the artwork's aspect ratio (`logoAspectRatio`). */
   logo: { sm: 40, md: 64, lg: 96 },
-  /** Width / height of the Team IMPACT logo artwork (335 x 388). */
-  logoAspectRatio: 335 / 388,
+  /** Width / height of the Team IMPACT logo canvas (1473 x 1693, shared by light and dark files). */
+  logoAspectRatio: 1473 / 1693,
   /** Largest content width on the portal and on tablet. */
   maxContentWidth: 720,
 } as const;

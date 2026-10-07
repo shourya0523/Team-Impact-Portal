@@ -4,7 +4,7 @@ export { Button, type ButtonProps } from './Button';
 export { Card, type CardProps } from './Card';
 export { FadeSlideIn } from './FadeSlideIn';
 export { Input, type InputProps } from './Input';
-export { Logo } from './Logo';
+export { Logo, type LogoProps } from './Logo';
 export { Sheet, type SheetProps } from './Sheet';
 export { Text, type TextProps } from './Text';
 export { ease, springTransition, transition } from './motion';
