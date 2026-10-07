@@ -48,8 +48,7 @@ primitive in each app. Do not redraw it.
 ## Where things live
 
 Tokens are platform-neutral here (plain numbers, strings, hex). Primitives and animation adapters
-depend on React Native or the DOM, so they live in each app (`apps/*/src/ui`). Notion TI-12 says
-primitives belong in `ui-tokens`; CLAUDE.md wins, and the ticket text should be updated.
+depend on React Native or the DOM, so they live in each app (`apps/*/src/ui`), as CLAUDE.md and Notion TI-12 both say.
 
 ## Lint
 

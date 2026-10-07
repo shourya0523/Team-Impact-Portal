@@ -11,7 +11,7 @@ Sprint board.
 - `apps/portal`: React 19 + Vite
 - `apps/api`: Fastify 5 + Drizzle + postgres-js. Auth is ours (argon2, signed cookies), no auth provider
 - `packages/contracts`: Zod 4 schemas shared by API and clients. No OpenAPI or codegen
-- `packages/ui-tokens`: plain numbers/hex only, must work on native, RN Web and the portal. Primitives (Button, Input, Card, Avatar, Badge, Sheet) are NOT here: they need RN or the DOM, so they live in `apps/athlete/src/ui` and `apps/portal/src/ui`, built only from these tokens (Notion TI-12 wording is outdated on this)
+- `packages/ui-tokens`: plain numbers/hex only, must work on native, RN Web and the portal. Primitives (Button, Input, Card, Avatar, Badge, Sheet) are NOT here: they need RN or the DOM, so they live in `apps/athlete/src/ui` and `apps/portal/src/ui`, built only from these tokens (matches Notion TI-12)
 - Hosting: DigitalOcean (App Platform, Managed Postgres, Valkey, Spaces). No provider-specific primitives
 
 ## Commands
