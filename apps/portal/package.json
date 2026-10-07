@@ -14,6 +14,7 @@
   "dependencies": {
     "@team-impact/contracts": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
+    "motion": "^14.0.0",
     "react": "19.2.3",
     "react-dom": "19.2.3"
   },
