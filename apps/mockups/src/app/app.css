@@ -1,0 +1,314 @@
+/* Mobile app mockup: small additions on top of shared/styles.css (layout only, no new motion). */
+.m-screen {
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 52px 20px 28px;
+}
+.m-screen.tabs {
+  padding-bottom: 112px;
+}
+.m-dark {
+  background: #0b0d10;
+  color: var(--ground);
+}
+.m-red {
+  background: var(--red);
+  color: #fff;
+}
+
+.choice {
+  min-height: 54px;
+  border-radius: 12px;
+  text-align: left;
+  padding: 7px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+  border: 1.5px solid var(--field-line);
+  background: #fff;
+  color: var(--ink);
+  cursor: pointer;
+}
+.choice .s {
+  font-size: 12px;
+  color: var(--muted);
+}
+.choice[aria-pressed='true'] {
+  border: 2px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+.choice[aria-pressed='true'] .s {
+  color: var(--on-navy);
+}
+.choice[disabled] {
+  border-color: var(--line-soft);
+  background: var(--ground);
+  color: #8a8f96;
+  cursor: not-allowed;
+}
+.choice[disabled] .s {
+  color: #8a8f96;
+}
+.choice.c {
+  align-items: center;
+  text-align: center;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.seg {
+  display: grid;
+  background: var(--line-soft);
+  border-radius: 12px;
+  padding: 4px;
+}
+.seg button {
+  min-height: 36px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.seg button[aria-selected='true'] {
+  background: #fff;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.inkchip {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1.5px solid var(--field-line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.inkchip[aria-pressed='true'] {
+  border: 2px solid var(--ink);
+  background: var(--ink);
+  color: var(--ground);
+  font-weight: 600;
+}
+.inkchip.sm {
+  min-height: 36px;
+  font-size: 14px;
+}
+
+.card-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  color: var(--ink);
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  text-decoration: none;
+}
+button.card-row {
+  cursor: pointer;
+}
+.lrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  width: 100%;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.lrow .v {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--muted);
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 16px;
+  font-size: 15px;
+}
+.kv > :first-child {
+  color: var(--muted);
+}
+.kv > :last-child {
+  font-weight: 600;
+  text-align: right;
+}
+.sec {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.rule-n {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--navy-tint);
+  color: var(--navy);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.datebox {
+  width: 56px;
+  flex-shrink: 0;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 0;
+}
+.datebox .mo {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+.datebox .dy {
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1;
+}
+.fab {
+  position: absolute;
+  right: 20px;
+  bottom: 104px;
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  border: 0;
+  background: var(--red);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 24px rgba(208, 33, 60, 0.35);
+  cursor: pointer;
+  z-index: 3;
+}
+.fab:hover {
+  background: var(--red-pressed);
+}
+.pdf {
+  width: 40px;
+  height: 48px;
+  border-radius: 6px;
+  background: var(--red-tint);
+  color: var(--danger);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.phone-dialog {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 190px;
+  background: #fff;
+  border-radius: 20px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  z-index: 6;
+  animation: pop 360ms var(--deal) both;
+}
+.swipe-card {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  top: 0;
+  height: 440px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--navy);
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(17, 20, 24, 0.25);
+  cursor: grab;
+  user-select: none;
+  touch-action: none;
+}
+.swipe-tag {
+  position: absolute;
+  top: 24px;
+  padding: 4px 12px;
+  border: 3px solid;
+  border-radius: 10px;
+  font-family: var(--display);
+  font-weight: 800;
+  font-size: 28px;
+  letter-spacing: 0.06em;
+}
+.side-persona {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.side-persona button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 6px 12px;
+  border-radius: 12px;
+  border: 1.5px solid var(--field-line);
+  background: #fff;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+.side-persona button[aria-pressed='true'] {
+  border: 2px solid var(--navy);
+  background: var(--navy);
+  color: #fff;
+}
+.side-persona button .s {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.8;
+}
+.swipe-card .bk {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--on-navy-muted);
+}
+/* Chrome's UA sheet gives <button> align-items: flex-start; the shared card needs its rows to stretch. */
+.phone .bcard {
+  align-items: stretch;
+}
+.phone-scroll > div > * {
+  flex: 1 0 auto;
+}
