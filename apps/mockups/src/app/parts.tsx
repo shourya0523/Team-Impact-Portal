@@ -349,7 +349,7 @@ export function PostCard({
               justifyContent: 'center',
             }}
           >
-            <img src="/logo.png" alt="" style={{ width: 22 }} />
+            <img src="./logo.png" alt="" style={{ width: 22 }} />
           </span>
           <span style={{ fontSize: 14, fontWeight: 600 }}>Team IMPACT</span>
           <span

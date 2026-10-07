@@ -12,6 +12,7 @@ const read = (): Route => (location.hash.replace(/^#\/?/, '').split('/')[0] as R
 
 function MockBar({ route }: { route: Route }) {
   const { reset } = useWorld();
+  const [armed, setArmed] = useState(false);
   const links: [Route, string][] = [
     ['', 'Overview'],
     ['app', 'Mobile app'],
@@ -21,7 +22,7 @@ function MockBar({ route }: { route: Route }) {
   return (
     <div className="mockbar" role="navigation" aria-label="Mockups">
       <img
-        src="/logo.png"
+        src="./logo.png"
         alt=""
         style={{ width: 20, background: '#fff', borderRadius: 4, padding: 2 }}
       />
@@ -33,18 +34,20 @@ function MockBar({ route }: { route: Route }) {
       <span className="sp" />
       <button
         onClick={() => {
-          if (confirmReset()) {
-            reset();
-            location.reload();
+          if (!armed) {
+            setArmed(true);
+            window.setTimeout(() => setArmed(false), 3000);
+            return;
           }
+          reset();
+          location.reload();
         }}
       >
-        Reset demo data
+        {armed ? 'Click again to reset' : 'Reset demo data'}
       </button>
     </div>
   );
 }
-const confirmReset = () => window.confirm('Reset all demo data?');
 
 function Root() {
   const [route, setRoute] = useState<Route>(read);

@@ -395,7 +395,7 @@ export function PostDetail() {
       <div className="row g10">
         {p.official ? (
           <span className="avatar" style={{ background: '#fff', border: '1px solid var(--line)' }}>
-            <img src="/logo.png" alt="" style={{ width: 26 }} />
+            <img src="./logo.png" alt="" style={{ width: 26 }} />
           </span>
         ) : (
           <Circle name={p.author} color={roleColor(p.role)} size={40} />

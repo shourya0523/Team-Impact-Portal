@@ -644,7 +644,7 @@ export function ExportCard() {
               {a.num}
             </div>
             <img
-              src="/logo.png"
+              src="./logo.png"
               alt=""
               style={{
                 position: 'absolute',

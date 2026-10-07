@@ -74,14 +74,14 @@ export const Logo = ({ size = 34, boxed = false }: { size?: number; boxed?: bool
   boxed ? (
     <span style={{ background: '#fff', borderRadius: 10, padding: 5, display: 'inline-flex' }}>
       <img
-        src="/logo.png"
+        src="./logo.png"
         alt="Team IMPACT"
         style={{ width: size, height: 'auto', display: 'block' }}
       />
     </span>
   ) : (
     <img
-      src="/logo.png"
+      src="./logo.png"
       alt="Team IMPACT"
       style={{ width: size, height: 'auto', display: 'block' }}
     />
@@ -397,7 +397,7 @@ export function BaseballCard({
             Athlete photo
             {showNum && <div className="num">{a.num}</div>}
             <img
-              src="/logo.png"
+              src="./logo.png"
               alt=""
               style={{
                 position: 'absolute',
