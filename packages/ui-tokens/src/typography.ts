@@ -1,81 +1,75 @@
 /**
- * Team Impact typography.
- *
- * Typeface: DM Sans
- * Weights used by the Figma design system:
- * 400 Regular, 500 Medium, 700 Bold
+ * Signing Day type scale. Barlow Condensed 800 uppercase for display, Barlow for UI.
+ * `letterSpacing` is in em; adapters convert to px for React Native. Line heights are px.
  */
-
 export const fontFamily = {
-  sans: 'DM Sans',
+  display: 'Barlow Condensed',
+  ui: 'Barlow',
 } as const;
 
 export const fontWeight = {
-  regular: '400',
-  medium: '500',
-  bold: '700',
+  regular: 400,
+  medium: 500,
+  semibold: 600,
+  display: 800,
 } as const;
 
+export interface TypeStyle {
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  fontWeight: number;
+  letterSpacing: number;
+  uppercase: boolean;
+}
+
+const display = (fontSize: number): TypeStyle => ({
+  fontFamily: fontFamily.display,
+  fontSize,
+  lineHeight: Math.round(fontSize * 0.95),
+  fontWeight: fontWeight.display,
+  letterSpacing: 0,
+  uppercase: true,
+});
+
 export const typography = {
-  displayLg: {
-    fontFamily: fontFamily.sans,
-    fontSize: 48,
-    lineHeight: 56,
-    fontWeight: fontWeight.bold,
+  display: {
+    xl: display(48),
+    lg: display(44),
+    md: display(34),
+    sm: display(32),
   },
-  headingLg: {
-    fontFamily: fontFamily.sans,
-    fontSize: 36,
-    lineHeight: 44,
-    fontWeight: fontWeight.bold,
-  },
-  headingMd: {
-    fontFamily: fontFamily.sans,
-    fontSize: 28,
-    lineHeight: 36,
-    fontWeight: fontWeight.bold,
-  },
-  headingSm: {
-    fontFamily: fontFamily.sans,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: fontWeight.bold,
-  },
-  bodyLg: {
-    fontFamily: fontFamily.sans,
-    fontSize: 18,
-    lineHeight: 28,
-    fontWeight: fontWeight.regular,
-  },
-  bodyMd: {
-    fontFamily: fontFamily.sans,
+  body: {
+    fontFamily: fontFamily.ui,
     fontSize: 16,
     lineHeight: 24,
     fontWeight: fontWeight.regular,
+    letterSpacing: 0,
+    uppercase: false,
   },
-  bodySm: {
-    fontFamily: fontFamily.sans,
+  small: {
+    fontFamily: fontFamily.ui,
     fontSize: 14,
     lineHeight: 20,
     fontWeight: fontWeight.regular,
-  },
-  labelLg: {
-    fontFamily: fontFamily.sans,
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: fontWeight.medium,
-  },
-  labelMd: {
-    fontFamily: fontFamily.sans,
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: fontWeight.medium,
+    letterSpacing: 0,
+    uppercase: false,
   },
   caption: {
-    fontFamily: fontFamily.sans,
-    fontSize: 12,
-    lineHeight: 16,
+    fontFamily: fontFamily.ui,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: fontWeight.regular,
+    letterSpacing: 0,
+    uppercase: false,
+  },
+  eyebrow: {
+    fontFamily: fontFamily.ui,
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: 0.12,
+    uppercase: true,
   },
 } as const;
 

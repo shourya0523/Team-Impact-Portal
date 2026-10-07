@@ -1,27 +1,32 @@
 /**
- * Design tokens shared by the Expo app, React Native Web and the Vite portal.
- * Plain numbers and hex strings only, so every token works on all three.
- *
- * TODO(TI-72): placeholder values. Replace with the palette and type scale derived
- * from Team Impact's brand once the design language is settled.
+ * Signing Day design tokens (TI-72), shared by the Expo app, React Native Web and the Vite portal.
+ * Plain numbers and strings only. Platform adapters (Reanimated, Motion, CSS) live with their app
+ * or in `css.ts`, and are derived from these values.
  */
-export const colors = {
-  primary: '#1F3A93',
-  primaryContrast: '#FFFFFF',
-  accent: '#F2A900',
-  background: '#FFFFFF',
-  surface: '#F5F6F8',
-  text: '#111827',
-  textMuted: '#4B5563',
-  border: '#E5E7EB',
-  danger: '#B91C1C',
-} as const;
+import { colors } from './colors';
+import { layout } from './layout';
+import { motion } from './motion';
+import { radius } from './radius';
+import { spacing } from './spacing';
+import { typography } from './typography';
 
-export const spacing = { xs: 4, sm: 8, md: 16, lg: 24, xl: 32 } as const;
+export { colors, type Colors } from './colors';
+export { spacing, type Spacing } from './spacing';
+export { radius, type Radius } from './radius';
+export { layout, type Layout } from './layout';
+export { typography, fontFamily, fontWeight, type Typography, type TypeStyle } from './typography';
+export { motion, duration, easing, spring, tilt, type Motion } from './motion';
+export {
+  contrastRatio,
+  contrastThreshold,
+  readableOn,
+  relativeLuminance,
+  textPairs,
+  uiPairs,
+  type ColorPair,
+} from './accessibility';
+export { resolveTeamColor, onTeamColor } from './team';
+export { tokensToCss } from './css';
 
-export const radius = { sm: 4, md: 8, lg: 16, pill: 999 } as const;
-
-export const fontSize = { sm: 13, md: 16, lg: 20, xl: 28 } as const;
-
-export const tokens = { colors, spacing, radius, fontSize } as const;
+export const tokens = { colors, spacing, radius, layout, typography, motion } as const;
 export type Tokens = typeof tokens;
