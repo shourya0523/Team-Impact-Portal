@@ -7,7 +7,6 @@ import type { PortalProps } from '../ctx';
 import {
   EMPTY,
   FILTER_KEYS,
-  activeGroups,
   cityOf,
   describeFilters,
   filterCount,
@@ -53,7 +52,6 @@ export default function Search(p: PortalProps) {
 
   const opts = filterOptions(world);
   const groups = officialGroups(world);
-  const idOn = activeGroups(world, f).length > 0;
   const results = sortResults(runSearch(world, f), sort);
   const saved = companyLists(world, p.company.id).find((l) => l.name === 'Saved');
 
@@ -220,7 +218,6 @@ export default function Search(p: PortalProps) {
             <h1 className="display d-40" aria-live="polite">
               {results.length} {results.length === 1 ? 'athlete' : 'athletes'}
             </h1>
-            {idOn && <Pill tone="warn">Affinity filter on · this search is logged</Pill>}
             <div className="row wrap g8" style={{ marginLeft: 'auto' }}>
               <label htmlFor="sort" className="sr-only">
                 Sort
