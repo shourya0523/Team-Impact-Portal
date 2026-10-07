@@ -63,6 +63,8 @@ export const textPairs: readonly ColorPair[] = [
   text('brand on surface', colors.brand, colors.surface),
   text('surface on brand', colors.surface, colors.brand),
   text('surface on brand pressed', colors.surface, colors.brandPressed),
+  text('surface on action (primary button)', colors.surface, colors.action),
+  text('surface on action pressed', colors.surface, colors.actionPressed),
   text('ink on line (neutral badge)', colors.ink, colors.line),
   text('warning text on warning bg', colors.warning.text, colors.warning.bg),
   text('card text on card surface', colors.surface, colors.card.surface),

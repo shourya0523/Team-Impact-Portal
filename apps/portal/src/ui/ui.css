@@ -108,12 +108,12 @@ body {
   min-height: var(--ti-size-button-height-lg);
 }
 .ti-button--primary {
-  background: var(--ti-color-brand);
+  background: var(--ti-color-action);
   color: var(--ti-color-surface);
 }
 .ti-button--primary:hover,
 .ti-button--primary:active {
-  background: var(--ti-color-brand-pressed);
+  background: var(--ti-color-action-pressed);
 }
 .ti-button--secondary {
   background: var(--ti-color-surface);

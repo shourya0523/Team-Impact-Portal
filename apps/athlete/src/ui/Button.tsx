@@ -28,7 +28,7 @@ export function Button({
         styles.base,
         { minHeight: layout.buttonHeight[size] },
         primary
-          ? { backgroundColor: pressed ? colors.brandPressed : colors.brand }
+          ? { backgroundColor: pressed ? colors.actionPressed : colors.action }
           : {
               backgroundColor: pressed ? colors.ground : colors.surface,
               borderColor: colors.ink,
