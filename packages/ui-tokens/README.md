@@ -41,9 +41,12 @@ Implemented per app (RN vs DOM), using only these tokens: `Text`, `Button`, `Inp
 
 ## Logo
 
-Not in the repo yet. Drop the official files at `apps/athlete/assets/logo.svg` and
-`apps/portal/public/logo.svg` (navy and red from `colors.brand` / `colors.red`), then add a `Logo`
-primitive in each app. Do not redraw it.
+`apps/athlete/assets/logo.png` and `apps/portal/public/logo.png`: the official Team IMPACT logo,
+335 x 388 PNG with transparency, taken from Team IMPACT's own published PDF (the 2024 Game Day Gala
+sell sheet on teamimpact.org). Its colours are exactly `brand` navy and `red`. Render it with the
+`Logo` primitive (heights `layout.logo`, width from `layout.logoAspectRatio`). Use on light
+backgrounds only (no white keyline). Never recolour or redraw it; swap in the official SVG when
+Team IMPACT provides one.
 
 ## Where things live
 

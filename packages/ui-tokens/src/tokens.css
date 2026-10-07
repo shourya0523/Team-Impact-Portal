@@ -37,6 +37,10 @@
   --ti-size-avatar-sm: 32px;
   --ti-size-avatar-md: 44px;
   --ti-size-avatar-lg: 64px;
+  --ti-size-logo-sm: 40px;
+  --ti-size-logo-md: 64px;
+  --ti-size-logo-lg: 96px;
+  --ti-size-logo-aspect-ratio: 0.8634020618556701px;
   --ti-size-max-content-width: 720px;
   --ti-font-display: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --ti-font-ui: 'Barlow', system-ui, sans-serif;

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { sampleTeams } from '../fixtures/teams';
-import { Badge, Button, Card, FadeSlideIn, Input, Sheet, TeamAvatar, Text } from '../ui';
+import { Badge, Button, Card, FadeSlideIn, Input, Logo, Sheet, TeamAvatar, Text } from '../ui';
 
 /** Sample screen: every Signing Day token on one page. Real screens replace it in later tickets. */
 export function TokenSample() {
@@ -10,6 +10,7 @@ export function TokenSample() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <FadeSlideIn>
+        <Logo size="md" />
         <Text variant="eyebrow" color="secondary">
           Signing Day
         </Text>

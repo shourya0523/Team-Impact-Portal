@@ -4,7 +4,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { colors, contrastRatio } from '@team-impact/ui-tokens';
 import { sampleTeams } from '../fixtures';
-import { Button, Input, Sheet, TeamAvatar } from '.';
+import { Button, Input, Logo, Sheet, TeamAvatar } from '.';
 
 describe('portal primitives', () => {
   it('Button fires onClick and respects disabled', () => {
@@ -27,6 +27,13 @@ describe('portal primitives', () => {
     const el = screen.getByRole('img', { name: 'Austin Hawks' });
     expect(el.textContent).toBe('AH');
     expect(contrastRatio(colors.ink, sampleTeams.hawks)).toBeGreaterThan(4.5);
+  });
+
+  it('Logo is labelled and keeps the artwork aspect ratio', () => {
+    render(<Logo size="lg" />);
+    const img = screen.getByRole('img', { name: 'Team IMPACT' });
+    expect(img.getAttribute('height')).toBe('96');
+    expect(img.getAttribute('width')).toBe('83');
   });
 
   it('Sheet closes on Escape', () => {

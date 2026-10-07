@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { sampleTeams } from './fixtures';
-import { Badge, Button, Card, FadeSlideIn, Input, Sheet, TeamAvatar, Text } from './ui';
+import { Badge, Button, Card, FadeSlideIn, Input, Logo, Sheet, TeamAvatar, Text } from './ui';
 
 /** Sample page: every Signing Day token on one screen. Real routes land in later tickets. */
 export const App = () => {
@@ -8,6 +8,7 @@ export const App = () => {
   return (
     <main className="ti-page ti-stack">
       <FadeSlideIn>
+        <Logo size="md" />
         <Text variant="eyebrow" color="secondary">
           Signing Day
         </Text>
