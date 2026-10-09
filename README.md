@@ -27,14 +27,27 @@ cp .env.example .env         # local secrets for the API
 docker compose up -d         # local Postgres on :5432
 
 pnpm dev                     # API on :3000, portal on :5173, Expo dev server
-pnpm --filter @team-impact/api db:generate   # create a migration from src/db/schema.ts
 pnpm --filter @team-impact/api db:migrate    # apply migrations
+pnpm seed                    # wipe and refill the local DB with fake data (same rows every run)
+
+pnpm --filter @team-impact/api db:generate   # create a migration from src/db/schema/
+pnpm --filter @team-impact/api db:rollback   # undo the latest migration (drizzle/down/<tag>.sql)
 
 pnpm typecheck && pnpm lint && pnpm test && pnpm build   # what CI runs
 pnpm format                  # Prettier
 ```
 
 Run one app: `pnpm --filter @team-impact/portal dev` (or `api`, `athlete`).
+
+## Database
+
+The data model (30 tables) and its ER diagrams are in [docs/data-model.md](docs/data-model.md).
+drizzle-kit only writes forward migrations, so every new migration needs a hand-written
+`apps/api/drizzle/down/<tag>.sql`; a test fails without one.
+
+Seeded accounts all use the password `team-impact-dev`; the fixed logins (Tufts coach, athletes,
+parents, teen, recruiter, alumnus, staff) are listed at the top of `apps/api/src/db/seed/index.ts`.
+Seeding a non-local database needs `SEED_CONFIRM=<database name>`, because it wipes every table.
 
 ## CI
 
