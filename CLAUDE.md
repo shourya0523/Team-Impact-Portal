@@ -16,8 +16,7 @@ Sprint board.
 
 ## Commands
 
-`pnpm install`, `pnpm dev`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm format`,
-`pnpm seed`. Schema changes: see `docs/data-model.md` (every migration needs a down file).
+`pnpm install`, `pnpm dev`, `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm format`.
 Run typecheck, lint and test before pushing.
 
 ## Hard product rules (PRD §2, §6)

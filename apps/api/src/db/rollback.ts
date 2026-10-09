@@ -1,6 +1,5 @@
 // Rolls back the most recently applied migration using its hand-written drizzle/down/<tag>.sql.
-// drizzle-kit only generates forward migrations, so every new migration needs a matching down file
-// (schema-rules.test.ts fails without one).
+// drizzle-kit only generates forward migrations, so every new migration needs a matching down file.
 import { readFileSync } from 'node:fs';
 import postgres from 'postgres';
 

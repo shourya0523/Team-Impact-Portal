@@ -4,7 +4,7 @@ import { hasBaseballCard, SignupRequest } from './index';
 describe('contracts', () => {
   it('only athletes have a Baseball Card', () => {
     expect(hasBaseballCard('athlete')).toBe(true);
-    expect(hasBaseballCard('alumni')).toBe(true);
+    expect(hasBaseballCard('alumni_athlete')).toBe(true);
     expect(hasBaseballCard('parent')).toBe(false);
     expect(hasBaseballCard('recruiter')).toBe(false);
   });

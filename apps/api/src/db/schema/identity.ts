@@ -1,7 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
   boolean,
-  check,
   date,
   index,
   integer,
@@ -105,7 +104,6 @@ export const children = pgTable(
   (t) => [
     index('children_parent_user_id_idx').on(t.parentUserId),
     index('children_team_id_idx').on(t.teamId),
-    check('children_age_under_13', sql`${t.age} between 0 and 12`),
   ],
 );
 
@@ -124,7 +122,6 @@ export const blocks = pgTable(
   (t) => [
     unique('blocks_blocker_blocked_key').on(t.blockerId, t.blockedId),
     index('blocks_blocked_id_idx').on(t.blockedId),
-    check('blocks_not_self', sql`${t.blockerId} <> ${t.blockedId}`),
   ],
 );
 

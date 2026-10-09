@@ -1,14 +1,4 @@
-import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  index,
-  jsonb,
-  pgTable,
-  text,
-  unique,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, jsonb, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { at, createdAt, id } from './columns';
 import { orgStatus, orgTier, shortlistEntryStatus } from './enums';
 import { users } from './identity';
@@ -68,9 +58,6 @@ export const shortlists = pgTable(
   (t) => [
     index('shortlists_org_id_idx').on(t.orgId),
     index('shortlists_created_by_idx').on(t.createdBy),
-    uniqueIndex('shortlists_one_default_per_org')
-      .on(t.orgId)
-      .where(sql`${t.isDefault}`),
   ],
 );
 

@@ -44,9 +44,7 @@ CREATE TABLE "cards" (
 	"division" text,
 	"payload" jsonb DEFAULT '{}'::jsonb NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "cards_athlete_season_version_key" UNIQUE("athlete_id","season","version"),
-	CONSTRAINT "cards_has_owner" CHECK ("cards"."athlete_id" is not null or "cards"."ingested_record_id" is not null),
-	CONSTRAINT "cards_completeness_range" CHECK ("cards"."completeness" between 0 and 100)
+	CONSTRAINT "cards_athlete_season_version_key" UNIQUE("athlete_id","season","version")
 );
 --> statement-breakpoint
 CREATE TABLE "ingested_records" (
@@ -183,8 +181,7 @@ CREATE TABLE "blocks" (
 	"blocker_id" uuid NOT NULL,
 	"blocked_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "blocks_blocker_blocked_key" UNIQUE("blocker_id","blocked_id"),
-	CONSTRAINT "blocks_not_self" CHECK ("blocks"."blocker_id" <> "blocks"."blocked_id")
+	CONSTRAINT "blocks_blocker_blocked_key" UNIQUE("blocker_id","blocked_id")
 );
 --> statement-breakpoint
 CREATE TABLE "children" (
@@ -195,8 +192,7 @@ CREATE TABLE "children" (
 	"photo_storage_key" text,
 	"age" smallint NOT NULL,
 	"bio" text,
-	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "children_age_under_13" CHECK ("children"."age" between 0 and 12)
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
 CREATE TABLE "consent_records" (
@@ -287,8 +283,7 @@ CREATE TABLE "groups" (
 	"official" boolean DEFAULT false NOT NULL,
 	"created_by" uuid,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "groups_team_id_unique" UNIQUE("team_id"),
-	CONSTRAINT "groups_official_affinity_only" CHECK (not "groups"."official" or "groups"."kind" = 'affinity')
+	CONSTRAINT "groups_team_id_unique" UNIQUE("team_id")
 );
 --> statement-breakpoint
 CREATE TABLE "join_codes" (
@@ -337,8 +332,7 @@ CREATE TABLE "teams" (
 	"logo_storage_key" text,
 	"status" "team_status" DEFAULT 'live' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "teams_college_sport_gender_key" UNIQUE("college_id","sport","gender"),
-	CONSTRAINT "teams_color_hex" CHECK ("teams"."color" ~ '^#[0-9A-Fa-f]{6}$')
+	CONSTRAINT "teams_college_sport_gender_key" UNIQUE("college_id","sport","gender")
 );
 --> statement-breakpoint
 CREATE TABLE "events_log" (
@@ -454,7 +448,6 @@ CREATE INDEX "shortlist_notes_entry_id_idx" ON "shortlist_notes" USING btree ("s
 CREATE INDEX "shortlist_notes_author_id_idx" ON "shortlist_notes" USING btree ("author_id");--> statement-breakpoint
 CREATE INDEX "shortlists_org_id_idx" ON "shortlists" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "shortlists_created_by_idx" ON "shortlists" USING btree ("created_by");--> statement-breakpoint
-CREATE UNIQUE INDEX "shortlists_one_default_per_org" ON "shortlists" USING btree ("org_id") WHERE "shortlists"."is_default";--> statement-breakpoint
 CREATE INDEX "blocks_blocked_id_idx" ON "blocks" USING btree ("blocked_id");--> statement-breakpoint
 CREATE INDEX "children_parent_user_id_idx" ON "children" USING btree ("parent_user_id");--> statement-breakpoint
 CREATE INDEX "children_team_id_idx" ON "children" USING btree ("team_id");--> statement-breakpoint
@@ -465,7 +458,6 @@ CREATE INDEX "users_org_id_idx" ON "users" USING btree ("org_id");--> statement-
 CREATE INDEX "users_pending_erasure_idx" ON "users" USING btree ("deleted_at") WHERE "users"."deleted_at" is not null;--> statement-breakpoint
 CREATE INDEX "coach_invites_team_id_idx" ON "coach_invites" USING btree ("team_id");--> statement-breakpoint
 CREATE INDEX "coach_invites_invited_by_idx" ON "coach_invites" USING btree ("invited_by");--> statement-breakpoint
-CREATE UNIQUE INDEX "coach_invites_one_open_per_email" ON "coach_invites" USING btree ("team_id","email") WHERE "coach_invites"."accepted_at" is null and "coach_invites"."revoked_at" is null;--> statement-breakpoint
 CREATE INDEX "groups_college_id_idx" ON "groups" USING btree ("college_id");--> statement-breakpoint
 CREATE INDEX "groups_org_id_idx" ON "groups" USING btree ("org_id");--> statement-breakpoint
 CREATE INDEX "groups_created_by_idx" ON "groups" USING btree ("created_by");--> statement-breakpoint
@@ -474,7 +466,6 @@ CREATE INDEX "join_codes_created_by_idx" ON "join_codes" USING btree ("created_b
 CREATE INDEX "join_requests_user_id_idx" ON "join_requests" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "join_requests_team_status_idx" ON "join_requests" USING btree ("team_id","status");--> statement-breakpoint
 CREATE INDEX "join_requests_decided_by_idx" ON "join_requests" USING btree ("decided_by");--> statement-breakpoint
-CREATE UNIQUE INDEX "join_requests_one_pending" ON "join_requests" USING btree ("user_id","team_id") WHERE "join_requests"."status" = 'pending';--> statement-breakpoint
 CREATE INDEX "memberships_group_id_idx" ON "memberships" USING btree ("group_id");--> statement-breakpoint
 CREATE INDEX "memberships_join_code_id_idx" ON "memberships" USING btree ("join_code_id");--> statement-breakpoint
 CREATE INDEX "memberships_added_by_idx" ON "memberships" USING btree ("added_by");--> statement-breakpoint

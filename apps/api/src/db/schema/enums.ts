@@ -1,8 +1,15 @@
 import { pgEnum } from 'drizzle-orm/pg-core';
-import { ROLES } from '@team-impact/contracts';
 
 // Identity
-export const userType = pgEnum('user_type', ROLES);
+export const userType = pgEnum('user_type', [
+  'athlete',
+  'alumni',
+  'recruiter',
+  'staff',
+  'coach',
+  'parent',
+  'teen',
+]);
 export const userStatus = pgEnum('user_status', ['active', 'suspended']);
 export const channelPreference = pgEnum('channel_preference', ['push', 'email', 'both', 'none']);
 export const contactScope = pgEnum('contact_scope', ['family', 'recruiter']);

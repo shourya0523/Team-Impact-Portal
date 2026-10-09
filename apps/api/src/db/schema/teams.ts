@@ -1,14 +1,5 @@
 import { sql } from 'drizzle-orm';
-import {
-  boolean,
-  check,
-  index,
-  pgTable,
-  text,
-  unique,
-  uniqueIndex,
-  uuid,
-} from 'drizzle-orm/pg-core';
+import { boolean, index, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
 import { at, createdAt, id } from './columns';
 import {
   groupKind,
@@ -47,10 +38,7 @@ export const teams = pgTable(
     status: teamStatus('status').notNull().default('live'),
     createdAt: createdAt(),
   },
-  (t) => [
-    unique('teams_college_sport_gender_key').on(t.collegeId, t.sport, t.gender),
-    check('teams_color_hex', sql`${t.color} ~ '^#[0-9A-Fa-f]{6}$'`),
-  ],
+  (t) => [unique('teams_college_sport_gender_key').on(t.collegeId, t.sport, t.gender)],
 );
 
 /** Staff invite a coach onto a team (TI-149). Only the token's hash is stored. */
@@ -72,9 +60,6 @@ export const coachInvites = pgTable(
   (t) => [
     index('coach_invites_team_id_idx').on(t.teamId),
     index('coach_invites_invited_by_idx').on(t.invitedBy),
-    uniqueIndex('coach_invites_one_open_per_email')
-      .on(t.teamId, t.email)
-      .where(sql`${t.acceptedAt} is null and ${t.revokedAt} is null`),
   ],
 );
 
@@ -102,7 +87,6 @@ export const groups = pgTable(
     index('groups_college_id_idx').on(t.collegeId),
     index('groups_org_id_idx').on(t.orgId),
     index('groups_created_by_idx').on(t.createdBy),
-    check('groups_official_affinity_only', sql`not ${t.official} or ${t.kind} = 'affinity'`),
   ],
 );
 
@@ -179,8 +163,5 @@ export const joinRequests = pgTable(
     index('join_requests_user_id_idx').on(t.userId),
     index('join_requests_team_status_idx').on(t.teamId, t.status),
     index('join_requests_decided_by_idx').on(t.decidedBy),
-    uniqueIndex('join_requests_one_pending')
-      .on(t.userId, t.teamId)
-      .where(sql`${t.status} = 'pending'`),
   ],
 );

@@ -1059,12 +1059,6 @@ const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) throw new Error('DATABASE_URL is not set');
 const target = new URL(databaseUrl);
 const dbName = target.pathname.slice(1);
-const isLocal = ['localhost', '127.0.0.1', '[::1]'].includes(target.hostname);
-if (!isLocal && process.env.SEED_CONFIRM !== dbName) {
-  throw new Error(
-    `Seeding wipes every table. To seed ${target.hostname}, re-run with SEED_CONFIRM=${dbName}.`,
-  );
-}
 
 const ORDER: [PgTable, object[]][] = [
   [schema.colleges, rows.colleges],

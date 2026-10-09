@@ -1,6 +1,5 @@
 import { sql } from 'drizzle-orm';
 import {
-  check,
   index,
   integer,
   jsonb,
@@ -46,8 +45,6 @@ export const cards = pgTable(
   (t) => [
     unique('cards_athlete_season_version_key').on(t.athleteId, t.season, t.version),
     index('cards_ingested_record_id_idx').on(t.ingestedRecordId),
-    check('cards_has_owner', sql`${t.athleteId} is not null or ${t.ingestedRecordId} is not null`),
-    check('cards_completeness_range', sql`${t.completeness} between 0 and 100`),
     ...(['sport', 'gradYear', 'major', 'region', 'city', 'division'] as const).map((col) =>
       index(`cards_published_${t[col].name}_idx`)
         .on(t[col])

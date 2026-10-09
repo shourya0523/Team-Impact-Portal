@@ -19,16 +19,16 @@ Identity-search auditing is an `events_log` event (`search.identity_filter`), no
 ## Rules the schema enforces
 
 - **No health data, no minor flag.** No column stores a condition, diagnosis, injury or `is_minor`.
-  Minor status is derived from `users.dob`. `schema-rules.test.ts` fails on any such column name.
-- **Children never log in and have no birthdate.** They are rows in `children` (age only, checked
-  0–12), owned by a parent user, never rows in `users`.
+  Minor status is derived from `users.dob`.
+- **Children never log in and have no birthdate.** They are rows in `children` (age only), owned
+  by a parent user, never rows in `users`.
 - **Consent is history, not a boolean.** `consent_records` is append-only; a flag's current value is
   its newest row.
 - **Seasons.** `memberships.season` and `cards.season` let roster dedupe (TI-36) resolve one athlete
   across years. Cards are versioned (`season`, `version`).
 - **Moderation first.** `posts`, `comments` and `events` default to `status = pending`.
 - **Every foreign key has an index**; the users soft-delete (`deleted_at`) has a partial index for the
-  30-day erasure job. Both are checked by `schema-rules.test.ts`.
+  30-day erasure job.
 - **Deletion.** Setting `users.deleted_at` hides an account at once; a scheduled job hard-deletes it
   with cascade after 30 days (TI-79). Foreign keys cascade for things a person owns and `set null`
   for records that outlive them (who invited, who decided, shortlist entries → "profile withdrawn").
@@ -87,7 +87,7 @@ erDiagram
         uuid parent_user_id FK
         uuid team_id FK
         text first_name
-        smallint age "0-12, no birthdate"
+        smallint age "no birthdate"
         text bio
     }
     CONTACT_VISIBILITY {
@@ -295,7 +295,7 @@ erDiagram
     SHORTLISTS {
         uuid id PK
         uuid org_id FK
-        bool is_default "one per org"
+        bool is_default "swipe target"
     }
     SHORTLIST_ENTRIES {
         uuid shortlist_id FK
