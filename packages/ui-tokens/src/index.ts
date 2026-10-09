@@ -23,5 +23,8 @@ export const radius = { sm: 4, md: 8, lg: 16, pill: 999 } as const;
 
 export const fontSize = { sm: 13, md: 16, lg: 20, xl: 28 } as const;
 
+export { palette } from './colors';
+export { duration, easing, motion } from './motion';
+
 export const tokens = { colors, spacing, radius, fontSize } as const;
 export type Tokens = typeof tokens;

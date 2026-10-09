@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@team-impact/contracts": "workspace:*",
+    "@team-impact/ui-primitives": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
     "react": "19.2.3",
     "react-dom": "19.2.3"

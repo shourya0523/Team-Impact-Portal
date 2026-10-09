@@ -1,0 +1,202 @@
+import { useId } from 'react';
+import type { CardPalette } from '../athlete-card/palette';
+import { CARD_HEIGHT, CARD_WIDTH, cardColors, cardLayout, photoBleed } from '../athlete-card/spec';
+import { svgSafeId, type CardFaceArt, type PatternLayer } from '../athlete-card/patterns';
+
+/** Splits layers into consecutive runs that share the same `clipped` flag, keeping paint order. */
+const layerRuns = (layers: PatternLayer[]) => {
+  const runs: { clipped: boolean; layers: { layer: PatternLayer; index: number }[] }[] = [];
+  layers.forEach((layer, index) => {
+    const clipped = Boolean(layer.clipped);
+    const last = runs[runs.length - 1];
+    if (last && last.clipped === clipped) last.layers.push({ layer, index });
+    else runs.push({ clipped, layers: [{ layer, index }] });
+  });
+  return runs;
+};
+
+export const CardArt = ({ art }: { art: CardFaceArt }) => {
+  const id = svgSafeId(useId());
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${CARD_WIDTH} ${CARD_HEIGHT}`}
+      preserveAspectRatio="none"
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+    >
+      <defs>
+        <linearGradient id={`${id}bg`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={art.gradient[0]} />
+          <stop offset="1" stopColor={art.gradient[1]} />
+        </linearGradient>
+        {art.glow && (
+          <radialGradient id={`${id}glow`} cx="0.5" cy="0.5" r="0.5">
+            <stop offset="0" stopColor={art.glow.color} stopOpacity={art.glow.opacity} />
+            <stop offset="1" stopColor={art.glow.color} stopOpacity={0} />
+          </radialGradient>
+        )}
+        {art.clip && (
+          <clipPath id={`${id}clip`}>
+            <path d={art.clip} />
+          </clipPath>
+        )}
+      </defs>
+      <rect width={CARD_WIDTH} height={CARD_HEIGHT} fill={`url(#${id}bg)`} />
+      {art.glow && (
+        <circle cx={art.glow.cx} cy={art.glow.cy} r={art.glow.r} fill={`url(#${id}glow)`} />
+      )}
+      {layerRuns(art.layers).map(({ clipped, layers }) => {
+        const paths = layers.map(({ layer, index }) => (
+          <path
+            key={index}
+            d={layer.d}
+            fill={layer.fill ?? 'none'}
+            stroke={layer.stroke}
+            strokeWidth={layer.strokeWidth}
+            strokeLinecap={layer.strokeLinecap}
+            opacity={layer.opacity}
+          />
+        ));
+        const key = layers[0]?.index ?? 0;
+        return clipped && art.clip ? (
+          <g key={key} clipPath={`url(#${id}clip)`}>
+            {paths}
+          </g>
+        ) : (
+          <g key={key}>{paths}</g>
+        );
+      })}
+    </svg>
+  );
+};
+
+/** Two-stop gradient filling its parent; vertical unless `diagonal`. */
+export const Gradient = ({
+  from,
+  to,
+  fromOpacity = 1,
+  toOpacity = 1,
+  diagonal = false,
+}: {
+  from: string;
+  to: string;
+  fromOpacity?: number;
+  toOpacity?: number;
+  diagonal?: boolean;
+}) => {
+  const id = svgSafeId(useId());
+  return (
+    <svg
+      aria-hidden
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    >
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2={diagonal ? '1' : '0'} y2="1">
+          <stop offset="0" stopColor={from} stopOpacity={fromOpacity} />
+          <stop offset="1" stopColor={to} stopOpacity={toOpacity} />
+        </linearGradient>
+      </defs>
+      <rect width="100%" height="100%" fill={`url(#${id})`} />
+    </svg>
+  );
+};
+
+/**
+ * The front photo, bleeding past its frame and dissolving into the card (see `photoBleed`). An
+ * SVG mask rather than overlays, so the card's patterns show through the fade.
+ */
+export const PhotoBleed = ({ uri, palette }: { uri: string | null; palette: CardPalette }) => {
+  const id = svgSafeId(useId());
+  const b = photoBleed;
+  const inset = cardLayout.photoInset;
+  return (
+    <svg
+      aria-hidden
+      viewBox={`0 0 ${CARD_WIDTH} ${CARD_HEIGHT}`}
+      preserveAspectRatio="none"
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+      }}
+    >
+      <defs>
+        <linearGradient id={`${id}v`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#000" />
+          <stop offset={b.topFade} stopColor="#fff" />
+          <stop offset={b.bottomFadeStart} stopColor="#fff" />
+          <stop offset="1" stopColor="#000" />
+        </linearGradient>
+        <linearGradient id={`${id}h`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#000" stopOpacity={1} />
+          <stop offset={b.sideFade} stopColor="#000" stopOpacity={0} />
+          <stop offset={1 - b.sideFade} stopColor="#000" stopOpacity={0} />
+          <stop offset="1" stopColor="#000" stopOpacity={1} />
+        </linearGradient>
+        <mask
+          id={`${id}m`}
+          maskUnits="userSpaceOnUse"
+          x="0"
+          y="0"
+          width={CARD_WIDTH}
+          height={b.height}
+        >
+          <rect width={CARD_WIDTH} height={b.height} fill={`url(#${id}v)`} />
+          <rect width={CARD_WIDTH} height={b.height} fill={`url(#${id}h)`} />
+        </mask>
+        <linearGradient id={`${id}p`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor={palette.glow} />
+          <stop offset="1" stopColor={palette.base} />
+        </linearGradient>
+        <linearGradient id={`${id}s`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor={palette.deep} stopOpacity={0} />
+          <stop
+            offset={(b.scrimPeak - b.scrimStart) / (1 - b.scrimStart)}
+            stopColor={palette.deep}
+            stopOpacity={b.scrimOpacity}
+          />
+          <stop offset="1" stopColor={palette.deep} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <g mask={`url(#${id}m)`}>
+        {uri ? (
+          <image
+            href={uri}
+            x="0"
+            y="0"
+            width={CARD_WIDTH}
+            height={b.height}
+            preserveAspectRatio="xMidYMid slice"
+          />
+        ) : (
+          <rect width={CARD_WIDTH} height={b.height} fill={`url(#${id}p)`} />
+        )}
+      </g>
+      <rect
+        y={b.height * b.scrimStart}
+        width={CARD_WIDTH}
+        height={b.height * (1 - b.scrimStart)}
+        fill={`url(#${id}s)`}
+      />
+      <rect
+        x={inset}
+        y={inset}
+        width={CARD_WIDTH - inset * 2}
+        height={cardLayout.photoHeight}
+        rx={cardLayout.photoRadius}
+        fill="none"
+        stroke={cardColors.yellow}
+        strokeWidth={b.frameWidth}
+        opacity={b.frameOpacity}
+      />
+    </svg>
+  );
+};

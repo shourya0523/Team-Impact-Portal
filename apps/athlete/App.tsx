@@ -1,32 +1,13 @@
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, spacing } from '@team-impact/ui-tokens';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { CardDemoScreen } from './src/screens/CardDemoScreen';
 
+// TODO: move to Expo Router (src/app/) once the app has more than one screen.
 export default function App() {
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Team Impact</Text>
-      <Text style={styles.subtitle}>ALL IN. ALL TOGETHER.</Text>
-      <StatusBar style="auto" />
-    </View>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <CardDemoScreen />
+      <StatusBar style="dark" />
+    </GestureHandlerRootView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: '700',
-    color: colors.primary,
-  },
-  subtitle: {
-    fontSize: fontSize.md,
-    color: colors.textMuted,
-  },
-});

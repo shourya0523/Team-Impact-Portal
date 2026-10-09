@@ -13,13 +13,20 @@
   },
   "dependencies": {
     "@team-impact/contracts": "workspace:*",
+    "@team-impact/ui-primitives": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
     "expo": "~57.0.26",
+    "expo-image-manipulator": "~57.0.21",
+    "expo-image-picker": "~57.0.20",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",
-    "react-native-web": "^0.21.3"
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.3",
+    "react-native-worklets": "0.10.1"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
