@@ -26,7 +26,7 @@ import { AthleteCard, sampleAthlete } from '@team-impact/ui-primitives/web';
 ```
 
 Leave out `flipped` (optionally passing `defaultFlipped`) and the card tracks its own flip state.
-The demos are `apps/athlete/src/screens/CardDemoScreen.tsx` and
+The demos are `apps/athlete/src/demos/CardDemoScreen.tsx` (route: `/dev/card-demo`) and
 `apps/portal/src/AthleteCardPreview.tsx`.
 
 ### Product rules the caller must enforce (PRD §2, §6)
@@ -272,8 +272,15 @@ pnpm --filter @team-impact/ui-primitives test        # art, PNG decoder, palette
 pnpm --filter @team-impact/portal test               # card flips via click and button
 ```
 
-To see it running: `pnpm --filter @team-impact/athlete dev` (or `npx expo start` **from
-`apps/athlete`**) and `pnpm --filter @team-impact/portal dev`.
+To see it running:
+
+- **App, straight into the card (showcase mode):** `pnpm --filter @team-impact/athlete demo:card`
+  (or `pnpm demo:card` in `apps/athlete`). It sets `EXPO_PUBLIC_DEMO=card`, and
+  `apps/athlete/src/app/index.tsx` redirects to the demo.
+- **App, normal start:** `pnpm --filter @team-impact/athlete dev`, then open
+  `teamimpact://dev/card-demo`, `/dev/card-demo` on web, or the "Open card demo" link (dev builds
+  only).
+- **Portal:** `pnpm --filter @team-impact/portal dev`.
 
 ## Gotchas
 
