@@ -12,8 +12,8 @@ import { UserSummary } from './users';
 
 /**
  * Staff, coaches, athletes and alumni post anywhere; teens only to their own team. Parents and
- * recruiters don't post (recruiters only put opportunities into groups). Child profiles never
- * appear in the network feed. The API enforces all of this from the author's role.
+ * recruiters don't post (recruiters only put opportunities into groups). The API enforces this
+ * from the author's role.
  */
 export const PostAudience = z.discriminatedUnion('scope', [
   TeamAudience,

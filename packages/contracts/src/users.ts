@@ -46,37 +46,6 @@ export const ParentRelationship = z.enum(PARENT_RELATIONSHIPS);
 export type ParentRelationship = z.infer<typeof ParentRelationship>;
 
 /**
- * A child under 13. Children never log in: a parent or guardian runs the profile, and only the
- * child's team and family can see it. First name, age, interests and a photo are all there is,
- * by design: no health or diagnosis data, ever (both hard product rules).
- */
-export const ChildProfile = z.object({
-  id: Id,
-  firstName: z.string(),
-  age: z.number().int(),
-  interests: z.string().nullable(),
-  photoUrl: z.url().nullable(),
-  teamId: Id.nullable(),
-  parent: UserSummary,
-  relationship: ParentRelationship,
-});
-export type ChildProfile = z.infer<typeof ChildProfile>;
-
-const ChildFirstName = z.string().trim().min(1).max(40).regex(/^\S+$/, 'First name only, please.');
-
-export const CreateChildProfileRequest = z.object({
-  firstName: ChildFirstName,
-  /** Kids 13 and up join with their own teen account instead. */
-  age: z.number().int().min(3, 'Enter an age from 3 to 12.').max(12, 'Enter an age from 3 to 12.'),
-  interests: z.string().trim().max(500).nullish(),
-  relationship: ParentRelationship,
-});
-export type CreateChildProfileRequest = z.infer<typeof CreateChildProfileRequest>;
-
-export const UpdateChildProfileRequest = CreateChildProfileRequest.partial();
-export type UpdateChildProfileRequest = z.infer<typeof UpdateChildProfileRequest>;
-
-/**
  * Former athletes, and former Team Impact kids back as mentors. Athletes find alumni; alumni never
  * browse athletes. Turning on mentoring or hiring makes the profile and contact details visible to
  * athletes. Alumni athletes also have a Baseball Card.

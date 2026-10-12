@@ -13,9 +13,8 @@ export const LoginRequest = z.object({
 export type LoginRequest = z.infer<typeof LoginRequest>;
 
 /**
- * Open sign-up in the athlete app. Birth date is used only to check age: the minimum is 13 (under
- * 13s exist only as a profile their parent runs), 13–17 year olds sign up as teens, and adults
- * can't pick the teen role.
+ * Open sign-up in the athlete app. Birth date is used only to check age: the minimum is 13,
+ * 13–17 year olds sign up as teens, and adults can't pick the teen role.
  */
 export const SignupRequest = z
   .object({
@@ -38,7 +37,7 @@ export const SignupRequest = z
       ctx.addIssue({
         code: 'custom',
         path: ['birthDate'],
-        message: 'Kids under 13 join through a parent or guardian, who runs their profile.',
+        message: 'You need to be 13 or older to sign up.',
       });
     } else if (band === 'teen') {
       if (signup.role !== 'teen') {

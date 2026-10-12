@@ -48,9 +48,5 @@ export const QrCodePreview = z.object({
 });
 export type QrCodePreview = z.infer<typeof QrCodePreview>;
 
-/** A parent names the children joining with them. */
-export const RedeemQrCodeRequest = z.object({
-  token: Token,
-  childIds: z.array(Id).max(10).optional(),
-});
+export const RedeemQrCodeRequest = z.object({ token: Token });
 export type RedeemQrCodeRequest = z.infer<typeof RedeemQrCodeRequest>;

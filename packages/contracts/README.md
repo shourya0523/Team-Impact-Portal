@@ -5,24 +5,24 @@ with them; the Expo app and the portal import their types. Change a schema and e
 relies on the old shape stops compiling, so breaking changes surface in CI the same day instead of
 in production.
 
-| File               | What                                                               |
-| ------------------ | ------------------------------------------------------------------ |
-| `common.ts`        | Ids, timestamps, colours, audiences, pagination, `ApiError`        |
-| `roles.ts`         | Roles, sign-up roles, age bands                                    |
-| `auth.ts`          | Login, sign-up, coach invite acceptance, recruiter sign-up         |
-| `users.ts`         | `UserSummary`, `Me`, notification prefs, child and alumni profiles |
-| `colleges.ts`      | The managed college list                                           |
-| `teams.ts`         | Teams, coach invites, members                                      |
-| `join-requests.ts` | Team join requests (athlete, parent, teen)                         |
-| `qr-codes.ts`      | Team join QR codes                                                 |
-| `cards.ts`         | Baseball Card fields, audience views, resume ingest                |
-| `contacts.ts`      | Contact details and who they're shared with                        |
-| `posts.ts`         | Posts, announcements, sponsor opportunities, comments              |
-| `events.ts`        | Events and RSVPs                                                   |
-| `groups.ts`        | Affinity groups and recruiter-search opt-in                        |
-| `companies.ts`     | Partner companies, email domains, recruiters                       |
-| `lists.ts`         | Recruiter lists and notes                                          |
-| `moderation.ts`    | Moderation status and reports                                      |
+| File               | What                                                        |
+| ------------------ | ----------------------------------------------------------- |
+| `common.ts`        | Ids, timestamps, colours, audiences, pagination, `ApiError` |
+| `roles.ts`         | Roles, sign-up roles, age bands                             |
+| `auth.ts`          | Login, sign-up, coach invite acceptance, recruiter sign-up  |
+| `users.ts`         | `UserSummary`, `Me`, notification prefs, alumni profiles    |
+| `colleges.ts`      | The managed college list                                    |
+| `teams.ts`         | Teams, coach invites, members                               |
+| `join-requests.ts` | Team join requests (athlete, parent, teen)                  |
+| `qr-codes.ts`      | Team join QR codes                                          |
+| `cards.ts`         | Baseball Card fields, audience views, resume ingest         |
+| `contacts.ts`      | Contact details and who they're shared with                 |
+| `posts.ts`         | Posts, announcements, sponsor opportunities, comments       |
+| `events.ts`        | Events and RSVPs                                            |
+| `groups.ts`        | Affinity groups and recruiter-search opt-in                 |
+| `companies.ts`     | Partner companies, email domains, recruiters                |
+| `lists.ts`         | Recruiter lists and notes                                   |
+| `moderation.ts`    | Moderation status and reports                               |
 
 ## Conventions
 

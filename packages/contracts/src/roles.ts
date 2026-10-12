@@ -33,7 +33,7 @@ export const SELF_SIGNUP_ROLES = [
 export const SelfSignupRole = z.enum(SELF_SIGNUP_ROLES);
 export type SelfSignupRole = z.infer<typeof SelfSignupRole>;
 
-/** Under 13 is a child (no account, run by a parent), 13–17 a teen, 18 and over an adult. */
+/** Under 13 is a child (no account), 13–17 a teen, 18 and over an adult. */
 export type AgeBand = 'child' | 'teen' | 'adult';
 
 /** Whole years between an ISO `YYYY-MM-DD` birth date and `today`, in UTC. */

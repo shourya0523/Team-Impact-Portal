@@ -88,7 +88,6 @@ export const StaffUpdateTeamRequest = UpdateTeamRequest.extend({
 });
 export type StaffUpdateTeamRequest = z.infer<typeof StaffUpdateTeamRequest>;
 
-/** Removing a parent also removes their child from the team. */
 export const TeamMember = z.object({
   user: UserSummary,
   joinedVia: z.enum(['coach_invite', 'join_request', 'qr_code']),

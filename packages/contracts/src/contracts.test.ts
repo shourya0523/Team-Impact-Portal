@@ -8,7 +8,6 @@ import {
   CardWithContact,
   CreateAnnouncementRequest,
   CreateCardRequest,
-  CreateChildProfileRequest,
   CreateCompanyRequest,
   CreateEventRequest,
   CreateGroupRequest,
@@ -34,7 +33,6 @@ import {
   TeamQrCodeHistoryEntry,
   UpdateAlumniProfileRequest,
   UpdateCardVisibilityRequest,
-  UpdateChildProfileRequest,
   UpdateListRequest,
   UpdateTeamRequest,
 } from './index';
@@ -92,7 +90,7 @@ describe('sign-up', () => {
     expect(accepts(SignupRequest, { ...adultSignup, password: 'short' })).toBe(false);
   });
 
-  it('never creates an account for a child under 13', () => {
+  it('never creates an account for anyone under 13', () => {
     const result = SignupRequest.safeParse({ ...adultSignup, birthDate: bornYearsAgo(12) });
     expect(issuePaths(result)).toContain('birthDate');
   });
@@ -139,21 +137,6 @@ describe('sign-up', () => {
 });
 
 describe('users', () => {
-  const child = { firstName: 'Leo', age: 9, relationship: 'parent' };
-
-  it('keeps a child profile to a first name and an age under 13', () => {
-    expect(accepts(CreateChildProfileRequest, child)).toBe(true);
-    const fullName = CreateChildProfileRequest.safeParse({ ...child, firstName: 'Leo Kim' });
-    expect(issuePaths(fullName)).toEqual(['firstName']);
-    expect(accepts(CreateChildProfileRequest, { ...child, age: 13 })).toBe(false);
-    expect(accepts(CreateChildProfileRequest, { ...child, age: 2 })).toBe(false);
-    expect(accepts(CreateChildProfileRequest, { ...child, age: 12 })).toBe(true);
-  });
-
-  it('lets a parent clear their child’s interests', () => {
-    expect(UpdateChildProfileRequest.parse({ interests: null }).interests).toBeNull();
-  });
-
   it('filters alumni by the mentoring and hiring flags only', () => {
     expect(accepts(FindAlumniQuery, { flag: 'hiring' })).toBe(true);
     expect(accepts(FindAlumniQuery, { flag: 'recruiting' })).toBe(false);
@@ -276,9 +259,12 @@ describe('teams', () => {
     expect(StaffUpdateTeamRequest.parse(edit)).toEqual(edit);
   });
 
-  it('requires parents to bring a child', () => {
-    expect(accepts(CreateJoinRequest, { role: 'parent', teamId: ID, childIds: [] })).toBe(false);
-    expect(accepts(CreateJoinRequest, { role: 'parent', teamId: ID, childIds: [ID] })).toBe(true);
+  it('asks parents whether they’re a parent or guardian, and nothing about children', () => {
+    const parent = { role: 'parent', teamId: ID, relationship: 'guardian' };
+    expect(accepts(CreateJoinRequest, parent)).toBe(true);
+    expect(accepts(CreateJoinRequest, { ...parent, relationship: undefined })).toBe(false);
+    expect(accepts(CreateJoinRequest, { ...parent, relationship: 'aunt' })).toBe(false);
+    expect(CreateJoinRequest.parse({ ...parent, childIds: [ID] })).not.toHaveProperty('childIds');
   });
 
   it('never gives staff a usable QR token', () => {
