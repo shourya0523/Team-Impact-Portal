@@ -37,14 +37,63 @@ Routes are **files**. There's no route table anywhere. A file's path under `src/
 
 Some names are special:
 
-- **`_layout.tsx`** wraps the routes beside it. The root one keeps `GestureHandlerRootView`, which the
-  card's swipe needs, and the role provider. A layout that returns `<Stack />` gives its screens push and back
-  navigation with a header.
+- **`_layout.tsx` is a frame, not a page.** It renders around every screen in its folder and the
+  folders below it. Layouts nest, so a screen is drawn inside every layout on its path (see
+  [Layouts](#layouts-frames-around-screens)).
 - **`(name)/` is a route group.** It's a normal folder that groups files and can have its own
   `_layout.tsx`, but it **doesn't appear in the URL**. `(app)/` holds the signed-in screens, so its
-  layout (the tab bar) only wraps them, while URLs stay clean (`/home`, not `/app/home`).
+  layout (the tab bar plus the sign-in check) only wraps them, while URLs stay clean (`/home`, not
+  `/app/home`). Screens outside it (`welcome`, `sign-up`, `onboarding/*`) get no tab bar.
 - **Only routes go in `src/app/`.** Shared code lives elsewhere in `src/`: `components/`,
   `navigation/`, `demos/`, `types/`.
+
+## Layouts: frames around screens
+
+A layout returns a **navigator**, which marks where the current screen goes and draws the UI around
+it. The navigators are prebuilt, so you don't write the header, back button or tab bar yourself:
+
+| Navigator                          | What it draws around the screen                                                         |
+| ---------------------------------- | --------------------------------------------------------------------------------------- |
+| `<Slot />` (`expo-router`)         | nothing; put your own UI (e.g. a custom nav bar) around it                              |
+| `<Stack />` (`expo-router`)        | a top header with the title, plus a back button whenever there's a screen to go back to |
+| `<Tabs />` (`expo-router/js-tabs`) | the bottom tab bar, one button per tab                                                  |
+
+Opening `/card/upload` while signed in draws three layouts, outside in:
+
+```
+┌─ _layout.tsx ─────────────────────────────┐  root: providers, Stack with headers off
+│ ┌─ (app)/_layout.tsx ───────────────────┐ │  Tabs: redirects to /welcome if signed out
+│ │ ┌─ card/_layout.tsx ────────────────┐ │ │  Stack: header + back button
+│ │ │  ‹ Back        upload             │ │ │
+│ │ │      card/upload.tsx  (screen)    │ │ │
+│ │ └───────────────────────────────────┘ │ │
+│ │  Home  Events  Team  Card  Me         │ │  ← the tab bar
+│ └───────────────────────────────────────┘ │
+└───────────────────────────────────────────┘
+```
+
+- **Back** pops `upload` and shows `card/index.tsx`, without touching the tab bar.
+- **Switching tabs** keeps each tab's stack, so returning to Card shows Upload again.
+- **Without `card/_layout.tsx`**, the seven `card/` screens would each become a separate tab, with
+  no header or back button. The tab Stack is what makes them one tab.
+- **`child.tsx` has no layout.** It's a single screen, so it gets the tab bar but no header.
+  Turn it into a `child/` folder with a `<Stack />` layout once it needs sub-screens.
+
+Headers and back buttons come from `<Stack />` by default. Titles are currently the route names
+(`index`, `compose`) because no screen sets one. The back button is drawn by the platform (the iOS
+and Android navigation bar), and by React Navigation's `HeaderBackButton` on web, so it's not
+in this repo. Change them through options, never by editing library code:
+
+```tsx
+<Stack>
+  <Stack.Screen name="index" options={{ title: 'Home' }} />
+  <Stack.Screen name="compose" options={{ title: 'New post', headerBackTitle: 'Feed' }} />
+</Stack>
+```
+
+`headerShown: false` hides a navigator's own header. The root layout uses it so signed-out screens
+have none, and `(app)/_layout.tsx` uses it so the tab bar doesn't add a second header above each
+tab's Stack. `headerLeft: () => <MyButton />` replaces the back button with your own component.
 
 ## Folder map
 
@@ -83,8 +132,7 @@ src/
    - If no role is set, the layout redirects to `/welcome`.
    - Import `Tabs` from `expo-router/js-tabs`. The `expo-router` export is deprecated in SDK 57.
 4. **Each tab folder has a `_layout.tsx` returning `<Stack />`**, so screens opened from a tab push
-   on top of it with a back button. The tab bar's own header is hidden (`headerShown: false`), so the
-   stack's header is the only one.
+   on top of it with a back button (see [Layouts](#layouts-frames-around-screens)).
 5. **Each tab layout sets `unstable_settings = { anchor: 'index' }`**, and `Placeholder` navigates
    with `{ withAnchor: true }`. When a button jumps into another tab, for example Notifications → "A group"
    lands on `/me/groups/1`, that tab's main screen is loaded underneath. Back and re-pressing the
