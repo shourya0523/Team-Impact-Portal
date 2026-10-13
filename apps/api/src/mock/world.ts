@@ -17,6 +17,7 @@ import {
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
+import { initialQrCodes, type MockChild, type MockCoachInvite, type MockQrCode } from './team';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -36,6 +37,12 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
+  /** Coaches edit their team (name, colour, about), so each world has its own copy. */
+  readonly teams = structuredClone(fx.TEAMS);
+  /** Child profiles; a child leaves the team when their parent does (`team.ts`). */
+  readonly children: MockChild[] = structuredClone(fx.CHILDREN);
+  readonly qrCodes: MockQrCode[] = initialQrCodes();
+  readonly coachInvites: MockCoachInvite[] = [];
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
@@ -62,7 +69,7 @@ export class MockWorld {
   });
 
   teamSummary = (teamId: string): TeamSummary => {
-    const team = fx.TEAMS.find((t) => t.id === teamId)!;
+    const team = this.teams.find((t) => t.id === teamId)!;
     const { id, name, college, sport, gender, division, color, logoUrl } = team;
     return { id, name, college, sport, gender, division, color, logoUrl };
   };
