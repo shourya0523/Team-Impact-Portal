@@ -14,6 +14,7 @@ import {
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import type { MockWorld } from '../world';
+import { notifyJoinApproved } from '../activity';
 import { httpError, paginate, type Guards } from './context';
 
 /** Communities, the home feed and events. */
@@ -91,6 +92,8 @@ export const registerCommunityRoutes = (app: ZodApp, world: MockWorld, { viewer 
       const { u, c } = visibleCommunity(request, request.params.id);
       const problem = world.decideJoin(c, u, request.params.userId, request.body.decision);
       if (problem) throw httpError(problem === 'No such request' ? 404 : 403, problem);
+      if (request.body.decision === 'approve')
+        notifyJoinApproved(world, c, request.params.userId, u);
       return world.communityJoinRequests(c, u) ?? [];
     },
   );

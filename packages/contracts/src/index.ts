@@ -19,3 +19,4 @@ export * from './session';
 export * from './signup';
 export * from './teams';
 export * from './users';
+export * from './notifications';
