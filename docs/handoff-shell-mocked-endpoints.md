@@ -1,0 +1,65 @@
+# Handoff: app shells on mocked endpoints
+
+Written 13 Oct 2026 for a fresh Claude Code session. Read `CLAUDE.md` and `apps/athlete/AGENTS.md` first, then the Notion PRD (v2.2) and Stack decisions before any major change.
+
+## Goal
+
+Both clients run end to end against mocked endpoints, so screen work can start before the real API exists:
+
+- **Portal shell** for recruiters and staff (`apps/portal`): routes, layout, role-gated navigation, sign-in, with every call going to mocks. Matches the Sprint board ticket "Portal shell: recruiter and staff, on mocked endpoints".
+- **Athlete app shell** (`apps/athlete`): the Expo Router skeleton already exists on this branch (role-based tabs from the v2 wireframes). Point it at the same mocks and check every role's tabs render.
+- **Mocked endpoints**: one source of mock data used by both clients.
+
+## Starting point
+
+Branch `integration/shell-base`, which is `main` plus these branches, merged cleanly, with `pnpm install --frozen-lockfile` and `pnpm typecheck` passing (7 packages):
+
+| Merged | What it brings |
+|---|---|
+| `feature/zodd-schema` | Zod contracts in `packages/contracts` (roles, users, teams, join requests, QR codes, cards, posts, events, groups, companies, lists, moderation) |
+| `ti-14-schema-and-seed` | Drizzle schema, migration `0000_v2_data_model.sql`, seed, `docs/data-model.md` |
+| `frontend-design-tokens-and-primitives` | `packages/ui-tokens`, `packages/ui-primitives`, athlete app shell |
+| `design/hifi-mockups` | `apps/mockups`, high-fidelity screens (additive) |
+| `docs/claude-md-communities` | CLAUDE.md rules for PRD v2.2 |
+
+Not merged on purpose:
+
+- `design/signing-day-tokens` conflicts with the tokens branch above. Decide with the lead which token set wins before touching it.
+- `test` is a one-line change.
+- `local/ecstatic-gauss-xm1swi` was not looked at.
+
+## Known gaps to handle first
+
+1. **Communities.** PRD v2.2 merged affinity groups and feed scopes into communities. `packages/contracts/src/groups.ts` and the DB `group_kind` enum (`team, college, affinity, org, platform`) still use the old model. Target kinds: `team`, `team_impact`, `medical`, `interest`, with an `official` flag on interest only. Do this in the contracts, and use the new names in the mocks. Leave the DB migration alone unless asked, because the migration branch is unmerged on main and the lead owns that call.
+2. **Alumni roles.** Contracts split alumni into `alumni_athlete` and `alumni_mentor` (matches PRD §2, §8). The DB `user_type` has a single `alumni`. Mock data follows the contracts.
+3. **Token conflict** noted above.
+
+## Suggested approach
+
+- Mocks live in the API app (`apps/api`), as Fastify routes behind a `MOCK_API=1` switch, returning fixture data that is parsed through the `packages/contracts` schemas before it is sent, so a contract change breaks the mocks at build time. No database needed. If you find a better fit (for example MSW in the clients), say why before switching.
+- One fixture set: one Tufts team with a coach, athletes, two parents with a child each, a teen, a recruiter company, an alumnus, and one example of each community kind. Mirror the seed in `apps/api/src/db/seed/`.
+- Mock sign-in lets you pick a role, so every role's navigation can be checked quickly.
+- Respect the hard rules in CLAUDE.md in the fixtures too: no child or teen data in recruiter views or search, no health data, no contact details for teens, medical membership never in a profile or search response.
+- Use ticket names, not numbers, when writing to the lead. Ticket bodies are Goal / Acceptance criteria / Links only.
+
+## Conventions
+
+- React version identical across `apps/athlete` and `apps/portal`.
+- Add native deps with `npx expo install`, never `pnpm add`.
+- Workspace packages export `./src/index.ts` directly.
+- Run `pnpm typecheck`, `pnpm lint` and `pnpm test` before pushing. Never commit `.env`.
+- Do not commit to `main`. Work on a branch off `integration/shell-base` and open a PR.
+
+## Done when
+
+- `pnpm dev` starts the API with mocks, the portal and the athlete app, and each role can sign in and see its navigation.
+- Recruiter portal: search results page and a card view, on mock data.
+- Staff portal: shells for companies, teams and moderation.
+- Athlete app: feed, communities and join flow screens reachable on mock data.
+- Typecheck, lint and tests pass.
+
+## Product context (PRD v2.2, 13 Oct)
+
+- Communities replace affinity groups and feed scopes. Kinds: team (private), Team Impact, medical (anyone who can join one can create one, private membership, not teens or recruiters), interest (staff can mark official).
+- Only official interest communities are recruiter filters, behind one feature flag, with every search logged.
+- Week 4 tickets on the Sprint board: Access layer, Teams and join requests, Staff portal, Uploads, Baseball Card editor, Join flow screens, Staff colleges and teams.
