@@ -8,13 +8,23 @@ import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
-import { Async, ErrorText, SCROLL_END } from '@/components/ui';
+import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
+import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { KIND_STYLE, monogram } from '@/theme';
 import { Avatar, Badge, Button, Card, Icon, Text } from '@/ui';
 
 const COVER = 196;
+
+type Tab = 'posts' | 'events' | 'members';
+const TABS: { value: Tab; label: string }[] = [
+  { value: 'posts', label: 'Posts' },
+  { value: 'events', label: 'Events' },
+  { value: 'members', label: 'Members' },
+];
+/** Joining or leaving changes what the Events and Members tabs may show, so they reload. */
+const tabKey = (x: Community) => `${x.id}:${x.myMembership ? 'in' : 'out'}`;
 const SWITCH_W = 56;
 const SWITCH_H = 32;
 const KNOB = 26;
@@ -117,6 +127,7 @@ export default function CommunityDetail() {
   const posts = useApi(() => api.communityPosts(id), [id]);
   const [override, setOverride] = useState<Community | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>('posts');
 
   const leave = () =>
     api.leaveCommunity(id).then(
@@ -278,55 +289,64 @@ export default function CommunityDetail() {
                     <Findable community={x} onChange={setOverride} />
                   )}
 
-                <Text weight="semibold" style={styles.postsLabel}>
-                  Posts
-                </Text>
-                <Async state={posts.state}>
-                  {(page) =>
-                    page.items.length ? (
-                      page.items.map((p) => (
-                        <Card key={p.id}>
-                          <View style={styles.person}>
-                            <Avatar
-                              name={`${p.author.firstName} ${p.author.lastName}`}
-                              role={p.author.role}
-                            />
-                            <View style={styles.grow}>
-                              <Text weight="semibold">
-                                {p.author.firstName} {p.author.lastName}
-                              </Text>
-                              <Text variant="caption" weight="medium" color="muted">
-                                {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
-                              </Text>
-                            </View>
-                            {p.author.id !== me?.id && !p.official && (
-                              <ReportButton
-                                target={{ kind: 'post', id: p.id }}
-                                author={
-                                  p.author.role === 'staff'
-                                    ? undefined
-                                    : { id: p.author.id, name: p.author.firstName }
-                                }
-                                onDone={posts.reload}
+                <View style={styles.tabs}>
+                  <Segmented
+                    label="Community sections"
+                    options={TABS}
+                    value={tab}
+                    onChange={setTab}
+                  />
+                </View>
+                {tab === 'events' && <CommunityEvents key={tabKey(x)} community={x} />}
+                {tab === 'members' && <CommunityMembers key={tabKey(x)} community={x} />}
+                {tab === 'posts' && (
+                  <Async state={posts.state}>
+                    {(page) =>
+                      page.items.length ? (
+                        page.items.map((p) => (
+                          <Card key={p.id}>
+                            <View style={styles.person}>
+                              <Avatar
+                                name={`${p.author.firstName} ${p.author.lastName}`}
+                                role={p.author.role}
                               />
-                            )}
-                          </View>
-                          <Text>
-                            {p.kind === 'opportunity'
-                              ? `${p.opportunity.title} at ${p.opportunity.company.name}`
-                              : p.text}
-                          </Text>
-                        </Card>
-                      ))
-                    ) : (
-                      <Text variant="small" color="secondary">
-                        {x.myMembership
-                          ? 'No posts yet. Start the conversation.'
-                          : 'Join to see posts here.'}
-                      </Text>
-                    )
-                  }
-                </Async>
+                              <View style={styles.grow}>
+                                <Text weight="semibold">
+                                  {p.author.firstName} {p.author.lastName}
+                                </Text>
+                                <Text variant="caption" weight="medium" color="muted">
+                                  {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
+                                </Text>
+                              </View>
+                              {p.author.id !== me?.id && !p.official && (
+                                <ReportButton
+                                  target={{ kind: 'post', id: p.id }}
+                                  author={
+                                    p.author.role === 'staff'
+                                      ? undefined
+                                      : { id: p.author.id, name: p.author.firstName }
+                                  }
+                                  onDone={posts.reload}
+                                />
+                              )}
+                            </View>
+                            <Text>
+                              {p.kind === 'opportunity'
+                                ? `${p.opportunity.title} at ${p.opportunity.company.name}`
+                                : p.text}
+                            </Text>
+                          </Card>
+                        ))
+                      ) : (
+                        <Text variant="small" color="secondary">
+                          {x.myMembership
+                            ? 'No posts yet. Start the conversation.'
+                            : 'Join to see posts here.'}
+                        </Text>
+                      )
+                    }
+                  </Async>
+                )}
               </View>
             </ScrollView>
           );
@@ -369,7 +389,7 @@ const styles = StyleSheet.create({
   grow: { flex: 1 },
   note: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   noteTint: { backgroundColor: colors.brandTint, borderColor: colors.brandTint },
-  postsLabel: { marginTop: spacing.xs },
+  tabs: { marginTop: spacing.xs },
   findable: { flexDirection: 'row', gap: spacing.md, alignItems: 'flex-start' },
   findableText: { flex: 1, gap: spacing.xs },
   switch: {

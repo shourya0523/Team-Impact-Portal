@@ -1,11 +1,17 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@team-impact/ui-tokens';
+import { errorMessage } from '@/components/signup';
 import { Progress } from '@/components/ui';
+import { api } from '@/api';
+import { useRole } from '@/navigation/role';
 import { Button, Icon, Text } from '@/ui';
 
 const DOT = 24;
+/** How often the screen asks whether the coach has approved, while it's open. */
+const POLL_MS = 15_000;
 const CHECK = 64;
 
 function Step({
@@ -48,10 +54,58 @@ function Step({
   );
 }
 
-/** "/onboarding/pending": waiting on the coach. */
+/**
+ * "/onboarding/pending": waiting on the coach. While open it re-reads `/me` every so often (and on
+ * "Check again"); once the team is in `teamIds`, the coach approved and the Signed screen takes over.
+ */
 export default function Pending() {
-  const { teamName } = useLocalSearchParams<{ teamName?: string }>();
+  const { teamName, teamId } = useLocalSearchParams<{ teamName?: string; teamId?: string }>();
+  const { me, setMe } = useRole();
   const insets = useSafeAreaInsets();
+  const [checking, setChecking] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  // Without a team id (an older link), any team that wasn't there when we arrived counts.
+  const known = useRef(me?.teamIds ?? []);
+
+  const check = useCallback(
+    (byHand: boolean) => {
+      if (byHand) {
+        setChecking(true);
+        setNote(null);
+        setError(null);
+      }
+      return api.me().then(
+        (updated) => {
+          const approved = teamId
+            ? updated.teamIds.includes(teamId)
+            : updated.teamIds.some((t) => !known.current.includes(t));
+          setChecking(false);
+          if (approved) {
+            setMe(updated);
+            router.replace({
+              pathname: '/signed',
+              params: { teamId: teamId ?? updated.teamIds.at(-1) ?? '', teamName: teamName ?? '' },
+            });
+          } else if (byHand) {
+            setNote('Not yet. The coach hasn’t answered, so hang tight.');
+          }
+        },
+        (e: unknown) => {
+          setChecking(false);
+          if (byHand) setError(errorMessage(e));
+        },
+      );
+    },
+    [teamId, teamName, setMe],
+  );
+
+  useEffect(() => {
+    const timer = setInterval(() => void check(false), POLL_MS);
+    void check(false);
+    return () => clearInterval(timer);
+  }, [check]);
+
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -75,6 +129,23 @@ export default function Pending() {
           <Step title="You’re on the team" note="Roster, feed and events open up" state="next" />
         </View>
         <View style={styles.grow} />
+        {note && (
+          <Text color="onBrandSecondary" accessibilityRole="alert">
+            {note}
+          </Text>
+        )}
+        {error && (
+          <Text weight="semibold" color="onBrand" accessibilityRole="alert">
+            Couldn’t check: {error}
+          </Text>
+        )}
+        <Button
+          label={checking ? 'Checking…' : 'Check again'}
+          variant="onBrand"
+          size="lg"
+          disabled={checking}
+          onPress={() => void check(true)}
+        />
         <Button
           label="Have the coach’s QR? Scan it"
           variant="ghostOnBrand"

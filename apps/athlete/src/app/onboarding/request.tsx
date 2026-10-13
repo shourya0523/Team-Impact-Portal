@@ -64,7 +64,7 @@ export default function Request() {
     if (!body) return;
     setSending(true);
     api.requestToJoin(body).then(
-      () => router.replace({ pathname: '/onboarding/pending', params: { teamName } }),
+      () => router.replace({ pathname: '/onboarding/pending', params: { teamName, teamId } }),
       (e: Error) => {
         setError(e.message);
         setSending(false);

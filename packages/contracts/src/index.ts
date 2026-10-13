@@ -23,3 +23,4 @@ export * from './safety';
 export * from './notifications';
 export * from './profiles';
 export * from './team';
+export * from './community-members';

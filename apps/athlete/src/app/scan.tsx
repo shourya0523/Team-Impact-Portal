@@ -8,7 +8,6 @@ import { shortDate } from '@/components/format';
 import { errorMessage } from '@/components/signup';
 import { ErrorText, Gutter, Screen } from '@/components/ui';
 import { useRole } from '@/navigation/role';
-import { firstTab } from '@/navigation/tabs';
 import { Button, Card, Input, TeamAvatar, Text } from '@/ui';
 
 const teamLabel = (p: QrCodePreview) => `${p.team.college.name.split(' ')[0]} ${p.team.name}`;
@@ -23,7 +22,6 @@ export default function ScanQR() {
   const { me, role, setMe } = useRole();
   const [code, setCode] = useState(params.code ?? '');
   const [preview, setPreview] = useState<QrCodePreview | null>(null);
-  const [joined, setJoined] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -59,8 +57,8 @@ export default function ScanQR() {
       .then(
         (updated) => {
           setMe(updated);
-          setJoined(true);
-          setBusy(false);
+          // The earned moment: the Signed screen stamps it, then offers the next step.
+          router.replace({ pathname: '/signed', params: { teamId: preview?.team.id ?? '' } });
         },
         (e: unknown) => {
           setError(errorMessage(e));
@@ -72,7 +70,7 @@ export default function ScanQR() {
   const canJoin = role === 'athlete' || role === 'parent' || role === 'teen';
 
   return (
-    <Screen eyebrow="Fast lane" title={joined ? 'You’re on the team' : 'Scan a team QR code'} back>
+    <Screen eyebrow="Fast lane" title="Scan a team QR code" back>
       <Gutter gap="md">
         {!preview && (
           <>
@@ -102,7 +100,7 @@ export default function ScanQR() {
             <TeamAvatar name={preview.team.name} teamColor={preview.team.color} size="lg" />
             <View style={styles.grow}>
               <Text variant="eyebrow" color="secondary">
-                {joined ? 'Joined' : 'Join'}
+                Join
               </Text>
               <Text variant="display" size="xs" color="brand">
                 {teamLabel(preview)}
@@ -117,7 +115,7 @@ export default function ScanQR() {
           </Card>
         )}
 
-        {preview && !joined && me && canJoin && (
+        {preview && me && canJoin && (
           <>
             <Text color="secondary">
               Scanning a live code puts you on the team now, with no wait for the coach.
@@ -131,11 +129,11 @@ export default function ScanQR() {
           </>
         )}
 
-        {preview && !joined && me && !canJoin && (
+        {preview && me && !canJoin && (
           <ErrorText>Team codes are for athletes, parents and teammates.</ErrorText>
         )}
 
-        {preview && !joined && !me && (
+        {preview && !me && (
           <>
             <Text color="secondary">
               Create your account first. You’ll come straight back here.
@@ -155,34 +153,8 @@ export default function ScanQR() {
           </>
         )}
 
-        {joined && role && preview && (
-          <>
-            <Button
-              label="Enter the app"
-              size="lg"
-              onPress={() => router.replace(firstTab(role))}
-            />
-            {role === 'parent' && (
-              <Button
-                label="Add your child (coach approves)"
-                variant="secondary"
-                onPress={() =>
-                  router.push({
-                    pathname: '/onboarding/request',
-                    params: {
-                      teamId: preview.team.id,
-                      teamName: teamLabel(preview),
-                      division: preview.team.division,
-                    },
-                  })
-                }
-              />
-            )}
-          </>
-        )}
-
         {error && <ErrorText>{error}</ErrorText>}
-        {preview && !joined && (
+        {preview && (
           <Button
             label="Use a different code"
             variant="secondary"
