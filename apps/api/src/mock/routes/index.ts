@@ -17,6 +17,7 @@ import { registerSessionRoutes } from './session';
 import { registerStaffAdminRoutes } from './staff-admin';
 import { registerSignupRoutes } from './signup';
 import { registerStaffRoutes } from './staff';
+import { registerStaffToolsRoutes } from './staff-tools';
 import { registerTeamRoutes } from './team';
 
 /**
@@ -44,6 +45,7 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerProfileRoutes,
     registerCardRoutes,
     registerCommunityMemberRoutes,
+    registerStaffToolsRoutes,
   ]) {
     register(app, world, g);
   }

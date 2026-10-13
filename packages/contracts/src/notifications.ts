@@ -13,14 +13,21 @@ import { type NotificationPrefs, UserSummary } from './users';
  * - `reply`: an approved comment on your post.
  * - `event`: an approved event in a community you belong to.
  * - `announcement`: a Team Impact announcement.
+ * - `warning`: staff warned you about something you posted. Always sent: no switch turns it off.
  */
-export const NOTIFICATION_KINDS = ['join_approved', 'reply', 'event', 'announcement'] as const;
+export const NOTIFICATION_KINDS = [
+  'join_approved',
+  'reply',
+  'event',
+  'announcement',
+  'warning',
+] as const;
 export const NotificationKind = z.enum(NOTIFICATION_KINDS);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
-/** Which preference switch governs each kind. */
+/** Which preference switch governs each kind. Warnings have none: they always arrive. */
 export const NOTIFICATION_PREF: Record<
-  NotificationKind,
+  Exclude<NotificationKind, 'warning'>,
   keyof Omit<NotificationPrefs, 'emailDigest'>
 > = {
   join_approved: 'approvals',

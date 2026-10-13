@@ -14,6 +14,7 @@ const NAV: Partial<Record<Role, { to: string; label: string }[]>> = {
     { to: '/staff/teams', label: 'Teams' },
     { to: '/staff/colleges', label: 'Colleges' },
     { to: '/staff/companies', label: 'Companies' },
+    { to: '/staff/recruiters', label: 'Recruiters' },
     { to: '/staff/moderation', label: 'Moderation' },
     { to: '/staff/communities', label: 'Communities' },
     { to: '/staff/announcements', label: 'Announcements' },

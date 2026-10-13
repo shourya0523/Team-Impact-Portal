@@ -81,8 +81,11 @@ describe('posting permissions (PRD §5)', () => {
 });
 
 describe('notifications', () => {
-  it('maps every kind to a preference switch', () => {
-    for (const kind of NOTIFICATION_KINDS) expect(NOTIFICATION_PREF[kind]).toBeTruthy();
+  it('maps every kind but staff warnings to a preference switch', () => {
+    for (const kind of NOTIFICATION_KINDS) {
+      if (kind === 'warning') expect(kind in NOTIFICATION_PREF).toBe(false);
+      else expect(NOTIFICATION_PREF[kind]).toBeTruthy();
+    }
   });
 
   it('marks all read with no ids, but not with an empty list', () => {

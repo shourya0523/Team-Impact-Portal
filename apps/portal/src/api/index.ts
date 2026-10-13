@@ -4,6 +4,7 @@ import { session } from './session';
 import { signup, staffSignup } from './signup';
 import { staff } from './staff';
 import { staffAdmin } from './staff-admin';
+import { staffTools } from './staff-tools';
 
 export { ApiRequestError, request } from './client';
 
@@ -14,5 +15,5 @@ export const api = {
   ...lists,
 
   ...signup,
-  staff: { ...staff, ...staffSignup, ...staffAdmin },
+  staff: { ...staff, ...staffSignup, ...staffAdmin, ...staffTools },
 };

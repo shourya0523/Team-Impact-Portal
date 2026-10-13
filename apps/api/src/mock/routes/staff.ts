@@ -11,6 +11,7 @@ import {
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { applyResolution } from '../activity';
+import { authorOf, cannotSuspend, logAction, suspend, warn } from '../staff-tools';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
@@ -55,13 +56,32 @@ export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole
       schema: { params: IdParams, body: ResolveTicketRequest, response: { 200: ModerationTicket } },
     },
     async (request) => {
-      requireRole(request, 'staff');
+      const staff = requireRole(request, 'staff');
       const ticket = world.tickets.find((t) => t.id === request.params.id);
       if (!ticket) throw httpError(404, 'No such ticket');
+      const { resolution, authorAction, note } = request.body;
+      // Check the author action first, so a refused suspension leaves the ticket untouched.
+      const author = authorAction ? authorOf(world, ticket.target) : null;
+      if (author && 'status' in author) throw httpError(author.status, author.message);
+      if (author && authorAction === 'suspend') {
+        const refused = cannotSuspend(world, author);
+        if (refused) throw httpError(refused.status, refused.message);
+      }
       ticket.status = 'resolved';
-      ticket.resolution = request.body.resolution;
+      ticket.resolution = resolution;
       // Remove takes the item down; keep approves anything still held for review.
-      applyResolution(world, ticket.target, ticket.resolution);
+      applyResolution(world, ticket.target, resolution);
+      logAction(
+        world,
+        staff,
+        resolution === 'remove' ? 'remove' : 'keep',
+        { ...ticket.target, label: ticket.preview },
+        { ticketId: ticket.id, note: note ?? null },
+      );
+      if (author && authorAction === 'warn') warn(world, staff, author, ticket, note ?? null);
+      if (author && authorAction === 'suspend') {
+        suspend(world, staff, author, { reason: note ?? null, ticketId: ticket.id });
+      }
       return ticket;
     },
   );

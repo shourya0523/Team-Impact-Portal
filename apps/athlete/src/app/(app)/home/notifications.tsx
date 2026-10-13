@@ -16,6 +16,7 @@ const ICON: Record<NotificationKind, IconName> = {
   reply: 'comment',
   event: 'calendar',
   announcement: 'megaphone',
+  warning: 'flag',
 };
 
 const open = (n: Notification) => {
