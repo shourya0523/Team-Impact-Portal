@@ -1,9 +1,12 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Icon } from '@/components/Icon';
-import { Button, Progress } from '@/components/ui';
-import { c, font } from '@/theme';
+import { colors, spacing } from '@team-impact/ui-tokens';
+import { Progress } from '@/components/ui';
+import { Button, Icon, Text } from '@/ui';
+
+const DOT = 24;
+const CHECK = 64;
 
 function Step({
   title,
@@ -15,11 +18,11 @@ function Step({
   state: 'done' | 'now' | 'next';
 }) {
   return (
-    <View style={{ flexDirection: 'row', gap: 14 }}>
-      <View style={{ alignItems: 'center' }}>
+    <View style={styles.step}>
+      <View style={styles.rail}>
         {state === 'done' ? (
-          <View style={[styles.dot, { backgroundColor: '#fff' }]}>
-            <Icon name="check" size={14} color={c.navy} strokeWidth={3.4} />
+          <View style={[styles.dot, { backgroundColor: colors.surface }]}>
+            <Icon name="check" size={14} color={colors.brand} strokeWidth={3.4} />
           </View>
         ) : (
           <View style={[styles.dot, state === 'now' ? styles.dotNow : styles.dotNext]} />
@@ -28,28 +31,16 @@ function Step({
           <View
             style={[
               styles.line,
-              { backgroundColor: state === 'done' ? c.onNavyMuted : c.navyRaised },
+              { backgroundColor: state === 'done' ? colors.onBrand.muted : colors.brandRaised },
             ]}
           />
         )}
       </View>
-      <View style={{ paddingTop: 2 }}>
-        <Text
-          style={{
-            fontFamily: font.bold,
-            fontSize: 15,
-            color: state === 'next' ? c.onNavy : '#fff',
-          }}
-        >
+      <View style={styles.stepText}>
+        <Text weight="semibold" color={state === 'next' ? 'onBrandSecondary' : 'onBrand'}>
           {title}
         </Text>
-        <Text
-          style={{
-            fontFamily: font.body,
-            fontSize: 13,
-            color: state === 'next' ? c.onNavyMuted : c.onNavy,
-          }}
-        >
+        <Text variant="caption" color={state === 'next' ? 'onBrandMuted' : 'onBrandSecondary'}>
           {note}
         </Text>
       </View>
@@ -62,20 +53,18 @@ export default function Pending() {
   const { teamName } = useLocalSearchParams<{ teamName?: string }>();
   const insets = useSafeAreaInsets();
   return (
-    <View style={{ flex: 1, backgroundColor: c.navy }}>
+    <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        contentContainerStyle={{ flexGrow: 1, padding: 24, paddingTop: insets.top + 28, gap: 24 }}
-      >
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.lg }]}>
         <Progress step={3} total={3} onNavy />
-        <View style={{ marginTop: 48, gap: 10 }}>
+        <View style={styles.hero}>
           <View style={styles.check}>
-            <Icon name="check" size={30} color="#fff" strokeWidth={3} />
+            <Icon name="check" size={30} color={colors.onBrand.text} strokeWidth={3} />
           </View>
-          <Text style={styles.title} accessibilityRole="header">
-            REQUEST{'\n'}SENT
+          <Text variant="display" size="xxl" color="onBrand">
+            Request{'\n'}sent
           </Text>
-          <Text style={styles.body}>
+          <Text color="onBrandSecondary">
             The coach has your request to join {teamName ?? 'the team'}. We’ll tell you the moment
             it’s approved.
           </Text>
@@ -85,33 +74,42 @@ export default function Pending() {
           <Step title="Coach reviews it" note="Usually within a day or two" state="now" />
           <Step title="You’re on the team" note="Roster, feed and events open up" state="next" />
         </View>
-        <View style={{ flex: 1 }} />
-        <View style={{ gap: 10 }}>
-          <Button
-            label="Have the coach’s QR? Scan it"
-            kind="onNavy"
-            size="lg"
-            onPress={() => router.push('/scan')}
-          />
-        </View>
+        <View style={styles.grow} />
+        <Button
+          label="Have the coach’s QR? Scan it"
+          variant="ghostOnBrand"
+          size="lg"
+          onPress={() => router.push('/scan')}
+        />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.brand },
+  content: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
+  hero: { marginTop: spacing['2xl'], gap: spacing.sm },
   check: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: c.red,
+    width: CHECK,
+    height: CHECK,
+    borderRadius: CHECK / 2,
+    backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontFamily: font.display, fontSize: 56, lineHeight: 52, color: '#fff' },
-  body: { fontFamily: font.body, fontSize: 16, lineHeight: 23, color: c.navyTint },
-  dot: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  dotNow: { borderWidth: 3, borderColor: '#fff' },
-  dotNext: { borderWidth: 2, borderStyle: 'dashed', borderColor: c.onNavyMuted },
+  step: { flexDirection: 'row', gap: spacing.md },
+  rail: { alignItems: 'center' },
+  stepText: { paddingTop: spacing.xs },
+  dot: {
+    width: DOT,
+    height: DOT,
+    borderRadius: DOT / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dotNow: { borderWidth: 3, borderColor: colors.surface },
+  dotNext: { borderWidth: 2, borderStyle: 'dashed', borderColor: colors.onBrand.muted },
   line: { width: 2, height: 28 },
+  grow: { flex: 1 },
 });

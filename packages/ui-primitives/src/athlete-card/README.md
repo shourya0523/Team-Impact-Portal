@@ -102,7 +102,7 @@ Every size is in **base units** on a `CARD_WIDTH × CARD_HEIGHT` card. Each rend
 `width / CARD_WIDTH`, so the card scales to any width.
 
 - **`cardColors`:** the fixed brand colours (badge yellow, stripe red, text). They come from the
-  `palette` in `@team-impact/ui-tokens`.
+  `colors.card.art` in `@team-impact/ui-tokens`.
 - **`cardLayout`:** positions and sizes (photo window, badges, logo, back header, chips).
 - **`photoBleed`:** the front photo's fade-out mask.
 - **`cardText`:** every text style. Fonts: the portal asks for DM Sans; the app uses the system
@@ -232,7 +232,7 @@ cross-origin photos without CORS on the portal, and fully transparent images.
 | Card proportions                       | `CARD_HEIGHT` in `spec.ts` (width stays the 320 base)                                         |
 | Sizes, spacing, badge/logo size        | `cardLayout` in `spec.ts`                                                                     |
 | Fonts and text sizes                   | `cardText` in `spec.ts`                                                                       |
-| Fixed brand colours                    | `cardColors` in `spec.ts` (or the ui-tokens palette)                                          |
+| Fixed brand colours                    | `cardColors` in `spec.ts` (from ui-tokens `colors.card.art`)                                  |
 | Flip speed, depth, lift                | `cardMotion` in `spec.ts`; spring feel: `flipSpring` in `native/AthleteCard.tsx`              |
 | How the photo fades                    | `photoBleed` in `spec.ts`                                                                     |
 | Pattern shapes and placement           | `geometryFor()` in `patterns.ts`                                                              |

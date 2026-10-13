@@ -1,7 +1,11 @@
 import { Link } from 'react-router';
+import { colors, fontWeight, spacing } from '@team-impact/ui-tokens';
 import { api } from '../../api';
-import { Async, brand, formatDate, fullName, PageHeader, Table } from '../../ui';
+import { Async, formatDate, fullName, PageHeader, Table } from '../../ui';
 import { useApi } from '../../useApi';
+
+/** The list's own colour dot (runtime data, chosen by the recruiter). */
+const DOT = spacing.md;
 
 /** R6: the recruiter's own lists and the ones colleagues shared with them. */
 export const ListsPage = () => {
@@ -22,12 +26,20 @@ export const ListsPage = () => {
               {
                 header: 'List',
                 cell: (l) => (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: spacing.sm }}>
                     <span
                       aria-hidden="true"
-                      style={{ width: 12, height: 12, borderRadius: 6, background: l.color }}
+                      style={{
+                        width: DOT,
+                        height: DOT,
+                        borderRadius: DOT / 2,
+                        background: l.color,
+                      }}
                     />
-                    <Link to={`/lists/${l.id}`} style={{ color: brand.navy, fontWeight: 700 }}>
+                    <Link
+                      to={`/lists/${l.id}`}
+                      style={{ color: colors.brand, fontWeight: fontWeight.semibold }}
+                    >
                       {l.name}
                     </Link>
                   </span>

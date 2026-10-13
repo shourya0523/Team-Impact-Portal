@@ -10,7 +10,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "expo export --platform web --output-dir dist"
+    "test": "expo export --platform web --output-dir dist",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@expo-google-fonts/barlow": "^0.4.1",

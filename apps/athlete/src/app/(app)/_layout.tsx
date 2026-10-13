@@ -1,9 +1,9 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
-import { Icon, type IconName } from '@/components/Icon';
 import { useRole } from '@/navigation/role';
 import { TABS_BY_ROLE, type TabName } from '@/navigation/tabs';
-import { c, font } from '@/theme';
+import { colors, spacing, typography } from '@team-impact/ui-tokens';
+import { fontFor, Icon, type IconName } from '@/ui';
 
 // Every tab in the app, in tab-bar order. Each role only sees the ones TABS_BY_ROLE allows.
 const ALL_TABS: { name: TabName; title: string; icon: IconName }[] = [
@@ -27,15 +27,18 @@ export default function AppTabs() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: c.navy,
-        tabBarInactiveTintColor: c.muted,
+        tabBarActiveTintColor: colors.brand,
+        tabBarInactiveTintColor: colors.text.muted,
         tabBarStyle: {
-          backgroundColor: c.surface,
-          borderTopColor: c.lineSoft,
+          backgroundColor: colors.surface,
+          borderTopColor: colors.lineSoft,
           height: 84,
-          paddingTop: 8,
+          paddingTop: spacing.sm,
         },
-        tabBarLabelStyle: { fontFamily: font.semibold, fontSize: 12 },
+        tabBarLabelStyle: {
+          fontFamily: fontFor('semibold'),
+          fontSize: typography.caption.fontSize,
+        },
       }}
     >
       {ALL_TABS.map((tab) => (
@@ -50,7 +53,7 @@ export default function AppTabs() {
                   name={tab.icon}
                   size={24}
                   color={String(color)}
-                  fill={focused ? c.navyTint : 'none'}
+                  fill={focused ? colors.brandTint : 'none'}
                 />
               ),
             }}

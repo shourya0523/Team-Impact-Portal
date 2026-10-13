@@ -1,11 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { type AthleteSearchQuery, DIVISIONS, REGIONS } from '@team-impact/contracts';
-import { fontSize, spacing } from '@team-impact/ui-tokens';
+import { spacing } from '@team-impact/ui-tokens';
 import { regionName } from '../../athleteCard';
 import { api } from '../../api';
 import { useSession } from '../../session';
-import { Async, brand, button, PageHeader, Panel, Tile } from '../../ui';
+import { Async, Button, Card, Input, PageHeader, Select, Text, Tile } from '../../ui';
 import { useApi } from '../../useApi';
 
 const FILTER_KEYS = [
@@ -19,25 +18,6 @@ const FILTER_KEYS = [
   'communityId',
 ] as const;
 type Filters = Partial<Record<(typeof FILTER_KEYS)[number], string>>;
-
-const field: CSSProperties = {
-  width: '100%',
-  boxSizing: 'border-box',
-  minHeight: 38,
-  padding: '0 10px',
-  borderRadius: 8,
-  border: `1px solid ${brand.border}`,
-  background: '#FFFFFF',
-  fontSize: fontSize.sm,
-  color: brand.ink,
-};
-
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-    <span style={{ fontSize: 12, fontWeight: 700, color: brand.ink }}>{label}</span>
-    {children}
-  </label>
-);
 
 /**
  * R2–R4: dense results grid with a persistent filter rail. Filters live in the URL, so a search
@@ -70,9 +50,9 @@ export const SearchPage = () => {
     else next.delete(k);
     setParams(next, { replace: true });
   };
-  const text = (k: keyof Filters, placeholder: string) => (
-    <input
-      style={field}
+  const text = (k: keyof Filters, label: string, placeholder: string) => (
+    <Input
+      label={label}
       defaultValue={filters[k] ?? ''}
       placeholder={placeholder}
       // Search as the recruiter finishes typing a value, not on every key.
@@ -88,7 +68,7 @@ export const SearchPage = () => {
         subtitle="Athletes with a published Baseball Card who are open to recruiting."
       />
       <div style={{ display: 'flex', gap: spacing.lg, alignItems: 'flex-start' }}>
-        <Panel style={{ width: 248, flexShrink: 0, padding: spacing.md }}>
+        <Card style={{ width: 248, flexShrink: 0 }}>
           <form
             // Remount on every change so the text boxes show the URL's values, e.g. after Clear.
             key={key}
@@ -96,88 +76,75 @@ export const SearchPage = () => {
             onSubmit={(e) => e.preventDefault()}
             style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}
           >
-            <Field label="Region">
-              <select
-                style={field}
-                value={filters.region ?? ''}
-                onChange={(e) => set('region', e.target.value)}
-              >
-                <option value="">Any</option>
-                {REGIONS.map((r) => (
-                  <option key={r} value={r}>
-                    {regionName(r)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="City">{text('city', 'e.g. Boston')}</Field>
-            <Field label="Sport">{text('sport', 'e.g. Soccer')}</Field>
-            <Field label="Major">{text('major', 'e.g. Economics')}</Field>
-            <Field label="Grad year">{text('classYear', 'e.g. 2027')}</Field>
-            <Field label="Division">
-              <select
-                style={field}
-                value={filters.division ?? ''}
-                onChange={(e) => set('division', e.target.value)}
-              >
-                <option value="">Any</option>
-                {DIVISIONS.map((d) => (
-                  <option key={d} value={d}>
-                    Division {d}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Experience">{text('experience', 'e.g. internship')}</Field>
+            <Select
+              label="Region"
+              value={filters.region ?? ''}
+              onChange={(e) => set('region', e.target.value)}
+            >
+              <option value="">Any</option>
+              {REGIONS.map((r) => (
+                <option key={r} value={r}>
+                  {regionName(r)}
+                </option>
+              ))}
+            </Select>
+            {text('city', 'City', 'e.g. Boston')}
+            {text('sport', 'Sport', 'e.g. Soccer')}
+            {text('major', 'Major', 'e.g. Economics')}
+            {text('classYear', 'Grad year', 'e.g. 2027')}
+            <Select
+              label="Division"
+              value={filters.division ?? ''}
+              onChange={(e) => set('division', e.target.value)}
+            >
+              <option value="">Any</option>
+              {DIVISIONS.map((d) => (
+                <option key={d} value={d}>
+                  Division {d}
+                </option>
+              ))}
+            </Select>
+            {text('experience', 'Experience', 'e.g. internship')}
             {flags?.identitySearch && (
-              <Field label="Official community">
-                <Async state={officialCommunities.state}>
-                  {(communities) => (
-                    <select
-                      style={field}
-                      value={filters.communityId ?? ''}
-                      onChange={(e) => set('communityId', e.target.value)}
-                    >
-                      <option value="">Any</option>
-                      {communities.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </Async>
-              </Field>
+              <Async state={officialCommunities.state}>
+                {(communities) => (
+                  <Select
+                    label="Official community"
+                    value={filters.communityId ?? ''}
+                    onChange={(e) => set('communityId', e.target.value)}
+                  >
+                    <option value="">Any</option>
+                    {communities.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+              </Async>
             )}
             {key && (
-              <button
-                type="button"
-                style={button('quiet')}
+              <Button
+                label="Clear filters"
+                variant="quiet"
+                size="sm"
                 onClick={() => setParams({}, { replace: true })}
-              >
-                Clear filters
-              </button>
+              />
             )}
           </form>
-        </Panel>
+        </Card>
 
         <div style={{ flex: 1, minWidth: 0 }}>
           <Async state={results.state}>
             {(page) => (
               <>
-                <p
-                  style={{
-                    margin: `0 0 ${spacing.md}px`,
-                    color: brand.muted,
-                    fontSize: fontSize.sm,
-                  }}
-                >
+                <Text variant="small" color="muted" style={{ marginBottom: spacing.md }}>
                   {page.items.length} {page.items.length === 1 ? 'athlete' : 'athletes'}
-                </p>
+                </Text>
                 {page.items.length === 0 && (
-                  <Panel style={{ padding: spacing.lg, color: brand.muted }}>
-                    No athletes match these filters.
-                  </Panel>
+                  <Card style={{ padding: spacing.lg }}>
+                    <Text color="muted">No athletes match these filters.</Text>
+                  </Card>
                 )}
                 <ul
                   style={{
@@ -195,28 +162,22 @@ export const SearchPage = () => {
                         to={`/athletes/${a.athleteId}`}
                         style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}
                       >
-                        <Panel style={{ padding: spacing.md, display: 'flex', gap: spacing.md }}>
-                          <Tile
-                            text={a.jerseyNumber ?? '–'}
-                            color={a.team?.color ?? brand.navy}
-                            size={48}
-                          />
+                        <Card style={{ flexDirection: 'row', gap: spacing.md }}>
+                          <Tile text={a.jerseyNumber ?? '–'} teamColor={a.team?.color} size="md" />
                           <div style={{ minWidth: 0 }}>
-                            <div
-                              style={{ fontWeight: 800, color: brand.navy, fontSize: fontSize.md }}
-                            >
+                            <Text variant="body" weight="semibold" color="brand">
                               {a.firstName} {a.lastName}
-                            </div>
-                            <div style={{ fontSize: fontSize.sm, color: brand.ink, marginTop: 2 }}>
+                            </Text>
+                            <Text variant="small">
                               {a.team ? `${a.team.college.name} · ${a.team.name}` : 'Alumni'}
-                            </div>
-                            <div style={{ fontSize: 12, color: brand.muted, marginTop: 6 }}>
+                            </Text>
+                            <Text variant="caption" color="muted" style={{ marginTop: spacing.xs }}>
                               {[a.major, `Class of ${a.classYear}`, a.position, a.city]
                                 .filter(Boolean)
                                 .join(' · ')}
-                            </div>
+                            </Text>
                           </div>
-                        </Panel>
+                        </Card>
                       </Link>
                     </li>
                   ))}

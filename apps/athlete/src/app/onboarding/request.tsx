@@ -1,14 +1,17 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CreateJoinRequest, ParentRelationship } from '@team-impact/contracts';
 import { api } from '@/api';
 import { ROLE_LABEL } from '@/components/format';
-import { Icon } from '@/components/Icon';
-import { Avatar, Button, Card, IconButton, Progress, type } from '@/components/ui';
+import { colors, radius, spacing } from '@team-impact/ui-tokens';
+import { ErrorText, IconButton, Progress } from '@/components/ui';
 import { useRole } from '@/navigation/role';
-import { c, font, monogram } from '@/theme';
+import { monogram } from '@/theme';
+import { Avatar, Button, Card, Icon, Text } from '@/ui';
+
+const BADGE = 52;
 
 const YEARS = [2027, 2028, 2029, 2030];
 
@@ -20,8 +23,8 @@ function Choice({ label, on, onPress }: { label: string; on: boolean; onPress: (
       accessibilityState={{ checked: on }}
       style={[styles.choice, on ? styles.choiceOn : null]}
     >
-      {on && <Icon name="check" size={20} color={c.navy} strokeWidth={3} />}
-      <Text style={{ fontFamily: font.display, fontSize: 28, color: on ? c.navy : c.ink }}>
+      {on && <Icon name="check" size={20} color={colors.brand} strokeWidth={3} />}
+      <Text variant="display" size="xs" color={on ? 'brand' : 'ink'} accessibilityRole="none">
         {label}
       </Text>
     </Pressable>
@@ -76,34 +79,32 @@ export default function Request() {
           : '';
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.ground }}>
+    <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingTop: insets.top + 20, gap: 20, flexGrow: 1 }}
-      >
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.md }]}>
+        <View style={styles.topBar}>
           <IconButton icon="back" label="Back" onPress={() => router.back()} />
           <Progress step={2} total={3} />
         </View>
 
         <View style={styles.teamCard}>
-          <Text style={styles.teamMonogram} aria-hidden>
+          <Text variant="decor" size="md" style={styles.teamMonogram}>
             {monogram(teamName ?? '', true)}
           </Text>
           <View style={styles.teamBadge}>
-            <Text style={{ fontFamily: font.display, fontSize: 22, color: c.navy }}>
+            <Text variant="display" size="xs" color="brand" accessibilityRole="none">
               {monogram(teamName ?? '', true)}
             </Text>
           </View>
           <View>
-            <Text
-              style={{ fontFamily: font.bold, fontSize: 12, letterSpacing: 1.4, color: c.onNavy }}
-            >
-              ASKING TO JOIN
+            <Text variant="eyebrow" color="onBrandSecondary">
+              Asking to join
             </Text>
-            <Text style={{ fontFamily: font.bold, fontSize: 18, color: '#fff' }}>{teamName}</Text>
+            <Text weight="semibold" color="onBrand">
+              {teamName}
+            </Text>
             {division && (
-              <Text style={{ fontFamily: font.body, fontSize: 13, color: c.onNavy }}>
+              <Text variant="caption" color="onBrandSecondary">
                 Division {division}
               </Text>
             )}
@@ -111,12 +112,9 @@ export default function Request() {
         </View>
 
         {role === 'athlete' && (
-          <View style={{ gap: 12 }}>
-            <Text
-              style={[type.display, { fontSize: 40, lineHeight: 39 }]}
-              accessibilityRole="header"
-            >
-              WHAT’S YOUR CLASS?
+          <View style={styles.section}>
+            <Text variant="display" size="lg" color="brand">
+              What’s your class?
             </Text>
             <View accessibilityRole="radiogroup" style={styles.grid}>
               {YEARS.map((y) => (
@@ -131,12 +129,9 @@ export default function Request() {
           </View>
         )}
         {role === 'parent' && (
-          <View style={{ gap: 12 }}>
-            <Text
-              style={[type.display, { fontSize: 40, lineHeight: 39 }]}
-              accessibilityRole="header"
-            >
-              YOU ARE THEIR…
+          <View style={styles.section}>
+            <Text variant="display" size="lg" color="brand">
+              You are their…
             </Text>
             <View accessibilityRole="radiogroup" style={styles.grid}>
               <Choice
@@ -153,40 +148,35 @@ export default function Request() {
           </View>
         )}
         {role === 'teen' && (
-          <Text style={[type.display, { fontSize: 40, lineHeight: 39 }]} accessibilityRole="header">
-            READY TO ASK?
+          <Text variant="display" size="lg" color="brand">
+            Ready to ask?
           </Text>
         )}
 
         {me && (
           <Card>
-            <Text
-              style={{ fontFamily: font.bold, fontSize: 12, letterSpacing: 1.4, color: c.text2 }}
-            >
-              THE COACH WILL SEE
+            <Text variant="eyebrow" color="secondary">
+              The coach will see
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <Avatar firstName={me.firstName} lastName={me.lastName} role={me.role} />
+            <View style={styles.person}>
+              <Avatar name={`${me.firstName} ${me.lastName}`} role={me.role} />
               <View>
-                <Text style={type.name}>
+                <Text weight="semibold">
                   {me.firstName} {me.lastName}
                 </Text>
-                <Text style={type.small}>{detail}</Text>
+                <Text variant="small" color="secondary">
+                  {detail}
+                </Text>
               </View>
             </View>
-            <Text style={type.small}>That’s all. Your resume isn’t needed to join.</Text>
+            <Text variant="small" color="secondary">
+              That’s all. Your resume isn’t needed to join.
+            </Text>
           </Card>
         )}
 
-        {error && (
-          <Text
-            style={{ color: c.danger, fontFamily: font.medium, fontSize: 15 }}
-            accessibilityRole="alert"
-          >
-            {error}
-          </Text>
-        )}
-        <View style={{ flex: 1 }} />
+        {error && <ErrorText>{error}</ErrorText>}
+        <View style={styles.grow} />
         <Button
           label={sending ? 'Sending…' : 'Send request'}
           size="lg"
@@ -199,45 +189,48 @@ export default function Request() {
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.ground },
+  content: { padding: spacing.md, gap: spacing.lg, flexGrow: 1 },
+  topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  section: { gap: spacing.md },
+  person: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  grow: { flex: 1 },
   teamCard: {
-    backgroundColor: c.navy,
-    borderRadius: 24,
-    padding: 18,
+    backgroundColor: colors.brand,
+    borderRadius: radius.card,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: spacing.md,
     overflow: 'hidden',
   },
   teamMonogram: {
     position: 'absolute',
     right: -8,
     bottom: -34,
-    fontFamily: font.display,
-    fontSize: 110,
-    lineHeight: 120,
-    color: c.navyRaised,
+    color: colors.brandRaised,
   },
   teamBadge: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: '#fff',
+    width: BADGE,
+    height: BADGE,
+    borderRadius: BADGE / 2,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   choice: {
     width: '48%',
     flexGrow: 1,
-    minHeight: 64,
-    borderRadius: 18,
+    minHeight: spacing['3xl'],
+    borderRadius: radius.card,
     borderWidth: 1,
-    borderColor: c.line,
-    backgroundColor: c.surface,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
-  choiceOn: { borderWidth: 2, borderColor: c.navy, backgroundColor: c.navyTint },
+  choiceOn: { borderWidth: 2, borderColor: colors.brand, backgroundColor: colors.brandTint },
 });

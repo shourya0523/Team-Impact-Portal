@@ -1,7 +1,4 @@
-/**
- * Team Impact spacing scale from the Figma design system.
- * Values are platform-neutral points/pixels.
- */
+/** Spacing scale, unchanged from the pre-Signing-Day scale. Platform-neutral points/pixels. */
 export const spacing = {
   none: 0,
   xs: 4,

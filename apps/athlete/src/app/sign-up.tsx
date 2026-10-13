@@ -1,8 +1,10 @@
-import { Pressable, Button, ScrollView, Text } from 'react-native';
-import { useState } from 'react';
 import { Link, router } from 'expo-router';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet } from 'react-native';
 import type { Role } from '@team-impact/contracts';
+import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { useRole } from '@/navigation/role';
+import { Button, Icon, Text } from '@/ui';
 
 const OPTIONS: { id: Role; label: string }[] = [
   { id: 'athlete', label: 'Athlete' },
@@ -28,8 +30,10 @@ export default function SignUp() {
   return (
     // ScrollView: with 7 roles the list can be taller than a small screen. flexGrow keeps it
     // centred when it fits.
-    <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 24 }}>
-      <Text style={{ fontSize: 24, fontWeight: 'bold', textAlign: 'center' }}>Who are you?</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+      <Text variant="display" size="md" color="brand" style={styles.center}>
+        Who are you?
+      </Text>
       {OPTIONS.map((option) => {
         const isSelected = selected === option.id;
 
@@ -37,34 +41,45 @@ export default function SignUp() {
           <Pressable
             key={option.id}
             onPress={() => setSelected(option.id)}
-            style={{
-              padding: 16,
-              marginBottom: 12,
-              borderRadius: 10,
-              borderWidth: 2,
-              borderColor: isSelected ? '#2563eb' : '#d1d5db',
-              backgroundColor: isSelected ? '#eff6ff' : '#ffffff',
-            }}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: isSelected }}
+            style={[styles.option, isSelected && styles.optionOn]}
           >
-            <Text
-              style={{
-                textAlign: 'center',
-                fontSize: 16,
-                fontWeight: isSelected ? 'bold' : 'normal',
-                color: isSelected ? '#2563eb' : '#111827',
-              }}
-            >
-              {isSelected ? '✓  ' : ''}
+            {isSelected && <Icon name="check" size={18} color={colors.brand} strokeWidth={3} />}
+            <Text weight={isSelected ? 'semibold' : 'regular'} color={isSelected ? 'brand' : 'ink'}>
               {option.label}
             </Text>
           </Pressable>
         );
       })}
-      <Button title="Continue" disabled={!selected} onPress={onContinue} />
-      <Link href="/onboarding/under-13" style={{ textAlign: 'center', marginTop: 12 }}>
-        Under 13?
+      <Button label="Continue" size="lg" disabled={!selected} onPress={onContinue} />
+      <Link href="/onboarding/under-13" style={styles.link}>
+        <Text weight="semibold" color="brand">
+          Under 13?
+        </Text>
       </Link>
-      <Text style={{ textAlign: 'center', marginTop: 24 }}>Sign up / sign in</Text>
+      <Text variant="small" color="secondary" style={styles.center}>
+        Sign up / sign in
+      </Text>
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { backgroundColor: colors.ground },
+  content: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg, gap: spacing.sm },
+  center: { textAlign: 'center' },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  optionOn: { borderColor: colors.brand, backgroundColor: colors.brandTint },
+  link: { alignSelf: 'center', marginTop: spacing.sm },
+});

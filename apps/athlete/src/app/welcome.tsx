@@ -1,65 +1,65 @@
 import { router } from 'expo-router';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Text as RNText, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { teamImpactLogo } from '@team-impact/ui-primitives/native';
-import { Button } from '@/components/ui';
-import { c, font } from '@/theme';
+import { colors, spacing } from '@team-impact/ui-tokens';
+import { Button, Logo, Text } from '@/ui';
 
 /** "/welcome": the landing page every user starts from. */
 export default function Welcome() {
   const insets = useSafeAreaInsets();
   return (
     <ScrollView
-      style={{ backgroundColor: c.navy }}
-      contentContainerStyle={{
-        flexGrow: 1,
-        padding: 24,
-        paddingTop: insets.top + 32,
-        paddingBottom: insets.bottom + 24,
-        gap: 24,
-      }}
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        { paddingTop: insets.top + spacing.xl, paddingBottom: insets.bottom + spacing.lg },
+      ]}
     >
-      <Image
-        source={teamImpactLogo}
-        style={styles.logo}
-        accessibilityLabel="Team IMPACT"
-        resizeMode="contain"
-      />
-      <View style={{ flex: 1, justifyContent: 'center', gap: 16 }}>
-        <Text style={styles.title} accessibilityRole="header">
-          YOUR TEAM.{'\n'}
-          <Text style={{ color: '#ff8a9b' }}>YOUR PEOPLE.</Text>
+      <Logo size="md" variant="dark" />
+      <View style={styles.hero}>
+        <Text variant="display" size="xxl" color="onBrand">
+          Your team.{'\n'}
+          {/* A plain nested span: it inherits the headline's type, and stays inside one heading. */}
+          <RNText style={styles.accent}>Your people.</RNText>
         </Text>
-        <Text style={styles.body}>
+        <Text color="onBrandSecondary">
           The Team IMPACT app keeps teams, families and coaches together, and gives every athlete a
           Baseball Card.
         </Text>
       </View>
-      <View style={{ gap: 10 }}>
+      <View style={styles.actions}>
         <Button label="Create an account" size="lg" onPress={() => router.push('/sign-up')} />
         <Button
           label="Scan a team QR code"
-          kind="onNavy"
+          variant="ghostOnBrand"
           icon="qr"
           size="lg"
           onPress={() => router.push('/scan')}
         />
         {__DEV__ && (
-          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+          <View style={styles.dev}>
             <Button
               label="Mock sign-in"
-              kind="white"
+              variant="onBrand"
               size="sm"
-              stretch
               onPress={() => router.push('/dev-sign-in')}
             />
-            <Button
-              label="Card demo"
-              kind="onNavy"
-              size="sm"
-              stretch
-              onPress={() => router.push('/dev/card-demo')}
-            />
+            <View style={styles.row}>
+              <Button
+                label="Card demo"
+                variant="ghostOnBrand"
+                size="sm"
+                stretch
+                onPress={() => router.push('/dev/card-demo')}
+              />
+              <Button
+                label="Tokens"
+                variant="ghostOnBrand"
+                size="sm"
+                stretch
+                onPress={() => router.push('/dev/tokens')}
+              />
+            </View>
           </View>
         )}
       </View>
@@ -68,7 +68,12 @@ export default function Welcome() {
 }
 
 const styles = StyleSheet.create({
-  logo: { width: 84, height: 84, borderRadius: 18, backgroundColor: '#fff' },
-  title: { fontFamily: font.display, fontSize: 64, lineHeight: 60, color: '#fff' },
-  body: { fontFamily: font.body, fontSize: 17, lineHeight: 25, color: c.navyTint },
+  screen: { backgroundColor: colors.brand },
+  content: { flexGrow: 1, padding: spacing.lg, gap: spacing.lg },
+  hero: { flex: 1, justifyContent: 'center', gap: spacing.md },
+  // Pale action tint keeps the red accent while staying AA on navy (8.4:1).
+  accent: { color: colors.actionTint },
+  actions: { gap: spacing.sm },
+  dev: { gap: spacing.sm, marginTop: spacing.sm },
+  row: { flexDirection: 'row', gap: spacing.sm },
 });

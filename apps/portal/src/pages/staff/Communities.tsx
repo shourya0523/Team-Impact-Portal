@@ -1,14 +1,24 @@
 import type { CommunityKind, StaffCommunity } from '@team-impact/contracts';
-import { fontSize, spacing } from '@team-impact/ui-tokens';
+import { colors, fontWeight, spacing } from '@team-impact/ui-tokens';
 import { api } from '../../api';
 import { useSession } from '../../session';
-import { Async, Badge, brand, button, formatDate, fullName, PageHeader, Table } from '../../ui';
+import {
+  Async,
+  Badge,
+  type BadgeProps,
+  Button,
+  formatDate,
+  fullName,
+  PageHeader,
+  Table,
+  Text,
+} from '../../ui';
 import { useApi } from '../../useApi';
 
-const KIND: Record<CommunityKind, { label: string; tone: 'info' | 'neutral' | 'warn' | 'good' }> = {
+const KIND: Record<CommunityKind, { label: string; tone: BadgeProps['variant'] }> = {
   team: { label: 'Team', tone: 'info' },
   team_impact: { label: 'Team Impact', tone: 'info' },
-  medical: { label: 'Medical', tone: 'warn' },
+  medical: { label: 'Medical', tone: 'warning' },
   interest: { label: 'Interest', tone: 'neutral' },
 };
 
@@ -40,16 +50,18 @@ export const CommunitiesPage = () => {
               {
                 header: 'Community',
                 cell: ({ community: c }) => (
-                  <span style={{ fontWeight: 700, color: brand.navy }}>{c.name}</span>
+                  <span style={{ fontWeight: fontWeight.semibold, color: colors.brand }}>
+                    {c.name}
+                  </span>
                 ),
               },
               {
                 header: 'Kind',
                 cell: ({ community: c }) => (
-                  <span style={{ display: 'inline-flex', gap: 6 }}>
-                    <Badge tone={KIND[c.kind].tone}>{KIND[c.kind].label}</Badge>
+                  <span style={{ display: 'inline-flex', gap: spacing.xs }}>
+                    <Badge variant={KIND[c.kind].tone} label={KIND[c.kind].label} />
                     {(c.kind === 'interest' || c.kind === 'medical') && c.private && (
-                      <Badge tone="neutral">Private</Badge>
+                      <Badge variant="neutral" label="Private" />
                     )}
                   </span>
                 ),
@@ -64,11 +76,11 @@ export const CommunitiesPage = () => {
                 header: 'Moderation',
                 cell: ({ community: c }) =>
                   c.moderation === 'approved' ? (
-                    <Badge tone="good">Approved</Badge>
+                    <Badge variant="success" label="Approved" />
                   ) : c.moderation === 'in_review' ? (
-                    <Badge tone="warn">In review</Badge>
+                    <Badge variant="warning" label="In review" />
                   ) : (
-                    <Badge tone="danger">Removed</Badge>
+                    <Badge variant="danger" label="Removed" />
                   ),
               },
               {
@@ -76,24 +88,27 @@ export const CommunitiesPage = () => {
                 align: 'right',
                 cell: (r) =>
                   r.community.kind === 'interest' && r.community.private ? (
-                    <span style={{ color: brand.muted, fontSize: 12 }}>
+                    <Text as="span" variant="caption" color="muted">
                       Private: can’t be official
-                    </span>
+                    </Text>
                   ) : r.community.kind === 'interest' && r.community.moderation !== 'approved' ? (
-                    <span style={{ color: brand.muted, fontSize: 12 }}>Approve it first</span>
+                    <Text as="span" variant="caption" color="muted">
+                      Approve it first
+                    </Text>
                   ) : r.community.kind === 'interest' ? (
-                    <button
-                      type="button"
+                    <Button
+                      label={r.community.official ? 'Official' : 'Mark official'}
+                      variant={r.community.official ? 'primary' : 'secondary'}
+                      size="sm"
                       aria-pressed={r.community.official}
-                      style={button(r.community.official ? 'primary' : 'secondary')}
                       onClick={() =>
                         r.community.kind === 'interest' && toggle(r, !r.community.official)
                       }
-                    >
-                      {r.community.official ? 'Official' : 'Mark official'}
-                    </button>
+                    />
                   ) : (
-                    <span style={{ color: brand.muted, fontSize: 12 }}>Can’t be official</span>
+                    <Text as="span" variant="caption" color="muted">
+                      Can’t be official
+                    </Text>
                   ),
               },
             ]}
@@ -103,12 +118,18 @@ export const CommunitiesPage = () => {
 
       {flags?.identitySearch && (
         <section style={{ marginTop: spacing.xl }}>
-          <h2 style={{ fontSize: fontSize.lg, color: brand.navy, margin: `0 0 ${spacing.sm}px` }}>
+          <Text
+            as="h2"
+            variant="display"
+            size="xs"
+            color="brand"
+            style={{ marginBottom: spacing.sm }}
+          >
             Identity search log
-          </h2>
-          <p style={{ margin: `0 0 ${spacing.md}px`, color: brand.muted, fontSize: fontSize.sm }}>
+          </Text>
+          <Text variant="small" color="muted" style={{ marginBottom: spacing.md }}>
             Every recruiter search filtered by an official community.
-          </p>
+          </Text>
           <Async state={log.state}>
             {(entries) => (
               <Table

@@ -1,11 +1,12 @@
 import type { TeamStatus } from '@team-impact/contracts';
+import { colors, fontWeight, spacing } from '@team-impact/ui-tokens';
 import { api } from '../../api';
-import { Async, Badge, brand, formatDate, PageHeader, Table, Tile } from '../../ui';
+import { Async, Badge, type BadgeProps, formatDate, PageHeader, Table, Tile } from '../../ui';
 import { useApi } from '../../useApi';
 
-const STATUS: Record<TeamStatus, { label: string; tone: 'good' | 'warn' | 'neutral' }> = {
-  live: { label: 'Live', tone: 'good' },
-  invited: { label: 'Waiting on coach', tone: 'warn' },
+const STATUS: Record<TeamStatus, { label: string; tone: BadgeProps['variant'] }> = {
+  live: { label: 'Live', tone: 'success' },
+  invited: { label: 'Waiting on coach', tone: 'warning' },
   archived: { label: 'Archived', tone: 'neutral' },
 };
 
@@ -24,12 +25,14 @@ export const TeamsPage = () => {
               {
                 header: 'Team',
                 cell: (t) => (
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: spacing.sm }}>
                     <Tile
                       text={`${t.gender === 'women' ? 'W' : 'M'}${t.sport[0] ?? ''}`}
-                      color={t.color ?? brand.navy}
+                      teamColor={t.color}
                     />
-                    <span style={{ fontWeight: 700, color: brand.navy }}>{t.name}</span>
+                    <span style={{ fontWeight: fontWeight.semibold, color: colors.brand }}>
+                      {t.name}
+                    </span>
                   </span>
                 ),
               },
@@ -38,7 +41,9 @@ export const TeamsPage = () => {
               { header: 'Members', cell: (t) => t.memberCount, align: 'right' },
               {
                 header: 'Status',
-                cell: (t) => <Badge tone={STATUS[t.status].tone}>{STATUS[t.status].label}</Badge>,
+                cell: (t) => (
+                  <Badge variant={STATUS[t.status].tone} label={STATUS[t.status].label} />
+                ),
               },
               { header: 'Created', cell: (t) => formatDate(t.createdAt) },
             ]}

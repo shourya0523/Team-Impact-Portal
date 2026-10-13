@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import type { Role } from '@team-impact/contracts';
-import { fontSize, spacing } from '@team-impact/ui-tokens';
+import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { homeFor, isPortalRole, useSession } from '../session';
-import { brand } from '../ui';
+import { Logo, Text } from '../ui';
 
 const CHOICES: { role: Role; title: string; who: string; detail: string }[] = [
   {
@@ -43,30 +43,31 @@ export const SignInPage = () => {
       <div
         style={{
           width: '38%',
-          background: brand.navy,
-          color: '#FFFFFF',
-          padding: 64,
+          background: colors.brand,
+          padding: spacing['3xl'],
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
+          gap: spacing.lg,
         }}
       >
-        <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', opacity: 0.85 }}>
-          TEAM IMPACT PORTAL
-        </div>
-        <h1 style={{ fontSize: 48, lineHeight: 1.05, fontWeight: 800, margin: '24px 0' }}>
+        <Logo size="md" variant="dark" />
+        <Text variant="eyebrow" color="on-brand-secondary">
+          Team IMPACT portal
+        </Text>
+        <Text variant="display" size="xl" color="on-brand">
           Find athletes who show up for their team.
-        </h1>
-        <p style={{ fontSize: fontSize.md, lineHeight: 1.6, opacity: 0.9, maxWidth: 420 }}>
+        </Text>
+        <Text color="on-brand-secondary" style={{ maxWidth: 420 }}>
           For recruiters at partner companies and for Team Impact staff. Athletes, families and
           coaches use the app.
-        </p>
+        </Text>
       </div>
 
       <main
         style={{
           flex: 1,
-          background: brand.page,
+          background: colors.ground,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -74,12 +75,18 @@ export const SignInPage = () => {
         }}
       >
         <div style={{ width: '100%', maxWidth: 460 }}>
-          <div style={{ color: brand.red, fontWeight: 700, fontSize: 12, letterSpacing: '0.12em' }}>
-            MOCK DATA · NO PASSWORD
-          </div>
-          <h2 style={{ fontSize: 30, color: brand.navy, margin: '8px 0 24px', fontWeight: 800 }}>
+          <Text variant="eyebrow" color="secondary">
+            Mock data · no password
+          </Text>
+          <Text
+            as="h2"
+            variant="display"
+            size="md"
+            color="brand"
+            style={{ margin: `${spacing.sm}px 0 ${spacing.lg}px` }}
+          >
             Sign in as
-          </h2>
+          </Text>
           <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
             {CHOICES.map((c) => (
               <button
@@ -87,33 +94,39 @@ export const SignInPage = () => {
                 type="button"
                 onClick={() => choose(c.role)}
                 style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: spacing.xs,
                   textAlign: 'left',
                   padding: spacing.lg,
-                  borderRadius: 16,
-                  border: `1px solid ${brand.border}`,
-                  background: brand.surface,
+                  borderRadius: radius.xl,
+                  border: `1px solid ${colors.line}`,
+                  background: colors.surface,
+                  fontFamily: 'inherit',
                   cursor: 'pointer',
                 }}
               >
-                <div style={{ fontSize: fontSize.lg, fontWeight: 800, color: brand.navy }}>
+                <Text as="span" variant="display" size="xs" color="brand">
                   {c.title}
-                </div>
-                <div style={{ fontSize: fontSize.sm, color: brand.ink, marginTop: 4 }}>{c.who}</div>
-                <div style={{ fontSize: fontSize.sm, color: brand.muted, marginTop: 8 }}>
+                </Text>
+                <Text as="span" variant="small">
+                  {c.who}
+                </Text>
+                <Text as="span" variant="small" color="muted">
                   {c.detail}
-                </div>
+                </Text>
               </button>
             ))}
           </div>
           {me && !isPortalRole(me.role) && (
-            <p role="alert" style={{ color: brand.red }}>
+            <Text role="alert" color="danger" style={{ marginTop: spacing.md }}>
               The portal is for recruiters and staff. Use the Team Impact app.
-            </p>
+            </Text>
           )}
           {error && (
-            <p role="alert" style={{ color: brand.red }}>
+            <Text role="alert" color="danger" style={{ marginTop: spacing.md }}>
               {error}. Is the API running with MOCK_API=1?
-            </p>
+            </Text>
           )}
         </div>
       </main>

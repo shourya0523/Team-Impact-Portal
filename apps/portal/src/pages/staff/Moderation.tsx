@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { ModerationTicket } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '../../api';
-import { Async, Badge, button, formatDate, PageHeader, Table } from '../../ui';
+import { Async, Badge, Button, formatDate, PageHeader, Table } from '../../ui';
 import { useApi } from '../../useApi';
 
 const KIND_LABEL: Record<ModerationTicket['target']['kind'], string> = {
@@ -59,27 +59,25 @@ export const ModerationPage = () => {
                 cell: (t) =>
                   t.status === 'open' ? (
                     <span style={{ display: 'inline-flex', gap: spacing.sm }}>
-                      <button
-                        type="button"
+                      <Button
+                        label="Keep"
+                        variant="secondary"
+                        size="sm"
                         disabled={busy === t.id}
-                        style={button('secondary')}
                         onClick={() => resolve(t, 'dismiss')}
-                      >
-                        Keep
-                      </button>
-                      <button
-                        type="button"
+                      />
+                      <Button
+                        label="Remove"
+                        size="sm"
                         disabled={busy === t.id}
-                        style={button('primary')}
                         onClick={() => resolve(t, 'remove')}
-                      >
-                        Remove
-                      </button>
+                      />
                     </span>
                   ) : (
-                    <Badge tone={t.resolution === 'remove' ? 'danger' : 'neutral'}>
-                      {t.resolution === 'remove' ? 'Removed' : 'Kept'}
-                    </Badge>
+                    <Badge
+                      variant={t.resolution === 'remove' ? 'danger' : 'neutral'}
+                      label={t.resolution === 'remove' ? 'Removed' : 'Kept'}
+                    />
                   ),
               },
             ]}

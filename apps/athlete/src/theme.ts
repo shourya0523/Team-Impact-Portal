@@ -1,73 +1,48 @@
-import type { CommunityKind, Role } from '@team-impact/contracts';
+import type { CommunityKind } from '@team-impact/contracts';
+import { colors } from '@team-impact/ui-tokens';
+import type { TextColor } from '@/ui';
 
 /**
- * The athlete app's look, from the approved design canvas (navy and CTA red on warm paper, Barlow
- * Condensed headlines). Values match the hi-fi mockups (apps/mockups/src/shared/styles.css).
- *
- * TODO(token decision): fold these into @team-impact/ui-tokens once the lead picks between the
- * current tokens and design/signing-day-tokens. The tokens' red (#fd002b) is too light for white
- * text, so CTAs use #d0213c here (5.3:1).
+ * App-level styling composed from the Signing Day tokens (TI-72): navy and action red on warm
+ * paper. Colours live in @team-impact/ui-tokens only; this file just picks which token goes where.
  */
-export const c = {
-  navy: '#1e3f7b',
-  navyPressed: '#152e5c',
-  navyRaised: '#2b5296',
-  navyTint: '#e4e9f2',
-  onNavy: '#c5cfe3',
-  onNavyMuted: '#a9b6d3',
-  red: '#d0213c',
-  redPressed: '#b01a2d',
-  redTint: '#fbe3e7',
-  ground: '#f6f4ef',
-  surface: '#ffffff',
-  ink: '#111418',
-  text2: '#4a4f57',
-  muted: '#5c616a',
-  line: '#ddd8cd',
-  lineSoft: '#ece8df',
-  track: '#ece8df',
-  amber: '#f2c14e',
-  amberDeep: '#e3ac2b',
-  amberText: '#7a5200',
-  green: '#0b3d30',
-  okBg: '#ddf1ea',
-  okFg: '#0b3d30',
-  warnBg: '#fcebd2',
-  warnFg: '#8a4a00',
-  danger: '#b3261e',
-} as const;
 
-/** Font family names as loaded in app/_layout.tsx. Custom fonts carry their own weight. */
-export const font = {
-  display: 'BarlowCondensed_800ExtraBold',
-  displayBold: 'BarlowCondensed_700Bold',
-  body: 'Barlow_400Regular',
-  medium: 'Barlow_500Medium',
-  semibold: 'Barlow_600SemiBold',
-  bold: 'Barlow_700Bold',
-} as const;
-
-/** Avatar colours by role, so a coach reads differently from a parent at a glance. */
-export const ROLE_COLOR: Record<Role, { bg: string; fg: string }> = {
-  staff: { bg: c.red, fg: '#ffffff' },
-  coach: { bg: c.ink, fg: '#ffffff' },
-  athlete: { bg: c.navy, fg: '#ffffff' },
-  parent: { bg: '#5b3fa0', fg: '#ffffff' },
-  teen: { bg: c.amber, fg: c.ink },
-  recruiter: { bg: c.green, fg: '#ffffff' },
-  alumni_athlete: { bg: '#0f6b5f', fg: '#ffffff' },
-  alumni_mentor: { bg: '#0f6b5f', fg: '#ffffff' },
-};
-
-/** Each community kind's cover band, monogram tint and label colour. */
+/**
+ * Each community kind's cover band, decorative monogram, icon and label colour, plus the text
+ * colour that reads on the band (`onBand`, AA-checked in ui-tokens `textPairs`).
+ */
 export const KIND_STYLE: Record<
   CommunityKind,
-  { band: string; monogram: string; icon: string; label: string }
+  { band: string; monogram: string; icon: string; label: string; onBand: TextColor }
 > = {
-  team: { band: c.navy, monogram: c.navyRaised, icon: c.navy, label: c.navy },
-  team_impact: { band: c.red, monogram: '#e2435b', icon: c.red, label: c.redPressed },
-  interest: { band: c.amber, monogram: c.amberDeep, icon: c.amberText, label: c.amberText },
-  medical: { band: c.navyTint, monogram: '#d3dbea', icon: c.navy, label: c.navy },
+  team: {
+    band: colors.brand,
+    monogram: colors.brandRaised,
+    icon: colors.brand,
+    label: colors.brand,
+    onBand: 'onBrand',
+  },
+  team_impact: {
+    band: colors.action,
+    monogram: colors.red,
+    icon: colors.action,
+    label: colors.actionPressed,
+    onBand: 'onBrand',
+  },
+  interest: {
+    band: colors.accent.bg,
+    monogram: colors.accent.deep,
+    icon: colors.accent.text,
+    label: colors.accent.text,
+    onBand: 'ink',
+  },
+  medical: {
+    band: colors.brandTint,
+    monogram: colors.onBrand.secondary,
+    icon: colors.brand,
+    label: colors.brand,
+    onBand: 'brand',
+  },
 };
 
 export const initials = (first: string, last = '') =>

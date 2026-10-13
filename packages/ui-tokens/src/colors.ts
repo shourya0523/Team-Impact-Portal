@@ -1,145 +1,91 @@
 /**
- * Team Impact color tokens derived from the Team Impact Figma design system.
- *
- * Palette families:
- * primary    = Team Impact blue
- * secondary  = Team Impact navy
- * tertiary   = light blue
- * quaternary = yellow
- * quinary    = red accent
- * senary     = off-white
- * septenary  = ink
- * grey       = neutral grey
+ * Signing Day colour tokens (TI-72). Plain hex only, so they work on native, React Native Web and CSS.
  */
 
-export const palette = {
-  primary: {
-    100: '#ecf0fe',
-    200: '#c5d3fc',
-    300: '#89abfa',
-    400: '#3185f7',
-    500: '#1b61bb',
-    600: '#0f407f',
-    700: '#052148',
-  },
-  secondary: {
-    100: '#edf0fd',
-    200: '#c7d3f8',
-    300: '#90abf1',
-    400: '#4c85ea',
-    500: '#3161b2',
-    600: '#1e4079',
-    700: '#0d2244',
-  },
-  tertiary: {
-    100: '#c4daeb',
-    200: '#86b6d5',
-    300: '#688fa8',
-    400: '#4c697d',
-    500: '#324754',
-    600: '#19262f',
-    700: '#0a1217',
-  },
-  quaternary: {
-    100: '#ffda00',
-    200: '#d1b300',
-    300: '#a68d00',
-    400: '#7c6900',
-    500: '#554700',
-    600: '#302800',
-    700: '#151100',
-  },
-  quinary: {
-    100: '#ffeced',
-    200: '#ffb9bb',
-    300: '#ff7b81',
-    400: '#fd002b',
-    500: '#ba001d',
-    600: '#7b000f',
-    700: '#410004',
-  },
-  senary: {
-    100: '#f5f7fb',
-    200: '#c2cfe8',
-    300: '#8da9d5',
-    400: '#6484b1',
-    500: '#476082',
-    600: '#2d3e56',
-    700: '#151f2d',
-  },
-  septenary: {
-    100: '#f1f1f1',
-    200: '#cbcbcb',
-    300: '#a4a4a4',
-    400: '#7f7f7f',
-    500: '#5b5b5b',
-    600: '#3a3a3a',
-    700: '#1c1c1c',
-  },
-  grey: {
-    100: '#f0f1f1',
-    200: '#d3d3d6',
-    300: '#abacb1',
-    400: '#85868d',
-    500: '#616368',
-    600: '#404145',
-    700: '#212225',
-  },
-} as const;
+/** Team IMPACT logo colours. Navy is brand and selection; red is main actions. Change them here only. */
+const NAVY = '#1E3F7B';
+const NAVY_PRESSED = '#15305F';
+const RED = '#EA2642';
+/**
+ * Red for filled actions, nudged darker than the logo red: white on #EA2642 is 4.33:1, which fails
+ * AA for button labels. This is 4.59:1. Use `red` itself only for decoration and the logo.
+ */
+const ACTION = '#E3233F';
+const ACTION_PRESSED = '#B01A2D';
 
 export const colors = {
-  primary: palette.primary[600],
-  primaryDark: palette.primary[700],
-  primaryContrast: '#FFFFFF',
-
-  secondary: palette.secondary[600],
-  secondaryDark: palette.secondary[700],
-  secondaryContrast: '#FFFFFF',
-
-  accent: palette.quaternary[100],
-  accentContrast: palette.septenary[700],
-
-  tertiary: palette.tertiary[100],
-  surface: palette.senary[100],
-  background: '#FFFFFF',
-
-  text: palette.septenary[700],
-  textMuted: palette.grey[600],
-  border: palette.grey[200],
-
-  danger: palette.quinary[400],
-  dangerStrong: palette.quinary[500],
-} as const;
-
-/**
- * Approved semantic pairings called out by the Figma design system.
- *
- * Red is intentionally excluded from normal text/background pairings because
- * #fd002b on white is below WCAG AA for normal text.
- */
-export const semanticColors = {
-  light: {
-    background: colors.background,
-    surface: colors.surface,
-    text: colors.text,
-    textMuted: colors.textMuted,
-    primaryAction: colors.secondary,
-    primaryActionText: colors.primaryContrast,
-    secondaryAction: colors.accent,
-    secondaryActionText: colors.accentContrast,
-    border: colors.border,
-    accentSurface: colors.tertiary,
+  ground: '#F6F4EF',
+  surface: '#FFFFFF',
+  ink: '#111418',
+  text: {
+    secondary: '#4A4F57',
+    muted: '#5C616A',
   },
-  dark: {
-    background: colors.text,
-    surface: colors.secondaryDark,
+  line: '#DDD8CD',
+  /** Hairlines inside cards and the segmented-control track. Decorative only. */
+  lineSoft: '#ECE8DF',
+  /** Navy: brand, links, focus rings, selection. */
+  brand: NAVY,
+  brandPressed: NAVY_PRESSED,
+  /** Selected chips and icon fills on light grounds. */
+  brandTint: '#E4E9F2',
+  /** Big decorative numbers and monograms on navy. Decorative only. */
+  brandRaised: '#2B5296',
+  /** Text on navy surfaces. */
+  onBrand: {
     text: '#FFFFFF',
-    textMuted: palette.grey[200],
-    primaryAction: colors.accent,
-    primaryActionText: colors.accentContrast,
-    secondaryAction: colors.secondary,
-    secondaryActionText: colors.primaryContrast,
-    border: palette.grey[500],
-    accentSurface: colors.primary,
+    secondary: '#C5CFE3',
+    muted: '#A9B6D3',
+  },
+  /** Logo red, exact. Decorative only (fails AA with white text). */
+  red: RED,
+  /** Main actions (primary buttons). */
+  action: ACTION,
+  actionPressed: ACTION_PRESSED,
+  /** A pressed "Rally" and other soft action states; text on it uses `actionPressed`. */
+  actionTint: '#FBE3E7',
+  /** Interest communities and the teammate avatar. Ink text on `bg`, `text` on light grounds. */
+  accent: {
+    bg: '#F2C14E',
+    deep: '#E3AC2B',
+    text: '#7A5200',
+  },
+  success: {
+    bg: '#DDF1EA',
+    text: '#0B3D30',
+  },
+  danger: '#B3261E',
+  /** Avatar backgrounds by role, so a coach reads differently from a parent at a glance. */
+  role: {
+    staff: ACTION,
+    coach: '#111418',
+    athlete: NAVY,
+    parent: '#5B3FA0',
+    teen: '#F2C14E',
+    recruiter: '#0B3D30',
+    alumni: '#0F6B5F',
+  },
+  /** Default team colour. Real values are supplied per team at runtime, see `team.ts`. */
+  team: NAVY,
+  card: {
+    surface: '#111418',
+    textMuted: '#B9BDC4',
+    label: '#8D939C',
+    /** The Baseball Card's generated art (ui-primitives athlete-card). */
+    art: {
+      navyDeep: '#0D2244',
+      blue: '#0F407F',
+      blueBright: '#3185F7',
+      yellow: '#FFDA00',
+      tint: '#F5F7FB',
+      tintDeep: '#C4DAEB',
+      inkMuted: '#404145',
+    },
+  },
+  warning: {
+    bg: '#FCEBD2',
+    text: '#8A4A00',
   },
 } as const;
+
+export type Colors = typeof colors;

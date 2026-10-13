@@ -1,12 +1,10 @@
-/**
- * Team Impact radius scale.
- */
+/** Corner radii. `card` is the Baseball Card. */
 export const radius = {
-  none: 0,
-  sm: 4,
-  md: 8,
-  lg: 12,
-  pill: 9999,
+  sm: 10,
+  md: 12,
+  lg: 14,
+  xl: 16,
+  card: 18,
 } as const;
 
 export type Radius = typeof radius;

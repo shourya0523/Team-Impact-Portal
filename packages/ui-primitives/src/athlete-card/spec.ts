@@ -1,4 +1,4 @@
-import { duration, easing, palette } from '@team-impact/ui-tokens';
+import { colors, duration, easing } from '@team-impact/ui-tokens';
 
 /**
  * The card's visual spec, shared by the native and web renderers so both draw the same card.
@@ -11,17 +11,17 @@ export const CARD_ASPECT = CARD_HEIGHT / CARD_WIDTH;
 export const cardHeightFor = (width: number) => (width * CARD_HEIGHT) / CARD_WIDTH;
 
 export const cardColors = {
-  navy: palette.secondary[600],
-  navyDeep: palette.secondary[700],
-  blue: palette.primary[600],
-  blueBright: palette.primary[400],
-  yellow: palette.quaternary[100],
-  red: palette.quinary[400],
-  offWhite: palette.senary[100],
-  lightBlue: palette.tertiary[100],
-  ink: palette.septenary[700],
-  inkMuted: palette.grey[600],
-  white: '#ffffff',
+  navy: colors.brand,
+  navyDeep: colors.card.art.navyDeep,
+  blue: colors.card.art.blue,
+  blueBright: colors.card.art.blueBright,
+  yellow: colors.card.art.yellow,
+  red: colors.red,
+  offWhite: colors.card.art.tint,
+  lightBlue: colors.card.art.tintDeep,
+  ink: colors.ink,
+  inkMuted: colors.card.art.inkMuted,
+  white: colors.surface,
 } as const;
 
 export const cardLayout = {
@@ -117,8 +117,8 @@ export const cardText = {
 export type CardTextVariant = keyof typeof cardText;
 
 export const cardMotion = {
-  flipDuration: duration.emphasis,
-  pressDuration: duration.fast,
+  flipDuration: duration.cardReveal,
+  pressDuration: duration.tap,
   easing: easing.standard,
   perspective: 1400,
   /** Peak scale halfway through the flip, so the card "lifts" off the surface. */

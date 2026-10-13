@@ -1,8 +1,8 @@
 import { NavLink, Outlet, useNavigate } from 'react-router';
 import type { Role } from '@team-impact/contracts';
-import { fontSize, spacing } from '@team-impact/ui-tokens';
+import { colors, fontWeight, layout, radius, spacing, typography } from '@team-impact/ui-tokens';
 import { useSession } from './session';
-import { brand, fullName, initials } from './ui';
+import { Avatar, fullName, Logo, Text } from './ui';
 
 /** Each role's sidebar. A role never gets a link to a page its routes would refuse. */
 const NAV: Partial<Record<Role, { to: string; label: string }[]>> = {
@@ -18,6 +18,12 @@ const NAV: Partial<Record<Role, { to: string; label: string }[]>> = {
   ],
 };
 
+/** Avatar colour per portal role, from the shared role palette. */
+const ROLE_COLOR: Partial<Record<Role, string>> = {
+  recruiter: colors.role.recruiter,
+  staff: colors.role.staff,
+};
+
 const SECTION_NAME: Partial<Record<Role, string>> = {
   recruiter: 'Recruiter portal',
   staff: 'Staff',
@@ -29,15 +35,16 @@ export const Layout = () => {
   if (!me) return null;
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: brand.page }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: colors.ground }}>
       <aside
         style={{
           width: 232,
           flexShrink: 0,
-          background: brand.navy,
-          color: '#FFFFFF',
+          background: colors.brand,
+          color: colors.onBrand.text,
           display: 'flex',
           flexDirection: 'column',
+          gap: spacing.xl,
           padding: spacing.md,
           position: 'sticky',
           top: 0,
@@ -45,35 +52,39 @@ export const Layout = () => {
           boxSizing: 'border-box',
         }}
       >
-        <div style={{ padding: `${spacing.lg}px ${spacing.sm}px ${spacing.xl}px` }}>
-          <div style={{ fontWeight: 800, fontSize: fontSize.lg }}>Team IMPACT</div>
-          <div
-            style={{
-              marginTop: 2,
-              fontSize: 11,
-              fontWeight: 700,
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              opacity: 0.8,
-            }}
-          >
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: spacing.sm,
+            padding: `${spacing.lg}px ${spacing.sm}px 0`,
+          }}
+        >
+          <Logo size="sm" variant="dark" />
+          <Text variant="eyebrow" color="on-brand-secondary">
             {SECTION_NAME[me.role]}
-          </div>
+          </Text>
         </div>
 
-        <nav aria-label="Main" style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <nav
+          aria-label="Main"
+          style={{ display: 'flex', flexDirection: 'column', gap: spacing.xs, flex: 1 }}
+        >
           {(NAV[me.role] ?? []).map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               style={({ isActive }) => ({
-                padding: `${spacing.sm + 2}px ${spacing.sm + 4}px`,
-                borderRadius: 10,
-                fontWeight: 700,
-                fontSize: fontSize.sm + 1,
+                display: 'flex',
+                alignItems: 'center',
+                minHeight: layout.minTouchTarget,
+                padding: `0 ${spacing.md}px`,
+                borderRadius: radius.sm,
+                fontWeight: fontWeight.semibold,
+                fontSize: typography.body.fontSize,
                 textDecoration: 'none',
-                background: isActive ? '#FFFFFF' : 'transparent',
-                color: isActive ? brand.navy : '#FFFFFF',
+                background: isActive ? colors.surface : 'transparent',
+                color: isActive ? colors.brand : colors.onBrand.text,
               })}
             >
               {item.label}
@@ -81,35 +92,21 @@ export const Layout = () => {
           ))}
         </nav>
 
-        <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-          <span
-            aria-hidden="true"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 18,
-              background: brand.red,
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: 13,
-              fontWeight: 800,
-            }}
-          >
-            {initials(me)}
-          </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+          <Avatar name={fullName(me)} size="sm" color={ROLE_COLOR[me.role] ?? colors.brand} />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 700, fontSize: fontSize.sm }}>{fullName(me)}</div>
+            <Text variant="small" weight="semibold" color="on-brand">
+              {fullName(me)}
+            </Text>
             <button
               type="button"
               onClick={() => signOut().then(() => navigate('/sign-in'))}
+              className="ti-text ti-text--caption ti-color--on-brand-secondary"
               style={{
                 padding: 0,
                 border: 'none',
                 background: 'none',
-                color: '#FFFFFF',
-                opacity: 0.8,
-                fontSize: 12,
+                fontFamily: 'inherit',
                 cursor: 'pointer',
                 textDecoration: 'underline',
               }}
@@ -120,7 +117,7 @@ export const Layout = () => {
         </div>
       </aside>
 
-      <main style={{ flex: 1, minWidth: 0, padding: `${spacing.xl}px ${spacing.xl + 8}px` }}>
+      <main style={{ flex: 1, minWidth: 0, padding: `${spacing.xl}px ${spacing['2xl']}px` }}>
         <Outlet />
       </main>
     </div>

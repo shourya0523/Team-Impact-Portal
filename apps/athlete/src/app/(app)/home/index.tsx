@@ -1,14 +1,20 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Community, Post } from '@team-impact/contracts';
+import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { Icon } from '@/components/Icon';
-import { Async, Avatar, Card, Chip, Gutter, IconButton, Screen, Tag, type } from '@/components/ui';
+import { Async, Chip, Gutter, IconButton, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
-import { c, font, KIND_STYLE, monogram } from '@/theme';
+import { KIND_STYLE, monogram } from '@/theme';
+import { Avatar, Badge, Card, Icon, Text, withAlpha } from '@/ui';
+
+const BUBBLE = 64;
+const LOCK = 22;
+const FAB = 60;
+const TILE = 40;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -28,7 +34,7 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
     <ScrollView
       horizontal
       showsHorizontalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: 20, gap: 14 }}
+      contentContainerStyle={styles.bubbles}
       accessibilityLabel="Your communities"
     >
       {shown.map((x) => {
@@ -42,26 +48,19 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
             accessibilityLabel={x.name}
             style={styles.bubble}
           >
-            <View style={[styles.ring, { borderColor: c.red }]}>
+            <View style={[styles.ring, { borderColor: colors.action }]}>
               <View style={[styles.bubbleFill, { backgroundColor: k.band }]}>
-                <Text
-                  style={[
-                    styles.bubbleText,
-                    {
-                      color: x.kind === 'interest' ? c.ink : x.kind === 'medical' ? c.navy : '#fff',
-                    },
-                  ]}
-                >
+                <Text variant="display" size="xs" color={k.onBand} accessibilityRole="none">
                   {x.kind === 'team_impact' ? 'TI' : monogram(x.name, x.kind === 'team')}
                 </Text>
               </View>
               {isPrivate(x) && (
                 <View style={styles.lockBadge}>
-                  <Icon name="lock" size={11} color={c.navy} strokeWidth={2.8} />
+                  <Icon name="lock" size={11} color={colors.brand} strokeWidth={2.8} />
                 </View>
               )}
             </View>
-            <Text style={styles.bubbleLabel} numberOfLines={1}>
+            <Text variant="caption" weight="semibold" numberOfLines={1}>
               {x.kind === 'team_impact' ? 'Team Impact' : label}
             </Text>
           </Pressable>
@@ -72,21 +71,12 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
         accessibilityRole="button"
         style={styles.bubble}
       >
-        <View
-          style={[
-            styles.ring,
-            {
-              borderStyle: 'dashed',
-              borderColor: '#8a8f98',
-              borderWidth: 2,
-              alignItems: 'center',
-              justifyContent: 'center',
-            },
-          ]}
-        >
-          <Icon name="plus" size={24} color={c.text2} />
+        <View style={[styles.ring, styles.more]}>
+          <Icon name="plus" size={24} color={colors.text.secondary} />
         </View>
-        <Text style={styles.bubbleLabel}>Find more</Text>
+        <Text variant="caption" weight="semibold">
+          Find more
+        </Text>
       </Pressable>
     </ScrollView>
   );
@@ -100,15 +90,15 @@ function Rally({ count }: { count: number }) {
       onPress={() => setOn((v) => !v)}
       accessibilityRole="button"
       accessibilityState={{ selected: on }}
-      style={[styles.action, on ? { backgroundColor: c.redTint, borderColor: c.redTint } : null]}
+      style={[styles.action, on ? styles.rallied : null]}
     >
       <Icon
         name="heart"
         size={16}
-        color={on ? c.redPressed : c.ink}
-        fill={on ? c.redPressed : 'none'}
+        color={on ? colors.actionPressed : colors.ink}
+        fill={on ? colors.actionPressed : 'none'}
       />
-      <Text style={[styles.actionText, on && { color: c.redPressed }]}>
+      <Text variant="small" weight="semibold" color={on ? 'action' : 'ink'}>
         Rally · {count + (on ? 1 : 0)}
       </Text>
     </Pressable>
@@ -118,19 +108,29 @@ function Rally({ count }: { count: number }) {
 function Announcement({ post }: { post: Post }) {
   return (
     <View style={styles.announcement}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={styles.byline}>
         <View style={styles.megaphone}>
-          <Icon name="megaphone" size={18} color="#fff" />
+          <Icon name="megaphone" size={18} color={colors.onBrand.text} />
         </View>
         <View>
-          <Text style={[type.name, { color: '#fff' }]}>Team IMPACT</Text>
-          <Text style={[type.meta, { color: c.onNavy }]}>
+          <Text weight="semibold" color="onBrand">
+            Team IMPACT
+          </Text>
+          <Text variant="caption" weight="medium" color="onBrandSecondary">
             Announcement · {shortDate(post.createdAt)}
           </Text>
         </View>
       </View>
-      <Text style={styles.announcementText}>{post.text}</Text>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <Text
+        variant="display"
+        size="xs"
+        color="onBrand"
+        accessibilityRole="none"
+        style={styles.mixedCase}
+      >
+        {post.text}
+      </Text>
+      <View style={styles.actions}>
         <Rally count={post.likeCount} />
       </View>
     </View>
@@ -145,36 +145,35 @@ function PostCard({ post }: { post: Post }) {
       : `in ${post.community.name}`;
   return (
     <Card>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <View style={styles.byline}>
         {post.kind === 'opportunity' ? (
           <View style={styles.company}>
-            <Text style={{ color: '#fff', fontFamily: font.bold, fontSize: 14 }}>
+            <Text variant="small" weight="semibold" color="onBrand">
               {monogram(post.opportunity.company.name)}
             </Text>
           </View>
         ) : (
           <Avatar
-            firstName={post.author.firstName}
-            lastName={post.author.lastName}
+            name={`${post.author.firstName} ${post.author.lastName}`}
             role={post.author.role}
           />
         )}
-        <View style={{ flex: 1, gap: 2 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={type.name}>
+        <View style={styles.bylineText}>
+          <View style={styles.nameRow}>
+            <Text weight="semibold">
               {post.kind === 'opportunity'
                 ? post.opportunity.company.name
                 : `${post.author.firstName} ${post.author.lastName}`}
             </Text>
             {post.kind === 'post' && post.author.role !== 'athlete' && (
-              <Tag label={ROLE_LABEL[post.author.role]} />
+              <Badge label={ROLE_LABEL[post.author.role]} variant="brandTint" caps />
             )}
           </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={styles.meta}>
             {post.community.kind === 'team' && (
-              <Icon name="lock" size={12} color={c.muted} strokeWidth={2.4} />
+              <Icon name="lock" size={12} color={colors.text.muted} strokeWidth={2.4} />
             )}
-            <Text style={type.meta} numberOfLines={1}>
+            <Text variant="caption" weight="medium" color="muted" numberOfLines={1}>
               {post.kind === 'opportunity' ? 'Opportunity · ' : ''}
               {where} · {shortDate(post.createdAt)}
             </Text>
@@ -182,18 +181,18 @@ function PostCard({ post }: { post: Post }) {
         </View>
       </View>
       {post.moderation !== 'approved' && (
-        <Tag label="Waiting for review" bg={c.warnBg} fg={c.warnFg} />
+        <Badge label="Waiting for review" variant="warning" caps />
       )}
       {post.kind === 'opportunity' ? (
         <View style={styles.opportunity}>
           <View style={styles.briefcase}>
-            <Icon name="briefcase" size={20} color={c.green} />
+            <Icon name="briefcase" size={20} color={colors.role.recruiter} />
           </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontFamily: font.display, fontSize: 22, color: c.ink }}>
+          <View style={styles.grow}>
+            <Text variant="display" size="xs" accessibilityRole="none">
               {post.opportunity.title}
             </Text>
-            <Text style={type.meta}>
+            <Text variant="caption" weight="medium" color="muted">
               {post.opportunity.closesOn
                 ? `Closes ${shortDate(post.opportunity.closesOn)}`
                 : 'Open'}
@@ -204,17 +203,21 @@ function PostCard({ post }: { post: Post }) {
             accessibilityRole="link"
             style={styles.apply}
           >
-            <Text style={{ color: '#fff', fontFamily: font.bold, fontSize: 14 }}>Apply</Text>
+            <Text variant="small" weight="semibold" color="onBrand">
+              Apply
+            </Text>
           </Pressable>
         </View>
       ) : (
-        <Text style={type.body}>{post.text}</Text>
+        <Text>{post.text}</Text>
       )}
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={styles.actions}>
         <Rally count={post.likeCount} />
         <View style={styles.action}>
-          <Icon name="comment" size={16} color={c.ink} />
-          <Text style={styles.actionText}>{plural(post.commentCount, 'comment')}</Text>
+          <Icon name="comment" size={16} color={colors.ink} />
+          <Text variant="small" weight="semibold">
+            {plural(post.commentCount, 'comment')}
+          </Text>
         </View>
       </View>
     </Card>
@@ -242,7 +245,7 @@ export default function Home() {
       eyebrow="Team IMPACT"
       title="Home"
       right={
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={styles.actions}>
           <IconButton
             icon="bell"
             label="Notifications"
@@ -255,7 +258,7 @@ export default function Home() {
               accessibilityRole="button"
               accessibilityLabel="Your profile"
             >
-              <Avatar firstName={me.firstName} lastName={me.lastName} role={me.role} size={44} />
+              <Avatar name={`${me.firstName} ${me.lastName}`} role={me.role} />
             </Pressable>
           )}
         </View>
@@ -268,7 +271,7 @@ export default function Home() {
             accessibilityLabel="New post"
             style={styles.fab}
           >
-            <Icon name="plus" size={26} color="#fff" strokeWidth={2.4} />
+            <Icon name="plus" size={26} color={colors.onBrand.text} strokeWidth={2.4} />
           </Pressable>
         )
       }
@@ -276,7 +279,7 @@ export default function Home() {
       {communities.state.status === 'ready' && role !== 'recruiter' && (
         <CommunityBubbles communities={communities.state.data} />
       )}
-      <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 20 }}>
+      <View style={styles.chips}>
         <Chip label="All" selected={filter === 'all'} onPress={() => setFilter('all')} />
         <Chip label="My team" selected={filter === 'team'} onPress={() => setFilter('team')} />
         <Chip
@@ -293,8 +296,10 @@ export default function Home() {
               posts.map((p) => <PostCard key={p.id} post={p} />)
             ) : (
               <View style={styles.empty}>
-                <Text style={[type.display, { fontSize: 28 }]}>NOTHING HERE YET</Text>
-                <Text style={[type.small, { textAlign: 'center' }]}>
+                <Text variant="display" size="xs" color="brand">
+                  Nothing here yet
+                </Text>
+                <Text variant="small" color="secondary" style={styles.center}>
                   Posts from your team and the communities you join show up here.
                 </Text>
               </View>
@@ -307,98 +312,136 @@ export default function Home() {
 }
 
 const styles = StyleSheet.create({
-  bubble: { width: 64, alignItems: 'center', gap: 6 },
-  ring: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, padding: 3 },
-  bubbleFill: { flex: 1, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
-  bubbleText: { fontFamily: font.display, fontSize: 22 },
+  bubbles: { paddingHorizontal: spacing.md, gap: spacing.md },
+  bubble: { width: BUBBLE, alignItems: 'center', gap: spacing.xs },
+  ring: {
+    width: BUBBLE,
+    height: BUBBLE,
+    borderRadius: BUBBLE / 2,
+    borderWidth: 3,
+    padding: spacing.xs,
+  },
+  more: {
+    borderStyle: 'dashed',
+    borderColor: colors.text.muted,
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bubbleFill: {
+    flex: 1,
+    borderRadius: BUBBLE / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   lockBadge: {
     position: 'absolute',
     right: -4,
     bottom: -4,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#fff',
+    width: LOCK,
+    height: LOCK,
+    borderRadius: LOCK / 2,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: c.line,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bubbleLabel: { fontFamily: font.semibold, fontSize: 12, color: c.ink },
-  announcement: { backgroundColor: c.navy, borderRadius: 20, padding: 18, gap: 12 },
+  chips: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md },
+  byline: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  bylineText: { flex: 1, gap: spacing.xs },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  actions: { flexDirection: 'row', gap: spacing.sm },
+  grow: { flex: 1 },
+  center: { textAlign: 'center' },
+  // Announcements are sentences: condensed display face, but not shouted in caps.
+  mixedCase: { textTransform: 'none' },
+  announcement: {
+    backgroundColor: colors.brand,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    gap: spacing.md,
+  },
   megaphone: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: c.red,
+    width: TILE,
+    height: TILE,
+    borderRadius: radius.sm,
+    backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  announcementText: { fontFamily: font.displayBold, fontSize: 26, lineHeight: 27, color: '#fff' },
   company: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: c.green,
+    width: TILE,
+    height: TILE,
+    borderRadius: radius.sm,
+    backgroundColor: colors.role.recruiter,
     alignItems: 'center',
     justifyContent: 'center',
   },
   opportunity: {
-    borderRadius: 14,
-    backgroundColor: c.ground,
-    padding: 14,
+    borderRadius: radius.lg,
+    backgroundColor: colors.ground,
+    padding: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: spacing.md,
   },
   briefcase: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: c.surface,
+    width: TILE,
+    height: TILE,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: c.line,
+    borderColor: colors.line,
     alignItems: 'center',
     justifyContent: 'center',
   },
   apply: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: c.red,
+    minHeight: layout.buttonHeight.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.action,
     justifyContent: 'center',
   },
   action: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
+    minHeight: layout.minTouchTarget,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: c.line,
-    backgroundColor: c.surface,
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: spacing.xs,
   },
-  actionText: { fontFamily: font.semibold, fontSize: 14, color: c.ink },
+  rallied: { backgroundColor: colors.actionTint, borderColor: colors.actionTint },
   fab: {
     position: 'absolute',
-    right: 18,
-    bottom: 18,
-    width: 60,
-    height: 60,
-    borderRadius: 20,
-    backgroundColor: c.red,
+    right: spacing.md,
+    bottom: spacing.md,
+    width: FAB,
+    height: FAB,
+    borderRadius: radius.xl,
+    backgroundColor: colors.action,
     alignItems: 'center',
     justifyContent: 'center',
-    boxShadow: '0 8px 24px rgba(208, 33, 60, 0.35)',
+    boxShadow: [
+      {
+        offsetX: 0,
+        offsetY: spacing.sm,
+        blurRadius: spacing.lg,
+        color: withAlpha(colors.action, 0.35),
+      },
+    ],
   },
   empty: {
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: c.line,
-    borderRadius: 20,
-    padding: 28,
+    borderColor: colors.line,
+    borderRadius: radius.xl,
+    padding: spacing.lg,
     alignItems: 'center',
-    gap: 8,
+    gap: spacing.sm,
   },
 });

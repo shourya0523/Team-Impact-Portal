@@ -1,6 +1,8 @@
 import { router, Stack, type Href } from 'expo-router';
 import type { ReactNode } from 'react';
-import { Button, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { colors, spacing } from '@team-impact/ui-tokens';
+import { Button, Text } from '@/ui';
 
 export interface PlaceholderLink {
   label: string;
@@ -25,15 +27,22 @@ export function Placeholder({
   children?: ReactNode;
 }) {
   return (
-    <View style={{ padding: 24, gap: 12 }}>
+    <View style={styles.screen}>
       <Stack.Screen options={{ title }} />
-      <Text>{title}</Text>
-      {wireframe && <Text>Wireframe: {wireframe}</Text>}
+      <Text variant="display" size="xs" color="brand">
+        {title}
+      </Text>
+      {wireframe && (
+        <Text variant="small" color="secondary">
+          Wireframe: {wireframe}
+        </Text>
+      )}
       {children}
       {links.map((link) => (
         <Button
           key={link.label}
-          title={link.label}
+          label={link.label}
+          variant="secondary"
           // withAnchor: when a button jumps into another tab, load that tab's main screen beneath it.
           onPress={() =>
             link.replace
@@ -45,3 +54,7 @@ export function Placeholder({
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, padding: spacing.lg, gap: spacing.sm, backgroundColor: colors.ground },
+});

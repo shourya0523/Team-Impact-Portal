@@ -1,14 +1,14 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import type { Role } from '@team-impact/contracts';
 import { api } from '@/api';
 import { ROLE_LABEL } from '@/components/format';
-import { Icon } from '@/components/Icon';
-import { Avatar, Card, Gutter, Screen, SectionLabel, type } from '@/components/ui';
+import { colors, spacing } from '@team-impact/ui-tokens';
+import { ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useRole } from '@/navigation/role';
 import { firstTab } from '@/navigation/tabs';
-import { c, font } from '@/theme';
+import { Avatar, Card, Icon, Text } from '@/ui';
 
 const MEMBERS: { role: Role; first: string; last: string; who: string }[] = [
   { role: 'athlete', first: 'Jordan', last: 'Lee', who: 'Tufts Women’s Soccer' },
@@ -57,34 +57,36 @@ export default function DevSignIn() {
     <Card
       onPress={() => signIn(p.role, newcomer)}
       label={`Sign in as ${p.first} ${p.last}`}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12 }}
+      style={styles.row}
     >
-      <Avatar firstName={p.first} lastName={p.last} role={p.role} size={44} />
-      <View style={{ flex: 1 }}>
-        <Text style={type.name}>
+      <Avatar name={`${p.first} ${p.last}`} role={p.role} />
+      <View style={styles.grow}>
+        <Text weight="semibold">
           {p.first} {p.last}
         </Text>
-        <Text style={type.meta}>{note}</Text>
+        <Text variant="caption" weight="medium" color="muted">
+          {note}
+        </Text>
       </View>
-      <Icon name="chevron" size={18} color={c.muted} />
+      <Icon name="chevron" size={18} color={colors.text.muted} />
     </Card>
   );
 
   return (
     <Screen eyebrow="Mock data · no password" title="Sign in as" back>
       {error && (
-        <Text style={{ color: c.danger, fontFamily: font.medium, paddingHorizontal: 20 }}>
-          {error}
-        </Text>
+        <Gutter>
+          <ErrorText>{error}</ErrorText>
+        </Gutter>
       )}
       <SectionLabel>On the Tufts team</SectionLabel>
-      <Gutter gap={8}>
+      <Gutter gap="sm">
         {MEMBERS.map((m) => (
           <Row key={m.role} p={m} newcomer={false} note={`${ROLE_LABEL[m.role]} · ${m.who}`} />
         ))}
       </Gutter>
       <SectionLabel>New, to try the join flow</SectionLabel>
-      <Gutter gap={8}>
+      <Gutter gap="sm">
         {NEWCOMERS.map((m) => (
           <Row
             key={m.role}
@@ -97,3 +99,8 @@ export default function DevSignIn() {
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  grow: { flex: 1 },
+});

@@ -1,9 +1,13 @@
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { StyleSheet, View, useWindowDimensions } from 'react-native';
 import { ScrollView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
-import { AthleteCard, cardColors, sampleAthlete } from '@team-impact/ui-primitives/native';
-import { colors, fontSize, spacing } from '@team-impact/ui-tokens';
+import { AthleteCard, sampleAthlete } from '@team-impact/ui-primitives/native';
+import { colors, spacing } from '@team-impact/ui-tokens';
+import { Button, Text } from '@/ui';
+
+/** Widest the card gets on tablets and web. */
+const MAX_CARD_WIDTH = 360;
 
 /** Demo of the flippable athlete card with a photo picked from the device library. */
 export const CardDemoScreen = () => {
@@ -25,78 +29,49 @@ export const CardDemoScreen = () => {
   };
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.eyebrow}>TEAM IMPACT</Text>
-      <Text style={styles.title}>Your athlete card</Text>
-      <Text style={styles.subtitle}>
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      <Text variant="eyebrow" color="action">
+        Team IMPACT
+      </Text>
+      <Text variant="display" size="md" color="brand" style={styles.title}>
+        Your athlete card
+      </Text>
+      <Text variant="small" color="secondary" style={styles.subtitle}>
         Swipe or tap the card to flip between your resume and your story.
       </Text>
 
       <AthleteCard
         athlete={{ ...sampleAthlete, photoUri }}
-        width={Math.min(width - spacing.xl * 2, 360)}
+        width={Math.min(width - spacing.xl * 2, MAX_CARD_WIDTH)}
         flipped={flipped}
         onFlippedChange={setFlipped}
         style={styles.card}
       />
 
       <View style={styles.actions}>
-        <Pressable
-          onPress={pickPhoto}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.button, styles.primary, pressed && styles.pressed]}
-        >
-          <Text style={[styles.buttonText, { color: colors.text }]}>
-            {photoUri ? 'Change photo' : 'Upload photo'}
-          </Text>
-        </Pressable>
-        <Pressable
+        <Button label={photoUri ? 'Change photo' : 'Upload photo'} size="sm" onPress={pickPhoto} />
+        <Button
+          label={flipped ? 'Show resume' : 'Show personal'}
+          variant="brand"
+          size="sm"
           onPress={() => setFlipped((value) => !value)}
-          accessibilityRole="button"
-          style={({ pressed }) => [styles.button, styles.secondary, pressed && styles.pressed]}
-        >
-          <Text style={[styles.buttonText, { color: colors.primaryContrast }]}>
-            {flipped ? 'Show resume' : 'Show personal'}
-          </Text>
-        </Pressable>
+        />
       </View>
     </ScrollView>
   );
 };
 
 const styles = StyleSheet.create({
+  screen: { backgroundColor: colors.ground },
   container: {
     flexGrow: 1,
     alignItems: 'center',
     paddingHorizontal: spacing.xl,
-    paddingTop: spacing.xl * 2,
+    paddingTop: spacing['3xl'],
     paddingBottom: spacing.xl,
-    backgroundColor: cardColors.offWhite,
   },
-  eyebrow: { fontSize: 11, fontWeight: '700', letterSpacing: 2, color: cardColors.red },
-  title: {
-    fontSize: fontSize.xl,
-    fontWeight: '800',
-    color: cardColors.navy,
-    marginTop: spacing.xs,
-  },
-  subtitle: {
-    fontSize: fontSize.sm,
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: spacing.xs,
-  },
+  title: { marginTop: spacing.xs },
+  subtitle: { textAlign: 'center', marginTop: spacing.xs },
   card: { marginVertical: spacing.lg },
   actions: { flexDirection: 'row', gap: spacing.sm },
-  button: {
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: 999,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primary: { backgroundColor: cardColors.yellow },
-  secondary: { backgroundColor: cardColors.navy },
-  pressed: { opacity: 0.8 },
-  buttonText: { fontSize: fontSize.sm, fontWeight: '700' },
 });

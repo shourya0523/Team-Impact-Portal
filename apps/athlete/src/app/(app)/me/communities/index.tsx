@@ -1,13 +1,18 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { canCreateCommunity, canJoinCommunity, type Community } from '@team-impact/contracts';
+import { colors, layout, radius, spacing, typography } from '@team-impact/ui-tokens';
 import { api } from '@/api';
-import { Icon, type IconName } from '@/components/Icon';
-import { Async, Button, Card, Gutter, Screen, SectionLabel, type } from '@/components/ui';
+import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
-import { c, font, KIND_STYLE, monogram } from '@/theme';
+import { KIND_STYLE, monogram } from '@/theme';
+import { Button, Card, Icon, Text, typeStyle, type IconName } from '@/ui';
+
+const BAND = 64;
+const BADGE = 36;
+const ROW_TILE = 48;
 
 const KIND_ICON: Record<Community['kind'], IconName> = {
   team: 'users',
@@ -39,11 +44,13 @@ function Tile({ x }: { x: Community }) {
       <View style={[styles.band, { backgroundColor: k.band }]}>
         {isPrivate(x) ? (
           <View style={styles.private}>
-            <Icon name="lock" size={12} color={c.navy} strokeWidth={2.6} />
-            <Text style={{ fontFamily: font.bold, fontSize: 11, color: c.navy }}>PRIVATE</Text>
+            <Icon name="lock" size={12} color={colors.brand} strokeWidth={2.6} />
+            <Text variant="eyebrow" color="brand">
+              Private
+            </Text>
           </View>
         ) : (
-          <Text style={[styles.monogram, { color: k.monogram }]}>
+          <Text variant="decor" size="sm" style={[styles.monogram, { color: k.monogram }]}>
             {x.kind === 'team_impact' ? 'TI' : monogram(x.name, x.kind === 'team')}
           </Text>
         )}
@@ -51,11 +58,13 @@ function Tile({ x }: { x: Community }) {
           <Icon name={KIND_ICON[x.kind]} size={18} color={k.icon} />
         </View>
       </View>
-      <View style={{ paddingHorizontal: 12, paddingTop: 22, paddingBottom: 12, gap: 2 }}>
-        <Text style={type.name} numberOfLines={2}>
+      <View style={styles.tileText}>
+        <Text weight="semibold" numberOfLines={2}>
           {x.name}
         </Text>
-        <Text style={type.meta}>{subtitle(x)}</Text>
+        <Text variant="caption" weight="medium" color="muted">
+          {subtitle(x)}
+        </Text>
       </View>
     </Card>
   );
@@ -86,12 +95,12 @@ export default function Communities() {
     <Screen title="Communities" back>
       <Gutter>
         <View style={styles.search}>
-          <Icon name="search" size={18} color={c.muted} />
+          <Icon name="search" size={18} color={colors.text.muted} />
           <TextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Find a community"
-            placeholderTextColor={c.muted}
+            placeholderTextColor={colors.text.muted}
             accessibilityLabel="Search communities"
             style={styles.searchInput}
           />
@@ -116,14 +125,7 @@ export default function Communities() {
                 <SectionLabel>Discover</SectionLabel>
               )}
               <Gutter>
-                {error && (
-                  <Text
-                    style={{ color: c.danger, fontFamily: font.medium }}
-                    accessibilityRole="alert"
-                  >
-                    {error}
-                  </Text>
-                )}
+                {error && <ErrorText>{error}</ErrorText>}
                 {others.map((x) => (
                   // A plain card: the Join button can't sit inside another button on web.
                   <Card key={x.id} style={styles.row}>
@@ -135,18 +137,17 @@ export default function Communities() {
                     >
                       <View style={[styles.rowTile, { backgroundColor: KIND_STYLE[x.kind].band }]}>
                         <Text
-                          style={{
-                            fontFamily: font.display,
-                            fontSize: 20,
-                            color: x.kind === 'interest' ? c.ink : '#fff',
-                          }}
+                          variant="display"
+                          size="xs"
+                          color={KIND_STYLE[x.kind].onBand}
+                          accessibilityRole="none"
                         >
                           {monogram(x.name, x.kind === 'team')}
                         </Text>
                       </View>
-                      <View style={{ flex: 1, gap: 2 }}>
-                        <Text style={type.name}>{x.name}</Text>
-                        <Text style={type.meta} numberOfLines={1}>
+                      <View style={styles.rowText}>
+                        <Text weight="semibold">{x.name}</Text>
+                        <Text variant="caption" weight="medium" color="muted" numberOfLines={1}>
                           {subtitle(x)}
                         </Text>
                       </View>
@@ -156,7 +157,7 @@ export default function Communities() {
                       ((x.kind === 'interest' || x.kind === 'medical') && x.myJoinRequest ? (
                         <Button
                           label="Requested"
-                          kind="outline"
+                          variant="secondary"
                           size="sm"
                           disabled
                           onPress={() => undefined}
@@ -166,7 +167,7 @@ export default function Communities() {
                           label={
                             joining === x.id ? 'Sending…' : isPrivate(x) ? 'Ask to join' : 'Join'
                           }
-                          kind="navy"
+                          variant="brand"
                           size="sm"
                           disabled={joining === x.id}
                           onPress={() => join(x.id)}
@@ -180,12 +181,12 @@ export default function Communities() {
                     label="Start a community"
                     style={styles.create}
                   >
-                    <View style={[styles.rowTile, { backgroundColor: c.redTint }]}>
-                      <Icon name="plus" size={22} color={c.redPressed} strokeWidth={2.4} />
+                    <View style={[styles.rowTile, { backgroundColor: colors.actionTint }]}>
+                      <Icon name="plus" size={22} color={colors.actionPressed} strokeWidth={2.4} />
                     </View>
-                    <View style={{ flex: 1, gap: 2 }}>
-                      <Text style={type.name}>Start a community</Text>
-                      <Text style={type.meta}>
+                    <View style={styles.rowText}>
+                      <Text weight="semibold">Start a community</Text>
+                      <Text variant="caption" weight="medium" color="muted">
                         {canCreateCommunity(role, 'interest') ? 'Interest or medical.' : 'Medical.'}{' '}
                         Names are checked first.
                       </Text>
@@ -205,62 +206,72 @@ const styles = StyleSheet.create({
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    minHeight: 48,
-    paddingHorizontal: 16,
-    borderRadius: 24,
-    backgroundColor: c.surface,
+    gap: spacing.sm,
+    minHeight: layout.buttonHeight.md,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: c.line,
+    borderColor: colors.text.muted,
   },
-  searchInput: { flex: 1, fontFamily: font.body, fontSize: 15, color: c.ink, minHeight: 44 },
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  tile: { width: '48%', flexGrow: 1, padding: 0, gap: 0, overflow: 'hidden' },
-  band: { height: 64, justifyContent: 'flex-end', paddingHorizontal: 12 },
-  monogram: {
-    position: 'absolute',
-    right: 8,
-    top: -6,
-    fontFamily: font.display,
-    fontSize: 56,
-    lineHeight: 64,
+  searchInput: {
+    ...typeStyle(typography.body),
+    flex: 1,
+    color: colors.ink,
+    minHeight: layout.minTouchTarget,
   },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
+  tile: {
+    width: '48%',
+    flexGrow: 1,
+    padding: spacing.none,
+    gap: spacing.none,
+    overflow: 'hidden',
+  },
+  band: { height: BAND, justifyContent: 'flex-end', paddingHorizontal: spacing.sm },
+  tileText: {
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.sm,
+    gap: spacing.xs,
+  },
+  monogram: { position: 'absolute', right: 8, top: -6 },
   private: {
     position: 'absolute',
     right: 10,
     top: 10,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: spacing.xs,
   },
   badge: {
-    marginBottom: -16,
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: '#fff',
+    marginBottom: spacing.md * -1,
+    width: BADGE,
+    height: BADGE,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: colors.surface,
   },
-  row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
-  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  rowMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  rowText: { flex: 1, gap: spacing.xs },
   rowTile: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
+    width: ROW_TILE,
+    height: ROW_TILE,
+    borderRadius: radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
   },
   create: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 14,
+    gap: spacing.md,
     borderWidth: 2,
     borderStyle: 'dashed',
-    borderColor: '#b9b2a3',
+    borderColor: colors.line,
     backgroundColor: 'transparent',
   },
 });

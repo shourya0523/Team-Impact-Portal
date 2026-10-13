@@ -1,13 +1,14 @@
 import { router, Stack } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { College, TeamSummary } from '@team-impact/contracts';
 import { api } from '@/api';
-import { Icon } from '@/components/Icon';
-import { Async, Button, Card, Progress, type } from '@/components/ui';
+import { colors, layout, radius, spacing, typography } from '@team-impact/ui-tokens';
+import { Async, Progress } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
-import { c, font, monogram } from '@/theme';
+import { monogram } from '@/theme';
+import { Button, Card, Icon, TeamAvatar, Text, typeStyle } from '@/ui';
 
 /** For teams that aren't registered yet (PRD §3, P7). */
 const askForTeam = (college: College) =>
@@ -20,18 +21,18 @@ const askForTeam = (college: College) =>
 function CollegeCard({ college }: { college: College }) {
   const { state } = useApi(() => api.teams(college.id), [college.id]);
   return (
-    <Card style={{ padding: 0, gap: 0, overflow: 'hidden' }}>
+    <Card style={styles.college}>
       <View style={styles.collegeHead}>
         <View style={styles.collegeTile}>
-          <Text style={{ fontFamily: font.display, fontSize: 18, color: c.navy }}>
+          <Text variant="display" size="xs" color="brand" accessibilityRole="none">
             {monogram(college.name)}
           </Text>
         </View>
-        <View style={{ flex: 1 }}>
-          <Text style={[type.name, { fontSize: 16 }]}>{college.name}</Text>
+        <View style={styles.grow}>
+          <Text weight="semibold">{college.name}</Text>
           <Async state={state}>
             {(teams) => (
-              <Text style={type.meta}>
+              <Text variant="caption" weight="medium" color="muted">
                 {teams.length
                   ? `${teams.length} team${teams.length === 1 ? '' : 's'}`
                   : 'No team on Team IMPACT yet'}
@@ -58,31 +59,32 @@ function CollegeCard({ college }: { college: College }) {
                     },
                   })
                 }
-                style={({ pressed }) => [styles.teamRow, pressed && { backgroundColor: c.ground }]}
+                style={({ pressed }) => [
+                  styles.teamRow,
+                  pressed && { backgroundColor: colors.ground },
+                ]}
               >
-                <View style={[styles.teamTile, { backgroundColor: t.color ?? c.navy }]}>
-                  <Text style={{ fontFamily: font.display, fontSize: 18, color: '#fff' }}>
-                    {monogram(t.name)}
-                  </Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[type.name, { fontSize: 16 }]}>{t.name}</Text>
-                  <Text style={type.meta}>
+                <TeamAvatar name={t.name} teamColor={t.color} />
+                <View style={styles.grow}>
+                  <Text weight="semibold">{t.name}</Text>
+                  <Text variant="caption" weight="medium" color="muted">
                     {t.sport} · Division {t.division}
                   </Text>
                 </View>
+                {/* Looks like a button; the whole row is the button (no nesting on web). */}
                 <View style={styles.ask}>
-                  <Text style={{ color: '#fff', fontFamily: font.bold, fontSize: 14 }}>
+                  <Text variant="small" weight="semibold" color="onBrand">
                     Ask to join
                   </Text>
                 </View>
               </Pressable>
             ))
           ) : (
-            <View style={{ padding: 16, paddingTop: 0 }}>
+            <View style={styles.empty}>
               <Button
                 label="Ask us to add your team"
-                kind="outline"
+                variant="secondary"
+                size="sm"
                 icon="mail"
                 onPress={() => askForTeam(college)}
               />
@@ -100,39 +102,39 @@ export default function FindTeam() {
   const [query, setQuery] = useState('');
   const colleges = useApi(() => api.colleges());
   return (
-    <View style={{ flex: 1, backgroundColor: c.ground }}>
+    <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={[styles.hero, { paddingTop: insets.top + 20 }]}>
-          <View
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
-          >
-            <Text style={styles.step}>STEP 1 OF 3</Text>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <View style={[styles.hero, { paddingTop: insets.top + spacing.md }]}>
+          <View style={styles.heroTop}>
+            <Text variant="eyebrow" color="onBrandSecondary">
+              Step 1 of 3
+            </Text>
             <Button
               label="Scan QR instead"
-              kind="onNavy"
+              variant="ghostOnBrand"
               icon="qr"
               size="sm"
               onPress={() => router.push('/scan')}
             />
           </View>
           <Progress step={1} total={3} onNavy />
-          <Text style={styles.heroTitle} accessibilityRole="header">
-            FIND YOUR{'\n'}TEAM
+          <Text variant="display" size="xl" color="onBrand">
+            Find your{'\n'}team
           </Text>
           <View style={styles.search}>
-            <Icon name="search" size={18} color={c.muted} />
+            <Icon name="search" size={18} color={colors.text.muted} />
             <TextInput
               value={query}
               onChangeText={setQuery}
               placeholder="Your college"
-              placeholderTextColor={c.muted}
+              placeholderTextColor={colors.text.muted}
               accessibilityLabel="Your college"
-              style={{ flex: 1, fontFamily: font.body, fontSize: 16, color: c.ink, minHeight: 48 }}
+              style={styles.searchInput}
             />
           </View>
         </View>
-        <View style={{ padding: 16, gap: 12 }}>
+        <View style={styles.list}>
           <Async state={colleges.state}>
             {(list) =>
               list
@@ -140,7 +142,7 @@ export default function FindTeam() {
                 .map((x) => <CollegeCard key={x.id} college={x} />)
             }
           </Async>
-          <Text style={[type.small, { paddingHorizontal: 8 }]}>
+          <Text variant="small" color="secondary" style={styles.note}>
             Nothing about a team shows until a coach says yes. Have the coach’s QR code? Scanning it
             gets you in straight away.
           </Text>
@@ -151,46 +153,56 @@ export default function FindTeam() {
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: c.navy, paddingHorizontal: 20, paddingBottom: 28, gap: 16 },
-  step: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1.9, color: c.onNavy },
-  heroTitle: { fontFamily: font.display, fontSize: 48, lineHeight: 45, color: '#fff' },
+  screen: { flex: 1, backgroundColor: colors.ground },
+  scroll: { paddingBottom: spacing.xl },
+  hero: {
+    backgroundColor: colors.brand,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+  },
+  heroTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   search: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    borderRadius: 26,
-    backgroundColor: '#fff',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.surface,
   },
-  collegeHead: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16 },
+  searchInput: {
+    ...typeStyle(typography.body),
+    flex: 1,
+    color: colors.ink,
+    minHeight: layout.buttonHeight.md,
+  },
+  list: { padding: spacing.md, gap: spacing.md },
+  note: { paddingHorizontal: spacing.sm },
+  grow: { flex: 1 },
+  college: { padding: spacing.none, gap: spacing.none, overflow: 'hidden' },
+  collegeHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, padding: spacing.md },
   collegeTile: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: c.navyTint,
+    width: layout.avatar.md,
+    height: layout.avatar.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandTint,
     alignItems: 'center',
     justifyContent: 'center',
   },
   teamRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    padding: 16,
+    gap: spacing.md,
+    padding: spacing.md,
     borderTopWidth: 1,
-    borderTopColor: c.lineSoft,
-  },
-  teamTile: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderTopColor: colors.lineSoft,
   },
   ask: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    backgroundColor: c.red,
+    minHeight: layout.buttonHeight.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    backgroundColor: colors.action,
     justifyContent: 'center',
   },
+  empty: { padding: spacing.md, paddingTop: spacing.none },
 });

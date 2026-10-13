@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router';
-import { fontSize, spacing } from '@team-impact/ui-tokens';
+import { colors, fontWeight, spacing, typography } from '@team-impact/ui-tokens';
 import { api } from '../../api';
-import { Async, brand, formatDate, fullName, PageHeader, Table, Tile } from '../../ui';
+import { Async, formatDate, fullName, PageHeader, Table, Tile } from '../../ui';
 import { useApi } from '../../useApi';
 
 /** R6: one list's athletes, who added them, and the company's latest note on each. */
@@ -10,7 +10,14 @@ export const ListPage = () => {
   const { state } = useApi(() => api.list(id), [id]);
   return (
     <>
-      <Link to="/lists" style={{ color: brand.navy, fontSize: fontSize.sm, fontWeight: 700 }}>
+      <Link
+        to="/lists"
+        style={{
+          color: colors.brand,
+          fontSize: typography.small.fontSize,
+          fontWeight: fontWeight.semibold,
+        }}
+      >
         ← All lists
       </Link>
       <div style={{ height: spacing.md }} />
@@ -33,14 +40,11 @@ export const ListPage = () => {
                 {
                   header: 'Athlete',
                   cell: (e) => (
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-                      <Tile
-                        text={e.card.jerseyNumber ?? '–'}
-                        color={e.card.team?.color ?? brand.navy}
-                      />
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: spacing.sm }}>
+                      <Tile text={e.card.jerseyNumber ?? '–'} teamColor={e.card.team?.color} />
                       <Link
                         to={`/athletes/${e.card.athleteId}`}
-                        style={{ color: brand.navy, fontWeight: 700 }}
+                        style={{ color: colors.brand, fontWeight: fontWeight.semibold }}
                       >
                         {fullName(e.card)}
                       </Link>
