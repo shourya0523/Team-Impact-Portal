@@ -14,13 +14,13 @@ Both clients run end to end against mocked endpoints, so screen work can start b
 
 Branch `integration/shell-base`, which is `main` plus these branches, merged cleanly, with `pnpm install --frozen-lockfile` and `pnpm typecheck` passing (7 packages):
 
-| Merged | What it brings |
-|---|---|
-| `feature/zodd-schema` | Zod contracts in `packages/contracts` (roles, users, teams, join requests, QR codes, cards, posts, events, groups, companies, lists, moderation) |
-| `ti-14-schema-and-seed` | Drizzle schema, migration `0000_v2_data_model.sql`, seed, `docs/data-model.md` |
-| `frontend-design-tokens-and-primitives` | `packages/ui-tokens`, `packages/ui-primitives`, athlete app shell |
-| `design/hifi-mockups` | `apps/mockups`, high-fidelity screens (additive) |
-| `docs/claude-md-communities` | CLAUDE.md rules for PRD v2.2 |
+| Merged                                  | What it brings                                                                                                                                   |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `feature/zodd-schema`                   | Zod contracts in `packages/contracts` (roles, users, teams, join requests, QR codes, cards, posts, events, groups, companies, lists, moderation) |
+| `ti-14-schema-and-seed`                 | Drizzle schema, migration `0000_v2_data_model.sql`, seed, `docs/data-model.md`                                                                   |
+| `frontend-design-tokens-and-primitives` | `packages/ui-tokens`, `packages/ui-primitives`, athlete app shell                                                                                |
+| `design/hifi-mockups`                   | `apps/mockups`, high-fidelity screens (additive)                                                                                                 |
+| `docs/claude-md-communities`            | CLAUDE.md rules for PRD v2.2                                                                                                                     |
 
 Not merged on purpose:
 
@@ -33,6 +33,21 @@ Not merged on purpose:
 1. **Communities.** Done in the contracts: `packages/contracts/src/communities.ts` replaces `groups.ts`, with kinds `team`, `team_impact`, `medical`, `interest`, and `official` on interest only. Posts, events, announcements and opportunities now carry a `communityId` / `community` instead of an `audience`, and reports can target a community. `canCreateCommunity` and `canJoinCommunity` encode the PRD §5 table. The DB `group_kind` enum (`team, college, affinity, org, platform`) is still the old model; leave the migration alone unless asked, because the lead owns that call.
 2. **Alumni roles.** Contracts split alumni into `alumni_athlete` and `alumni_mentor` (matches PRD §2, §8). The DB `user_type` has a single `alumni`. Mock data follows the contracts.
 3. **Token conflict** noted above.
+
+## Mock API (done)
+
+`pnpm dev:mock` (or `MOCK_API=1` for `apps/api`) serves fixture data with no database. Code is in `apps/api/src/mock`: `fixtures.ts` (one Tufts team, coach, four athletes, two parents with a child each, a teen, two Northbeam recruiters, an alumni athlete and mentor, one community of each kind), `world.ts` (visibility rules), `routes.ts`, and `mock.test.ts` (one test per hard rule). Every response is parsed through its contract before it's sent.
+
+| Route                                                                                                                                                                                              | Who                                               |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `POST /auth/dev-sign-in` `{ role }`, `POST /auth/sign-out`, `GET /me`                                                                                                                              | anyone                                            |
+| `GET /config/flags`                                                                                                                                                                                | anyone, no session                                |
+| `GET /communities`, `GET /communities/:id`, `GET /feed`, `GET /events`                                                                                                                             | signed in                                         |
+| `GET /colleges`, `GET /teams?collegeId=`, `POST /join-requests`                                                                                                                                    | join flow; requests from athletes, parents, teens |
+| `GET /search/athletes`, `GET /cards/:athleteId`, `GET /lists`, `GET /lists/:id`                                                                                                                    | recruiters (cards: anyone allowed to see them)    |
+| `GET /staff/teams`, `/staff/companies`, `/staff/moderation/tickets`, `POST …/tickets/:id/resolve`, `GET /staff/communities`, `PUT /staff/communities/:id/official`, `GET /staff/identity-searches` | staff                                             |
+
+Flags: `FLAG_IDENTITY_SEARCH` and `FLAG_MEDICAL_COMMUNITIES` (both default on). The dev sign-in route only exists with `MOCK_API=1`.
 
 ## Suggested approach
 

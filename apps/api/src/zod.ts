@@ -79,3 +79,5 @@ export const useZodContracts = (app: FastifyInstance) => {
 
   return app.withTypeProvider<ZodTypeProvider>();
 };
+
+export type ZodApp = ReturnType<typeof useZodContracts>;

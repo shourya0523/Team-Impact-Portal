@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Id } from './common';
+import { Id, Timestamp } from './common';
 
 /**
  * Every post, comment and event is checked before it appears. `in_review` is held for staff (or
@@ -28,3 +28,25 @@ export const CreateReportRequest = z.object({
   note: z.string().trim().max(500).optional(),
 });
 export type CreateReportRequest = z.infer<typeof CreateReportRequest>;
+
+export const TICKET_STATUSES = ['open', 'resolved'] as const;
+export const TicketStatus = z.enum(TICKET_STATUSES);
+export type TicketStatus = z.infer<typeof TicketStatus>;
+
+/** Staff only. Reports on the same item collect into one ticket on the moderation page. */
+export const ModerationTicket = z.object({
+  id: Id,
+  target: CreateReportRequest.shape.target,
+  /** Enough to judge it at a glance: the post text, the community name, the profile's name. */
+  preview: z.string(),
+  reasons: z.array(ReportReason).min(1),
+  reportCount: z.number().int().positive(),
+  status: TicketStatus,
+  /** Set once resolved. `remove` takes the item down; `dismiss` leaves it up. */
+  resolution: z.enum(['remove', 'dismiss']).nullable(),
+  createdAt: Timestamp,
+});
+export type ModerationTicket = z.infer<typeof ModerationTicket>;
+
+export const ResolveTicketRequest = z.object({ resolution: z.enum(['remove', 'dismiss']) });
+export type ResolveTicketRequest = z.infer<typeof ResolveTicketRequest>;
