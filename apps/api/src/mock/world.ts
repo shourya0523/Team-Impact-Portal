@@ -22,6 +22,7 @@ import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
+import { isSuspended, newStaffToolsState } from './staff-tools';
 import {
   initialCoachInvites,
   initialQrCodes,
@@ -73,6 +74,8 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
+  readonly staffTools = newStaffToolsState();
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
@@ -352,6 +355,7 @@ export class MockWorld {
     return (
       card.visibility.published &&
       card.visibility.openToRecruiting &&
+      !isSuspended(this, card.face.athleteId) &&
       (owner?.role === 'athlete' || owner?.role === 'alumni_athlete')
     );
   };

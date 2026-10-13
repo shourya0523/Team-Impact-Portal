@@ -39,7 +39,8 @@ export const blockedBetween = (world: MockWorld, a: string, b: string) =>
 
 /**
  * Whether `u` shouldn't see an item: they reported it (hidden for the reporter straight away), or
- * its author and `u` blocked each other. Official Team Impact posts can't be blocked.
+ * its author and `u` blocked each other. Official Team Impact posts can't be blocked. A suspended
+ * author's content is hidden from everyone until staff restore them (staff can't be suspended).
  */
 export const hiddenFor = (
   world: MockWorld,
@@ -47,7 +48,8 @@ export const hiddenFor = (
   item: { id: string; authorId: string; official?: boolean },
 ) =>
   world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id) ||
-  (!item.official && blockedBetween(world, u.id, item.authorId));
+  (!item.official && blockedBetween(world, u.id, item.authorId)) ||
+  world.staffTools.suspensions.some((s) => s.userId === item.authorId);
 
 /**
  * What a report points at, as `u` can see it, with a one-line preview for the staff ticket.

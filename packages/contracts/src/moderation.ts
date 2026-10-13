@@ -53,5 +53,14 @@ export const ModerationTicket = z.object({
 });
 export type ModerationTicket = z.infer<typeof ModerationTicket>;
 
-export const ResolveTicketRequest = z.object({ resolution: z.enum(['remove', 'dismiss']) });
+/**
+ * `resolution` decides the item. `authorAction` also acts on its author: `warn` sends them a
+ * warning notification, `suspend` locks their account (staff and a team's last coach can't be).
+ * Every part is written to the moderation log, with `note` (PRD §9, Notion "Moderation").
+ */
+export const ResolveTicketRequest = z.object({
+  resolution: z.enum(['remove', 'dismiss']),
+  authorAction: z.enum(['warn', 'suspend']).optional(),
+  note: z.string().trim().max(500).optional(),
+});
 export type ResolveTicketRequest = z.infer<typeof ResolveTicketRequest>;

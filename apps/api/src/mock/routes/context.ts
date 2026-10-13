@@ -33,6 +33,10 @@ export const guards = (world: MockWorld) => {
     if (company && company.status === 'suspended') {
       throw httpError(403, 'Your company’s access is suspended. Contact Team Impact.');
     }
+    // A suspended account is refused everywhere until staff restore it (./staff-tools.ts).
+    if (world.staffTools.suspensions.some((s) => s.userId === u.id)) {
+      throw httpError(403, 'Your account is suspended. Contact Team Impact.');
+    }
     return u;
   };
 

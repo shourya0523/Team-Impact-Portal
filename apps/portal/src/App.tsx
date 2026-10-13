@@ -13,6 +13,7 @@ import { SignUpPage } from './pages/SignUp';
 import { CommunitiesPage } from './pages/staff/Communities';
 import { CompaniesPage } from './pages/staff/Companies';
 import { ModerationPage } from './pages/staff/Moderation';
+import { RecruitersPage } from './pages/staff/Recruiters';
 import { TeamsPage } from './pages/staff/Teams';
 import { homeFor, isPortalRole, SessionProvider, useSession } from './session';
 
@@ -110,6 +111,14 @@ export const AppRoutes = () => (
         element={
           <Guard allow={['staff']}>
             <CompaniesPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/staff/recruiters"
+        element={
+          <Guard allow={['staff']}>
+            <RecruitersPage />
           </Guard>
         }
       />

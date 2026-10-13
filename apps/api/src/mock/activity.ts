@@ -101,12 +101,13 @@ export const holdForReview = (world: MockWorld, target: Target, preview: string)
 
 const name = (u: MockUser) => `${u.firstName} ${u.lastName}`;
 
-/** Store one notification, unless the reader turned that kind off. */
+/** Store one notification, unless the reader turned that kind off (warnings can't be). */
 export const notify = (
   world: MockWorld,
   n: Omit<MockNotification, 'id' | 'read' | 'createdAt'>,
 ) => {
-  if (!prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
+  // Staff warnings always arrive; every other kind follows the reader's switch.
+  if (n.kind !== 'warning' && !prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
   world.notifications.push({
     ...n,
     id: world.newId(),
