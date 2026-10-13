@@ -1,99 +1,333 @@
-import { Stack } from 'expo-router';
+import { router, Stack } from 'expo-router';
 import type { ReactNode } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { colors, fontSize, radius, spacing } from '@team-impact/ui-tokens';
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { Role } from '@team-impact/contracts';
 import type { Loadable } from '@/hooks/useApi';
+import { c, font, initials, ROLE_COLOR } from '@/theme';
+import { Icon, type IconName } from './Icon';
 
 /**
- * The app shell's building blocks: a titled scrolling screen, cards, pills and buttons, all from
- * the shared tokens. Feature tickets restyle these against the hi-fi screens.
+ * The app's building blocks, from the approved design canvas. Screens own their header (eyebrow
+ * plus a condensed uppercase title), so the stack's native header is hidden on them.
  */
 export function Screen({
+  eyebrow,
   title,
-  subtitle,
-  actions,
+  right,
+  back,
   children,
+  floating,
 }: {
+  eyebrow?: string;
   title: string;
-  subtitle?: string;
-  actions?: ReactNode;
+  right?: ReactNode;
+  /** Show a round back button before the title. */
+  back?: boolean;
   children?: ReactNode;
+  /** Pinned over the content, e.g. the compose button. */
+  floating?: ReactNode;
 }) {
+  const insets = useSafeAreaInsets();
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Stack.Screen options={{ title }} />
-      <Text style={styles.title} accessibilityRole="header">
-        {title}
-      </Text>
-      {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
-      {actions && <View style={styles.actions}>{actions}</View>}
-      {children}
-    </ScrollView>
-  );
-}
-
-export function Card({ children, onPress }: { children: ReactNode; onPress?: () => void }) {
-  return onPress ? (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
-    >
-      {children}
-    </Pressable>
-  ) : (
-    <View style={styles.card}>{children}</View>
-  );
-}
-
-export function Pill({
-  label,
-  tone = 'neutral',
-}: {
-  label: string;
-  tone?: 'neutral' | 'brand' | 'warn';
-}) {
-  const palette = {
-    neutral: { bg: colors.surface, fg: colors.textMuted },
-    brand: { bg: '#E7EDFB', fg: colors.primary },
-    warn: { bg: '#FFF4D6', fg: '#7A5200' },
-  }[tone];
-  return (
-    <View style={[styles.pill, { backgroundColor: palette.bg }]}>
-      <Text style={[styles.pillText, { color: palette.fg }]}>{label}</Text>
+    <View style={{ flex: 1, backgroundColor: c.ground }}>
+      <Stack.Screen options={{ headerShown: false, title }} />
+      <ScrollView
+        contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 120, gap: 16 }}
+      >
+        <View style={styles.header}>
+          {back && <IconButton icon="back" label="Back" onPress={() => router.back()} />}
+          <View style={{ flex: 1, gap: 2 }}>
+            {eyebrow && <Text style={styles.eyebrow}>{eyebrow.toUpperCase()}</Text>}
+            <Text style={styles.title} accessibilityRole="header" numberOfLines={2}>
+              {title.toUpperCase()}
+            </Text>
+          </View>
+          {right}
+        </View>
+        {children}
+      </ScrollView>
+      {floating}
     </View>
   );
 }
 
+/** Horizontal padding for screen content. */
+export function Gutter({ children, gap = 12 }: { children: ReactNode; gap?: number }) {
+  return <View style={{ paddingHorizontal: 16, gap }}>{children}</View>;
+}
+
+export function IconButton({
+  icon,
+  label,
+  onPress,
+  dot,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  dot?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.iconButton, pressed && { backgroundColor: c.lineSoft }]}
+    >
+      <Icon name={icon} size={20} color={c.ink} />
+      {dot && <View style={styles.dot} />}
+    </Pressable>
+  );
+}
+
+export function Avatar({
+  firstName,
+  lastName,
+  role,
+  size = 40,
+  ring,
+}: {
+  firstName: string;
+  lastName: string;
+  role: Role;
+  size?: number;
+  /** Border colour, for overlapping facepiles. */
+  ring?: string;
+}) {
+  const { bg, fg } = ROLE_COLOR[role];
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: bg,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: ring ? 2 : 0,
+        borderColor: ring,
+      }}
+    >
+      <Text style={{ color: fg, fontFamily: font.bold, fontSize: size * 0.35 }}>
+        {initials(firstName, lastName)}
+      </Text>
+    </View>
+  );
+}
+
+type ButtonKind = 'red' | 'navy' | 'ink' | 'outline' | 'white' | 'onNavy';
+
+const BUTTON: Record<ButtonKind, { bg: string; fg: string; border?: string }> = {
+  red: { bg: c.red, fg: '#ffffff' },
+  navy: { bg: c.navy, fg: '#ffffff' },
+  ink: { bg: c.ink, fg: '#ffffff' },
+  outline: { bg: c.surface, fg: c.ink, border: c.line },
+  white: { bg: '#ffffff', fg: c.navy },
+  onNavy: { bg: 'transparent', fg: '#ffffff', border: c.onNavyMuted },
+};
+
 export function Button({
   label,
   onPress,
-  kind = 'primary',
+  kind = 'red',
+  icon,
+  size = 'md',
   disabled,
+  stretch,
 }: {
   label: string;
   onPress: () => void;
-  kind?: 'primary' | 'secondary';
+  kind?: ButtonKind;
+  icon?: IconName;
+  size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
+  stretch?: boolean;
 }) {
-  const primary = kind === 'primary';
+  const k = BUTTON[kind];
+  const height = { sm: 40, md: 46, lg: 56 }[size];
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled}
       accessibilityRole="button"
+      accessibilityState={{ disabled }}
       style={({ pressed }) => [
-        styles.button,
-        primary ? styles.buttonPrimary : styles.buttonSecondary,
-        (pressed || disabled) && { opacity: 0.6 },
+        {
+          minHeight: height,
+          paddingHorizontal: size === 'sm' ? 14 : 18,
+          borderRadius: height / 2,
+          backgroundColor: k.bg,
+          borderWidth: k.border ? 1 : 0,
+          borderColor: k.border,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 6,
+          alignSelf: stretch ? 'stretch' : 'auto',
+          flexGrow: stretch ? 1 : 0,
+        },
+        (pressed || disabled) && { opacity: 0.65 },
       ]}
     >
-      <Text
-        style={[styles.buttonText, { color: primary ? colors.primaryContrast : colors.primary }]}
-      >
+      {icon && <Icon name={icon} size={16} color={k.fg} strokeWidth={2.4} />}
+      <Text style={{ color: k.fg, fontFamily: font.bold, fontSize: size === 'lg' ? 17 : 14 }}>
         {label}
       </Text>
     </Pressable>
+  );
+}
+
+export function Chip({
+  label,
+  selected,
+  onPress,
+}: {
+  label: string;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      style={[styles.chip, selected ? styles.chipOn : styles.chipOff]}
+    >
+      <Text style={{ fontFamily: font.semibold, fontSize: 14, color: selected ? '#fff' : c.ink }}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** A segmented control, like the design's All / My team / Going. */
+export function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+  label,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+  label: string;
+}) {
+  return (
+    <View accessibilityRole="tablist" accessibilityLabel={label} style={styles.segmented}>
+      {options.map((o) => {
+        const on = o.value === value;
+        return (
+          <Pressable
+            key={o.value}
+            onPress={() => onChange(o.value)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: on }}
+            style={[styles.segment, on && { backgroundColor: c.surface }]}
+          >
+            <Text
+              style={{
+                fontFamily: on ? font.bold : font.semibold,
+                fontSize: 14,
+                color: on ? c.ink : c.text2,
+              }}
+            >
+              {o.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+export function Card({
+  children,
+  onPress,
+  style,
+  label,
+}: {
+  children: ReactNode;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  label?: string;
+}) {
+  if (!onPress) return <View style={[styles.card, style]}>{children}</View>;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={({ pressed }) => [styles.card, style, pressed && { opacity: 0.8 }]}
+    >
+      {children}
+    </Pressable>
+  );
+}
+
+/** Small uppercase badge, e.g. COACH or OFFICIAL. */
+export function Tag({
+  label,
+  bg = c.navyTint,
+  fg = c.navy,
+  icon,
+}: {
+  label: string;
+  bg?: string;
+  fg?: string;
+  icon?: IconName;
+}) {
+  return (
+    <View style={[styles.tag, { backgroundColor: bg }]}>
+      {icon && <Icon name={icon} size={12} color={fg} strokeWidth={2.6} />}
+      <Text style={{ color: fg, fontFamily: font.bold, fontSize: 11, letterSpacing: 0.6 }}>
+        {label.toUpperCase()}
+      </Text>
+    </View>
+  );
+}
+
+export function SectionLabel({ children }: { children: string }) {
+  return <Text style={styles.section}>{children.toUpperCase()}</Text>;
+}
+
+/** Step bars for the join flow. */
+export function Progress({
+  step,
+  total,
+  onNavy,
+}: {
+  step: number;
+  total: number;
+  onNavy?: boolean;
+}) {
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 1, max: total, now: step }}
+      style={{ flexDirection: 'row', gap: 6, flex: 1 }}
+    >
+      {Array.from({ length: total }, (_, i) => (
+        <View
+          key={i}
+          style={{
+            flex: 1,
+            height: 4,
+            borderRadius: 2,
+            backgroundColor: i < step ? c.red : onNavy ? c.navyRaised : c.line,
+          }}
+        />
+      ))}
+    </View>
   );
 }
 
@@ -105,7 +339,8 @@ export function Async<T>({
   state: Loadable<T>;
   children: (data: T) => ReactNode;
 }) {
-  if (state.status === 'loading') return <ActivityIndicator style={{ marginTop: spacing.lg }} />;
+  if (state.status === 'loading')
+    return <ActivityIndicator color={c.navy} style={{ marginTop: 24 }} />;
   if (state.status === 'error') {
     return (
       <Text style={styles.error} accessibilityRole="alert">
@@ -116,54 +351,80 @@ export function Async<T>({
   return <>{children(state.data)}</>;
 }
 
-export const text = StyleSheet.create({
-  strong: { fontSize: fontSize.md, fontWeight: '700', color: colors.text },
-  body: { fontSize: fontSize.md, color: colors.text, lineHeight: 22 },
-  muted: { fontSize: fontSize.sm, color: colors.textMuted },
-  section: {
-    fontSize: fontSize.sm,
-    fontWeight: '700',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: spacing.md,
-  },
+export const type = StyleSheet.create({
+  name: { fontFamily: font.bold, fontSize: 15, color: c.ink },
+  body: { fontFamily: font.body, fontSize: 16, lineHeight: 23, color: c.ink },
+  meta: { fontFamily: font.medium, fontSize: 12, color: c.muted },
+  small: { fontFamily: font.body, fontSize: 13, lineHeight: 18, color: c.text2 },
+  display: { fontFamily: font.display, color: c.navy },
 });
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.background },
-  content: { padding: spacing.md, gap: spacing.sm + 4, paddingBottom: spacing.xl },
-  title: { fontSize: fontSize.xl, fontWeight: '800', color: colors.primary },
-  subtitle: { fontSize: fontSize.sm, color: colors.textMuted, marginTop: -spacing.xs },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  card: {
-    backgroundColor: colors.background,
+  header: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 20 },
+  eyebrow: { fontFamily: font.bold, fontSize: 12, letterSpacing: 1.9, color: c.red },
+  title: { fontFamily: font.display, fontSize: 44, lineHeight: 42, color: c.navy },
+  iconButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    gap: spacing.xs + 2,
-  },
-  pill: {
-    alignSelf: 'flex-start',
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-  },
-  pillText: { fontSize: 12, fontWeight: '700' },
-  button: {
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.pill,
+    borderColor: c.line,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  buttonPrimary: { backgroundColor: colors.primary },
-  buttonSecondary: {
-    borderWidth: 1,
-    borderColor: colors.primary,
-    backgroundColor: colors.background,
+  dot: {
+    position: 'absolute',
+    top: 9,
+    right: 10,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: c.red,
+    borderWidth: 2,
+    borderColor: '#fff',
   },
-  buttonText: { fontSize: fontSize.sm + 1, fontWeight: '700' },
-  error: { color: colors.danger, fontSize: fontSize.md },
+  chip: { minHeight: 36, paddingHorizontal: 16, borderRadius: 18, justifyContent: 'center' },
+  chipOn: { backgroundColor: c.ink },
+  chipOff: { backgroundColor: c.surface, borderWidth: 1, borderColor: c.line },
+  segmented: {
+    flexDirection: 'row',
+    gap: 4,
+    padding: 4,
+    borderRadius: 16,
+    backgroundColor: c.track,
+  },
+  segment: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  card: {
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.lineSoft,
+    borderRadius: 20,
+    padding: 16,
+    gap: 12,
+  },
+  tag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  section: {
+    fontFamily: font.bold,
+    fontSize: 13,
+    letterSpacing: 1.5,
+    color: c.text2,
+    paddingHorizontal: 20,
+    marginTop: 4,
+  },
+  error: { color: c.danger, fontFamily: font.medium, fontSize: 15, paddingHorizontal: 20 },
 });

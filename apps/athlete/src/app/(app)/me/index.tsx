@@ -6,7 +6,7 @@ import { useRole } from '@/navigation/role';
 
 /** "/me": every role has this tab. Rows depend on the role; sign out to try another role. */
 export default function Me() {
-  const { role, setRole } = useRole();
+  const { role, setRole, setMe } = useRole();
 
   const links: PlaceholderLink[] = [];
   if (role === 'athlete') links.push({ label: 'Contacts and recruiting', href: '/me/recruiting' });
@@ -25,6 +25,7 @@ export default function Me() {
         onPress={() => {
           // Clear the session cookie too; go to the landing page even if the API is down.
           void api.signOut().catch(() => undefined);
+          setMe(null);
           setRole(null);
           router.replace('/welcome');
         }}

@@ -52,6 +52,15 @@ export const api = {
   events: () => request<CalendarEvent[]>('/events'),
   communities: () => request<Community[]>('/communities'),
   community: (id: string) => request<Community>(`/communities/${id}`),
+  communityPosts: (id: string) =>
+    request<{ items: Post[]; nextCursor: string | null }>(`/communities/${id}/posts`),
+  joinCommunity: (id: string) => post<Community>(`/communities/${id}/join`),
+  /** "Recruiters can find me through this community" (official communities, published cards). */
+  setFindable: (id: string, recruiterSearchOptIn: boolean) =>
+    request<Community>(`/communities/${id}/membership`, {
+      method: 'PUT',
+      body: JSON.stringify({ recruiterSearchOptIn }),
+    }),
 
   colleges: () => request<College[]>('/colleges'),
   teams: (collegeId: string) => request<TeamSummary[]>(`/teams?collegeId=${collegeId}`),

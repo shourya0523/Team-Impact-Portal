@@ -27,6 +27,7 @@ import {
   StaffCommunity,
   Team,
   TeamSummary,
+  UpdateCommunityMembershipRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../zod';
 import { COLLEGES, COMPANIES, NEWCOMERS, SIGN_IN_AS, summaryOf, TEAMS } from './fixtures';
@@ -115,6 +116,50 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
       const u = viewer(request);
       const c = world.communities.find((x) => x.id === request.params.id);
       if (!c || !world.canSeeCommunity(c, u)) throw httpError(404, 'No such community');
+      return world.community(c, u);
+    },
+  );
+
+  const visibleCommunity = (request: FastifyRequest, id: string) => {
+    const u = viewer(request);
+    const c = world.communities.find((x) => x.id === id);
+    if (!c || !world.canSeeCommunity(c, u)) throw httpError(404, 'No such community');
+    return { u, c };
+  };
+
+  app.get(
+    '/communities/:id/posts',
+    { schema: { params: IdParams, querystring: PageQuery, response: { 200: page(Post) } } },
+    async (request) => {
+      const { u, c } = visibleCommunity(request, request.params.id);
+      return paginate(world.communityFeed(c, u), request.query);
+    },
+  );
+
+  app.post(
+    '/communities/:id/join',
+    { schema: { params: IdParams, response: { 200: Community } } },
+    async (request) => {
+      const { u, c } = visibleCommunity(request, request.params.id);
+      const problem = world.join(c, u);
+      if (problem) throw httpError(403, problem);
+      return world.community(c, u);
+    },
+  );
+
+  app.put(
+    '/communities/:id/membership',
+    {
+      schema: {
+        params: IdParams,
+        body: UpdateCommunityMembershipRequest,
+        response: { 200: Community },
+      },
+    },
+    async (request) => {
+      const { u, c } = visibleCommunity(request, request.params.id);
+      const problem = world.setFindable(c, u, request.body.recruiterSearchOptIn);
+      if (problem) throw httpError(400, problem);
       return world.community(c, u);
     },
   );

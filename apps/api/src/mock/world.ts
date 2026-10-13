@@ -174,9 +174,14 @@ export class MockWorld {
         .map((c) => [c.id, c]),
     );
 
-  feed = (u: MockUser): Post[] => {
-    const readable = this.homeCommunities(u);
-    return this.posts
+  feed = (u: MockUser): Post[] => this.postsIn(this.homeCommunities(u), u);
+
+  /** One community's own feed, the only place a medical community's posts appear. */
+  communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
+    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
+
+  private postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
+    this.posts
       .filter((p) => readable.has(p.communityId))
       .filter((p) => p.moderation === 'approved' || p.authorId === u.id)
       .sort(
@@ -200,6 +205,40 @@ export class MockWorld {
           ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
           : { ...shared, kind: p.kind };
       });
+
+  /**
+   * Join an interest or medical community. Team communities follow the team and everyone is
+   * already in Team Impact's. Returns an error message, or null on success.
+   */
+  join = (c: MockCommunity, u: MockUser): string | null => {
+    if (c.kind !== 'interest' && c.kind !== 'medical')
+      return 'This community can’t be joined directly';
+    if (!canJoinCommunity(u.role, c.kind) || c.moderation !== 'approved') {
+      return 'You can’t join this community';
+    }
+    if (!c.members.some((m) => m.userId === u.id)) {
+      c.members.push({
+        userId: u.id,
+        joinedAt: new Date().toISOString(),
+        recruiterSearchOptIn: false,
+      });
+    }
+    return null;
+  };
+
+  /**
+   * "Recruiters can find me through this community": official interest communities only, for
+   * athletes with a published card. Returns an error message, or null on success.
+   */
+  setFindable = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
+    const member = c.members.find((m) => m.userId === u.id);
+    if (c.kind !== 'interest' || !c.official)
+      return 'Only official communities can make you findable';
+    if (!member) return 'Join the community first';
+    const card = this.cards.find((k) => k.face.athleteId === u.id);
+    if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    member.recruiterSearchOptIn = findable;
+    return null;
   };
 
   eventsFor = (u: MockUser): CalendarEvent[] => {

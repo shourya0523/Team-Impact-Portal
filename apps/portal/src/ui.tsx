@@ -11,7 +11,9 @@ import type { Loadable } from './useApi';
 export const brand = {
   navy: cardColors.navy,
   navyDeep: cardColors.navyDeep,
-  red: cardColors.red,
+  // The tokens' red (#fd002b) is too light for white text (3.9:1); this one is 5.3:1, as in the
+  // mockups. TODO(token decision): move into ui-tokens once the lead picks a token set.
+  red: '#d0213c',
   page: cardColors.offWhite,
   surface: colors.background,
   ink: cardColors.ink,

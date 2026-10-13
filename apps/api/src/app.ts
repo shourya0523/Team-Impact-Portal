@@ -27,7 +27,12 @@ export const buildApp = async ({
 }: AppOptions) => {
   const app = useZodContracts(Fastify({ logger }));
 
-  await app.register(cors, { origin: corsOrigins, credentials: true });
+  // @fastify/cors only allows GET, HEAD and POST by default; the app also sends PUT, PATCH and DELETE.
+  await app.register(cors, {
+    origin: corsOrigins,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  });
   await app.register(cookie, { secret: sessionSecret });
 
   app.get('/health', { schema: { response: { 200: HealthResponse } } }, async () => ({

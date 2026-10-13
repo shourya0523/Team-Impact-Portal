@@ -211,6 +211,51 @@ describe('mock API: communities', () => {
     expect(JSON.stringify(feed)).not.toContain('$5,000');
   });
 
+  it('shows a medical community’s posts in its own feed, to members only', async () => {
+    const member = await signIn('parent');
+    const own = await member.get(`/communities/${MEDICAL}/posts`);
+    expect(own.text).toContain('sent meals');
+    await close?.();
+    const coach = await signIn('coach'); // can see it exists, isn't a member
+    expect((await coach.get(`/communities/${MEDICAL}/posts`)).body.items).toEqual([]);
+  });
+
+  it('lets people join interest communities, but never teens into medical ones', async () => {
+    const coach = await signIn('coach');
+    const joined = await coach.send('POST', `/communities/${FINANCE}/join`, {});
+    expect(joined.status).toBe(200);
+    expect(joined.body.myMembership).toMatchObject({ recruiterSearchOptIn: false });
+    expect((await coach.send('POST', `/communities/${TEAM}/join`, {})).status).toBe(403);
+    await close?.();
+    const teen = await signIn('teen');
+    expect((await teen.send('POST', `/communities/${MEDICAL}/join`, {})).status).toBe(404);
+  });
+
+  it('makes an athlete findable only in official communities they belong to', async () => {
+    const { send, app } = await signIn('athlete');
+    const off = await send('PUT', `/communities/${FIRST_GEN}/membership`, {
+      recruiterSearchOptIn: false,
+    });
+    expect(off.status).toBe(200);
+    expect(off.body.myMembership.recruiterSearchOptIn).toBe(false);
+    const unofficial = await send('PUT', `/communities/${FINANCE}/membership`, {
+      recruiterSearchOptIn: true,
+    });
+    expect(unofficial.status).toBe(400);
+    // Turning it off drops Jordan from the identity search straight away.
+    const r = await app.inject({
+      method: 'POST',
+      url: '/auth/dev-sign-in',
+      payload: { role: 'recruiter' },
+    });
+    const res = await app.inject({
+      method: 'GET',
+      url: `/search/athletes?communityId=${FIRST_GEN}`,
+      cookies: { [r.cookies[0]!.name]: r.cookies[0]!.value },
+    });
+    expect(res.body).not.toContain(USERS.jordan.id);
+  });
+
   it('lets staff mark interest communities official, and nothing else', async () => {
     const { send } = await signIn('staff');
     const ok = await send('PUT', `/staff/communities/${FINANCE}/official`, { official: true });
