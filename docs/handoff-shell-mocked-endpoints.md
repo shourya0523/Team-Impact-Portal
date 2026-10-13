@@ -24,7 +24,7 @@ Branch `integration/shell-base`, which is `main` plus these branches, merged cle
 
 Not merged on purpose:
 
-- `design/signing-day-tokens` conflicts with the tokens branch above. Decide with the lead which token set wins before touching it.
+- ~~`design/signing-day-tokens` conflicts with the tokens branch above.~~ Resolved 13 Oct: the lead chose the Signing Day set; it is merged (`ddee6c2`) and both apps use it.
 - `test` is a one-line change.
 - `local/ecstatic-gauss-xm1swi` was not looked at.
 
@@ -32,7 +32,7 @@ Not merged on purpose:
 
 1. **Communities.** Done in the contracts: `packages/contracts/src/communities.ts` replaces `groups.ts`, with kinds `team`, `team_impact`, `medical`, `interest`, and `official` on interest only. Posts, events, announcements and opportunities now carry a `communityId` / `community` instead of an `audience`, and reports can target a community. `canCreateCommunity` and `canJoinCommunity` encode the PRD §5 table. The DB `group_kind` enum (`team, college, affinity, org, platform`) is still the old model; leave the migration alone unless asked, because the lead owns that call.
 2. **Alumni roles.** Contracts split alumni into `alumni_athlete` and `alumni_mentor` (matches PRD §2, §8). The DB `user_type` has a single `alumni`. Mock data follows the contracts.
-3. **Token conflict** noted above.
+3. ~~**Token conflict** noted above.~~ Resolved: Signing Day tokens (see CLAUDE.md, Design system).
 
 ## Mock API (done)
 
