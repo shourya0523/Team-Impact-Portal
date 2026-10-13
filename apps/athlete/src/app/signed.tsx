@@ -151,7 +151,13 @@ export default function Signed() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.brand },
   content: { flexGrow: 1, paddingHorizontal: spacing.lg, gap: spacing.lg },
-  hero: { flexGrow: 1, flexShrink: 0, alignItems: 'center', justifyContent: 'center', gap: spacing['2xl'] },
+  hero: {
+    flexGrow: 1,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing['2xl'],
+  },
   stamp: {
     borderWidth: STAMP_BORDER,
     borderColor: colors.onBrand.text,
