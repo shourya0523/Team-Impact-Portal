@@ -343,7 +343,8 @@ describe('mock API: staff and join flow', () => {
     const { send, get } = await signIn('teen');
     const colleges = (await get('/colleges')).body as { id: string }[];
     const teams = (await get(`/teams?collegeId=${colleges[0]!.id}`)).body as { id: string }[];
-    expect(teams).toHaveLength(1);
+    // Live teams only: lacrosse is still waiting on its first coach.
+    expect(teams.map((t) => t.id)).toEqual([id(201), id(210)]);
     // Already on it.
     expect(
       (await send('POST', '/join-requests', { role: 'teen', teamId: teams[0]!.id })).status,

@@ -2,8 +2,9 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { CreateJoinRequest, ParentRelationship } from '@team-impact/contracts';
+import type { CreateJoinRequest, NewChild, ParentRelationship } from '@team-impact/contracts';
 import { api } from '@/api';
+import { AddChildren } from '@/components/AddChildren';
 import { ROLE_LABEL } from '@/components/format';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { ErrorText, IconButton, Progress } from '@/components/ui';
@@ -48,11 +49,13 @@ export default function Request() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
+  const [children, setChildren] = useState<NewChild[]>([]);
+
   const body: CreateJoinRequest | null =
     role === 'athlete' && classYear
       ? { role, teamId, classYear }
       : role === 'parent' && relationship
-        ? { role, teamId, relationship }
+        ? { role, teamId, relationship, ...(children.length ? { children } : {}) }
         : role === 'teen'
           ? { role, teamId }
           : null;
@@ -145,6 +148,7 @@ export default function Request() {
                 onPress={() => setRelationship('guardian')}
               />
             </View>
+            <AddChildren value={children} onChange={setChildren} />
           </View>
         )}
         {role === 'teen' && (
@@ -169,6 +173,13 @@ export default function Request() {
                 </Text>
               </View>
             </View>
+            {role === 'parent' && children.length > 0 && (
+              <Text variant="small" color="secondary">
+                {`Your ${children.length === 1 ? 'child' : 'children'}: ${children
+                  .map((c) => `${c.firstName} ${c.lastInitial.toUpperCase()}.`)
+                  .join(', ')}, with age only. Never a birth date.`}
+              </Text>
+            )}
             <Text variant="small" color="secondary">
               That’s all. Your resume isn’t needed to join.
             </Text>

@@ -17,7 +17,14 @@ import {
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
-import { initialQrCodes, type MockChild, type MockCoachInvite, type MockQrCode } from './team';
+import { newSignupState } from './signup';
+import {
+  initialCoachInvites,
+  initialQrCodes,
+  type MockChild,
+  type MockCoachInvite,
+  type MockQrCode,
+} from './team';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -37,12 +44,15 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
-  /** Coaches edit their team (name, colour, about), so each world has its own copy. */
-  readonly teams = structuredClone(fx.TEAMS);
-  /** Child profiles; a child leaves the team when their parent does (`team.ts`). */
+  /** Child profiles parents run: never users, never accounts. They leave with their parent. */
   readonly children: MockChild[] = structuredClone(fx.CHILDREN);
+  /** Recruiters waiting on staff (`./signup.ts`). */
+  readonly signup = newSignupState();
+  /** Coaches edit their team and a first coach makes it live, so each world has its own copy. */
+  readonly teams = structuredClone(fx.TEAMS);
+  /** Team QR codes and coach invites (`./team.ts`). */
   readonly qrCodes: MockQrCode[] = initialQrCodes();
-  readonly coachInvites: MockCoachInvite[] = [];
+  readonly coachInvites: MockCoachInvite[] = initialCoachInvites();
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}

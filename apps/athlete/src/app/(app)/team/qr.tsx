@@ -19,8 +19,8 @@ const LIFETIMES: { value: QrCodeLifetime; label: string }[] = [
   { value: 'week', label: 'A week' },
 ];
 
-/** What the code encodes and what "Share link" sends: the app opens it on the join screen. */
-const joinLink = (shortCode: string) => createURL(`/qr/${shortCode}`);
+/** What the code encodes and what "Share link" sends: the app opens it on the scan screen. */
+const joinLink = (shortCode: string) => createURL('/scan', { queryParams: { code: shortCode } });
 
 const isLive = (c: TeamQrCode, now = Date.now()) =>
   c.revokedAt === null && Date.parse(c.expiresAt) > now;

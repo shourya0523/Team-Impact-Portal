@@ -10,7 +10,7 @@ import {
   Team,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { COMPANIES, TEAMS } from '../fixtures';
+import { COMPANIES } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
@@ -18,7 +18,7 @@ import { httpError, type Guards } from './context';
 export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole }: Guards) => {
   app.get('/staff/teams', { schema: { response: { 200: z.array(Team) } } }, async (request) => {
     requireRole(request, 'staff');
-    return TEAMS.map((t) => ({
+    return world.teams.map((t) => ({
       ...t,
       memberCount: world.teamMembers.filter((m) => m.teamId === t.id).length,
     }));

@@ -49,16 +49,19 @@ export interface MockCoachInvite {
   createdAt: string;
 }
 
+/** A child profile run by a parent. No login, no email, no birth date (PRD §2, data model). */
 export interface MockChild {
   id: string;
   parentId: string;
-  /** Null once their parent leaves the team, or before the parent's request is approved. */
+  /** Null once their parent leaves the team: a child stays only with its family. */
   teamId: string | null;
   firstName: string;
+  lastInitial?: string;
   age: number;
 }
 
 const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
 const LIFETIME_HOURS: Record<QrCodeLifetime, number> = { tonight: 6, day: 24, week: 24 * 7 };
 const INVITE_DAYS = 7;
 
@@ -69,6 +72,7 @@ export const PARENT_PHONES: Record<string, string> = {
 };
 
 const SOCCER = id(201);
+const LACROSSE = id(202);
 
 const newToken = () => randomBytes(24).toString('base64url');
 
@@ -83,19 +87,34 @@ const newShortCode = (taken: Set<string>) => {
   }
 };
 
-/** One live code (with the four athletes who joined through it) and one revoked one. */
+/** Codes the clients and tests point at. Dates are relative to now so they stay valid. */
+export const QR_TOKENS = {
+  live: 'tufts-soccer-live-qr-2026',
+  revoked: 'tufts-soccer-revoked-qr-2026',
+  expired: 'tufts-soccer-expired-qr-2026',
+} as const;
+
+export const INVITE_TOKENS = {
+  /** The first coach of the invited lacrosse team: no account yet. */
+  lacrosse: 'invite-tufts-lacrosse-first-coach',
+  /** An assistant for soccer whose invite was revoked. */
+  revoked: 'invite-tufts-soccer-revoked-assistant',
+  expired: 'invite-tufts-soccer-expired-assistant',
+} as const;
+
+/** A live code (the four athletes joined through it), a revoked one and an expired one. */
 export const initialQrCodes = (now = Date.now()): MockQrCode[] => [
   {
     id: id(1201),
     teamId: SOCCER,
-    token: 'fixture-live-token-soccer-0001',
+    token: QR_TOKENS.live,
     shortCode: 'JUMBQ7K4',
     label: 'Preseason meeting',
     createdById: USERS.coach.id,
     lifetime: 'week',
-    expiresAt: new Date(now + 3 * 24 * HOUR).toISOString(),
+    expiresAt: new Date(now + 3 * DAY).toISOString(),
     revokedAt: null,
-    createdAt: new Date(now - 4 * 24 * HOUR).toISOString(),
+    createdAt: new Date(now - 4 * DAY).toISOString(),
     joins: [USERS.jordan, USERS.sam, USERS.riley, USERS.ava].map((u) => ({
       userId: u.id,
       joinedAt: '2026-10-02T12:00:00.000Z',
@@ -104,15 +123,65 @@ export const initialQrCodes = (now = Date.now()): MockQrCode[] => [
   {
     id: id(1202),
     teamId: SOCCER,
-    token: 'fixture-revoked-token-soccer-02',
+    token: QR_TOKENS.revoked,
     shortCode: 'RVKD7XQ4',
     label: 'Posted by mistake',
     createdById: USERS.coach.id,
-    lifetime: 'day',
-    expiresAt: new Date(now + 12 * HOUR).toISOString(),
-    revokedAt: new Date(now - HOUR).toISOString(),
-    createdAt: new Date(now - 2 * HOUR).toISOString(),
+    lifetime: 'week',
+    expiresAt: new Date(now + 3 * DAY).toISOString(),
+    revokedAt: new Date(now - DAY).toISOString(),
+    createdAt: new Date(now - 4 * DAY).toISOString(),
     joins: [],
+  },
+  {
+    id: id(1203),
+    teamId: SOCCER,
+    token: QR_TOKENS.expired,
+    shortCode: 'XPRD4WTN',
+    label: 'Open practice',
+    createdById: USERS.coach.id,
+    lifetime: 'tonight',
+    expiresAt: new Date(now - 2 * DAY).toISOString(),
+    revokedAt: null,
+    createdAt: new Date(now - 3 * DAY).toISOString(),
+    joins: [],
+  },
+];
+
+/** Lacrosse's first coach (invited by staff), plus a revoked and an expired soccer assistant. */
+export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
+  {
+    id: id(1401),
+    teamId: LACROSSE,
+    email: 'pat.nguyen@tufts.edu',
+    token: INVITE_TOKENS.lacrosse,
+    invitedById: USERS.staff.id,
+    expiresAt: new Date(now + 5 * DAY).toISOString(),
+    acceptedAt: null,
+    revokedAt: null,
+    createdAt: new Date(now - 2 * DAY).toISOString(),
+  },
+  {
+    id: id(1402),
+    teamId: SOCCER,
+    email: 'alex.moore@tufts.edu',
+    token: INVITE_TOKENS.revoked,
+    invitedById: USERS.coach.id,
+    expiresAt: new Date(now + 5 * DAY).toISOString(),
+    acceptedAt: null,
+    revokedAt: new Date(now - DAY).toISOString(),
+    createdAt: new Date(now - 2 * DAY).toISOString(),
+  },
+  {
+    id: id(1403),
+    teamId: SOCCER,
+    email: 'jamie.cole@tufts.edu',
+    token: INVITE_TOKENS.expired,
+    invitedById: USERS.coach.id,
+    expiresAt: new Date(now - DAY).toISOString(),
+    acceptedAt: null,
+    revokedAt: null,
+    createdAt: new Date(now - 8 * DAY).toISOString(),
   },
 ];
 
@@ -230,22 +299,22 @@ export const removeMember = (
   return { removedChildren };
 };
 
-const addMember = (
+/** Puts `userId` on the team once; true if they were added. Every way onto a team comes here. */
+export const addTeamMember = (
   world: MockWorld,
   teamId: string,
   userId: string,
   joinedVia: TeamMember['joinedVia'],
-  joinedAt: string,
+  joinedAt = new Date().toISOString(),
 ) => {
-  if (world.teamMembers.some((m) => m.teamId === teamId && m.userId === userId)) return;
+  if (world.teamMembers.some((m) => m.teamId === teamId && m.userId === userId)) return false;
   world.teamMembers.push({ teamId, userId, joinedVia, joinedAt });
-  // A parent's children who aren't on a team yet come with them, and only to their parent's team.
-  if (world.user(userId)?.role === 'parent') {
-    for (const child of world.children) {
-      if (child.parentId === userId && child.teamId === null) child.teamId = teamId;
-    }
-  }
+  return true;
 };
+
+/** Live teams are in the join search and take requests, QR joins and members. */
+export const isTeamLive = (world: MockWorld, teamId: string) =>
+  world.teams.find((t) => t.id === teamId)?.status === 'live';
 
 // Join requests -----------------------------------------------------------------------------------
 
@@ -253,6 +322,33 @@ export const pendingRequests = (world: MockWorld, teamId: string) =>
   world.joinRequests
     .filter((r) => r.teamId === teamId && r.status === 'pending')
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+
+/**
+ * Applies a decision to a pending request. Approving puts the requester on the team and creates
+ * the profiles of any children the parent added: rows a parent runs, never accounts.
+ */
+export const applyJoinDecision = (
+  world: MockWorld,
+  request: JoinRequest,
+  decision: 'approve' | 'decline',
+) => {
+  const now = new Date().toISOString();
+  request.status = decision === 'approve' ? 'approved' : 'declined';
+  request.decidedAt = now;
+  if (decision !== 'approve') return;
+  addTeamMember(world, request.teamId, request.requester.id, 'join_request', now);
+  if (request.role !== 'parent') return;
+  for (const child of request.children ?? []) {
+    world.children.push({
+      id: world.newId(),
+      parentId: request.requester.id,
+      teamId: request.teamId,
+      firstName: child.firstName,
+      lastInitial: child.lastInitial,
+      age: child.age,
+    });
+  }
+};
 
 /** A coach of the request's team (or staff) approves or declines it, once. */
 export const decideJoinRequest = (
@@ -266,12 +362,10 @@ export const decideJoinRequest = (
   if (!canManageTeam(world, u, request.teamId)) {
     return { error: 'Only this team’s coaches can decide', status: 403 };
   }
-  if (request.status !== 'pending') return { error: 'Already decided', status: 409 };
-  const now = new Date().toISOString();
-  request.status = decision === 'approve' ? 'approved' : 'declined';
-  request.decidedAt = now;
-  if (decision === 'approve')
-    addMember(world, request.teamId, request.requester.id, 'join_request', now);
+  if (request.status !== 'pending') {
+    return { error: 'This request was already decided', status: 409 };
+  }
+  applyJoinDecision(world, request, decision);
   return { request };
 };
 
@@ -321,42 +415,63 @@ export const revokeQrCode = (code: MockQrCode) => {
   return code;
 };
 
-/** A code people can still join with: not revoked, not expired, and its team is live. */
-export const isLive = (world: MockWorld, code: MockQrCode, now = Date.now()) =>
-  code.revokedAt === null &&
-  Date.parse(code.expiresAt) > now &&
-  world.teams.find((t) => t.id === code.teamId)?.status === 'live';
+/** Why a code or invite can't be used, as the route answers it. */
+export type Problem = { status: 403 | 404 | 409 | 410; message: string };
 
-/** Looks a scanned token or typed short code up; null unless it is live. */
-export const liveQrCode = (world: MockWorld, tokenOrShortCode: string, now = Date.now()) => {
+/** A scanned token or a typed short code (any case, with or without the dash). */
+const findQrCode = (world: MockWorld, tokenOrShortCode: string) => {
   const short = QrShortCode.safeParse(tokenOrShortCode);
-  const code = world.qrCodes.find(
+  return world.qrCodes.find(
     (c) => c.token === tokenOrShortCode || (short.success && c.shortCode === short.data),
   );
-  return code && isLive(world, code, now) ? code : null;
+};
+
+/** A code anyone can still use (not revoked, not expired, team live), or why not. */
+export const usableQrCode = (
+  world: MockWorld,
+  tokenOrShortCode: string,
+  now = Date.now(),
+): MockQrCode | Problem => {
+  const code = findQrCode(world, tokenOrShortCode);
+  if (!code) return { status: 404, message: 'That code isn’t a Team IMPACT team code' };
+  if (code.revokedAt) return { status: 410, message: 'The coach turned this code off' };
+  if (Date.parse(code.expiresAt) <= now) {
+    return { status: 410, message: 'This code has expired. Ask the coach for a new one' };
+  }
+  if (!isTeamLive(world, code.teamId)) {
+    return { status: 410, message: 'This team isn’t taking new members' };
+  }
+  return code;
+};
+
+/** A live code, or null. */
+export const liveQrCode = (world: MockWorld, tokenOrShortCode: string, now = Date.now()) => {
+  const code = usableQrCode(world, tokenOrShortCode, now);
+  return 'status' in code ? null : code;
 };
 
 /** Roles that join teams. Coaches are invited; alumni, recruiters and staff never join. */
 const JOINING_ROLES: readonly MockUser['role'][] = ['athlete', 'parent', 'teen'];
 
 /**
- * The fast lane: a live code joins the team straight away. Exposed for the redeem route (`/qr/:code`)
- * so every way in records the join on the code. Returns an error message, or null on success.
+ * The fast lane: a live code joins the team straight away and the join lands on the code's join
+ * list. Used by `POST /qr/:code/join`. `joined` is false if they were already on the team.
  */
 export const redeemQrCode = (
   world: MockWorld,
   u: MockUser,
   tokenOrShortCode: string,
   now = Date.now(),
-): string | null => {
-  const code = liveQrCode(world, tokenOrShortCode, now);
-  if (!code) return 'This code has expired or been turned off. Ask your coach for a new one.';
-  if (!JOINING_ROLES.includes(u.role)) return 'Your account can’t join a team with a code';
-  if (world.teamIdsOf(u.id).includes(code.teamId)) return null;
+): Problem | { code: MockQrCode; joined: boolean } => {
+  const code = usableQrCode(world, tokenOrShortCode, now);
+  if ('status' in code) return code;
+  if (!JOINING_ROLES.includes(u.role)) {
+    return { status: 403, message: 'Your account can’t join a team with a code' };
+  }
   const joinedAt = new Date(now).toISOString();
-  addMember(world, code.teamId, u.id, 'qr_code', joinedAt);
-  code.joins.push({ userId: u.id, joinedAt });
-  return null;
+  const joined = addTeamMember(world, code.teamId, u.id, 'qr_code', joinedAt);
+  if (joined) code.joins.push({ userId: u.id, joinedAt });
+  return { code, joined };
 };
 
 export const qrCodeJoins = (world: MockWorld, code: MockQrCode): QrCodeJoin[] =>
@@ -414,8 +529,35 @@ export const createCoachInvite = (
   return { invite };
 };
 
-/** For `/invites/:token`: a pending invite, or null if it's used, revoked, expired or unknown. */
-export const findCoachInvite = (world: MockWorld, token: string, now = Date.now()) => {
+/** For `/invites/:token`: an invite that can still be accepted, or why not. */
+export const usableInvite = (
+  world: MockWorld,
+  token: string,
+  now = Date.now(),
+): MockCoachInvite | Problem => {
   const invite = world.coachInvites.find((i) => i.token === token);
-  return invite && isPending(invite, now) ? invite : null;
+  if (!invite) return { status: 404, message: 'No such invite' };
+  if (invite.revokedAt) return { status: 410, message: 'This invite was withdrawn' };
+  if (invite.acceptedAt) return { status: 410, message: 'This invite has already been used' };
+  if (Date.parse(invite.expiresAt) <= now) {
+    return { status: 410, message: 'This invite has expired. Ask Team Impact to resend it' };
+  }
+  return invite;
+};
+
+/** A pending invite, or null if it's used, revoked, expired or unknown. */
+export const findCoachInvite = (world: MockWorld, token: string, now = Date.now()) => {
+  const invite = usableInvite(world, token, now);
+  return 'status' in invite ? null : invite;
+};
+
+/**
+ * Accepting puts the coach on the team. A team's first coach makes it live: it shows in the join
+ * search and takes requests and codes from then on.
+ */
+export const acceptCoachInvite = (world: MockWorld, invite: MockCoachInvite, coach: MockUser) => {
+  invite.acceptedAt = new Date().toISOString();
+  addTeamMember(world, invite.teamId, coach.id, 'coach_invite');
+  const t = world.teams.find((x) => x.id === invite.teamId);
+  if (t?.status === 'invited') t.status = 'live';
 };

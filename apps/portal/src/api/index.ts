@@ -1,5 +1,6 @@
 import { recruiter } from './recruiter';
 import { session } from './session';
+import { signup, staffSignup } from './signup';
 import { staff } from './staff';
 
 export { ApiRequestError, request } from './client';
@@ -8,5 +9,6 @@ export { ApiRequestError, request } from './client';
 export const api = {
   ...session,
   ...recruiter,
-  staff: { ...staff },
+  ...signup,
+  staff: { ...staff, ...staffSignup },
 };

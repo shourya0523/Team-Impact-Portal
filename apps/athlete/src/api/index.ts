@@ -2,6 +2,7 @@ import { communities } from './communities';
 import { join } from './join';
 import { session } from './session';
 import { team } from './team';
+import { signup } from './signup';
 
 export { ApiRequestError, request } from './client';
 
@@ -11,4 +12,5 @@ export const api = {
   ...communities,
   ...join,
   ...team,
+  ...signup,
 };

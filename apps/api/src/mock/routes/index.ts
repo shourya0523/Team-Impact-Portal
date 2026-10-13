@@ -5,6 +5,7 @@ import { guards } from './context';
 import { registerJoinRoutes } from './join';
 import { registerRecruiterRoutes } from './recruiter';
 import { registerSessionRoutes } from './session';
+import { registerSignupRoutes } from './signup';
 import { registerStaffRoutes } from './staff';
 import { registerTeamRoutes } from './team';
 
@@ -22,6 +23,7 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerRecruiterRoutes,
     registerStaffRoutes,
     registerTeamRoutes,
+    registerSignupRoutes,
   ]) {
     register(app, world, g);
   }

@@ -146,6 +146,20 @@ export const TEAMS: Omit<Team, 'memberCount'>[] = [
     status: 'invited',
     createdAt: at(10),
   },
+  {
+    // A second live sport at Tufts, so the join search's sport step has a choice.
+    id: id(210),
+    name: "Women's Basketball",
+    college: tufts,
+    sport: 'Basketball',
+    gender: 'women',
+    division: 'III',
+    color: null,
+    logoUrl: null,
+    about: null,
+    status: 'live',
+    createdAt: at(5),
+  },
 ];
 
 const soccer = TEAMS[0]!;

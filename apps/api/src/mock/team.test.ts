@@ -3,12 +3,15 @@ import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { CHILDREN, id, USERS } from './fixtures';
 import {
+  acceptCoachInvite,
+  createCoachInvite,
   createQrCode,
   decideJoinRequest,
   findCoachInvite,
   liveQrCode,
   redeemQrCode,
   revokeQrCode,
+  usableInvite,
 } from './team';
 import { MockWorld } from './world';
 
@@ -204,7 +207,11 @@ describe('team: QR codes', () => {
     const { call } = await signIn('coach');
     const list = await call('GET', `/teams/${TEAM}/qr-codes`);
     expect(list.status).toBe(200);
-    expect(list.body.map((c: { id: string }) => c.id).sort()).toEqual([LIVE_CODE, REVOKED_CODE]);
+    expect(list.body.map((c: { id: string }) => c.id).sort()).toEqual([
+      LIVE_CODE,
+      REVOKED_CODE,
+      id(1203),
+    ]);
 
     const created = await call('POST', `/teams/${TEAM}/qr-codes`, {
       lifetime: 'tonight',
@@ -242,15 +249,21 @@ describe('team: QR codes', () => {
     const leo = world.user(USERS.leo.id)!;
     const revoked = world.qrCodes.find((c) => c.id === REVOKED_CODE)!;
     expect(liveQrCode(world, revoked.token)).toBeNull();
-    expect(redeemQrCode(world, leo, revoked.shortCode)).toMatch(/expired or been turned off/);
+    expect(redeemQrCode(world, leo, revoked.shortCode)).toMatchObject({ status: 410 });
     expect(world.teamIdsOf(leo.id)).not.toContain(TEAM);
 
     const code = createQrCode(world, coach, TEAM, 'tonight', undefined);
     const later = Date.now() + 7 * 3_600_000;
-    expect(redeemQrCode(world, leo, code.token, later)).toMatch(/expired/);
+    expect(redeemQrCode(world, leo, code.token, later)).toMatchObject({
+      status: 410,
+      message: expect.stringMatching(/expired/),
+    });
 
     revokeQrCode(code);
-    expect(redeemQrCode(world, leo, code.token)).toMatch(/turned off/);
+    expect(redeemQrCode(world, leo, code.token)).toMatchObject({
+      status: 410,
+      message: expect.stringMatching(/turned this code off/),
+    });
     expect(world.teamIdsOf(leo.id)).not.toContain(TEAM);
   });
 
@@ -260,7 +273,7 @@ describe('team: QR codes', () => {
     const live = world.qrCodes.find((c) => c.id === LIVE_CODE)!;
     // Typed by hand, in lower case with a dash.
     const typed = `${live.shortCode.slice(0, 4)}-${live.shortCode.slice(4)}`.toLowerCase();
-    expect(redeemQrCode(world, leo, typed)).toBeNull();
+    expect(redeemQrCode(world, leo, typed)).toMatchObject({ joined: true });
     expect(world.teamIdsOf(leo.id)).toContain(TEAM);
     expect(live.joins.map((j) => j.userId)).toContain(leo.id);
   });
@@ -269,9 +282,75 @@ describe('team: QR codes', () => {
     const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
     const live = world.qrCodes.find((c) => c.id === LIVE_CODE)!;
     for (const u of [USERS.elena, USERS.priya]) {
-      expect(redeemQrCode(world, world.user(u.id)!, live.token)).not.toBeNull();
+      expect(redeemQrCode(world, world.user(u.id)!, live.token)).toMatchObject({ status: 403 });
       expect(world.teamIdsOf(u.id)).not.toContain(TEAM);
     }
+  });
+});
+
+describe('team: codes and invites made by a coach work in the sign-up routes', () => {
+  /** One app, several people: each `as` signs in on the same world. */
+  const world = async () => {
+    const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true });
+    close = () => app.close();
+    const as = async (role: Role, newcomer = false) => {
+      const res = await app.inject({
+        method: 'POST',
+        url: '/auth/dev-sign-in',
+        payload: { role, newcomer },
+      });
+      const cookie = res.cookies[0]!;
+      return async (method: 'GET' | 'POST', url: string, payload?: object) => {
+        const r = await app.inject({
+          method,
+          url,
+          payload,
+          cookies: { [cookie.name]: cookie.value },
+        });
+        return { status: r.statusCode, body: r.json() };
+      };
+    };
+    return { as };
+  };
+
+  it('a new code’s short code joins the team and lands on its join list', async () => {
+    const { as } = await world();
+    const coach = await as('coach');
+    const code = (await coach('POST', `/teams/${TEAM}/qr-codes`, { lifetime: 'day' })).body;
+    const leo = await as('athlete', true);
+    const typed = `${code.shortCode.slice(0, 4)}-${code.shortCode.slice(4)}`.toLowerCase();
+    expect((await leo('GET', `/qr/${typed}`)).status).toBe(200);
+    expect((await leo('POST', `/qr/${typed}/join`)).status).toBe(201);
+    const joins = await coach('GET', `/qr-codes/${code.id}/joins`);
+    expect(joins.body.map((j: { user: { id: string } }) => j.user.id)).toEqual([USERS.leo.id]);
+
+    await coach('POST', `/qr-codes/${code.id}/revoke`);
+    const eli = await as('teen', true);
+    expect((await eli('POST', `/qr/${code.token}/join`)).status).toBe(410);
+  });
+
+  it('an invite a coach sends is the one `/invites/:token` accepts', () => {
+    // The token is only ever emailed, so this goes through the shared helpers directly.
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.user(USERS.coach.id)!;
+    const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+    const found = usableInvite(w, made.invite.token);
+    expect(found).toBe(made.invite);
+    const assistant = { ...coach, id: id(5999), email: 'assistant@tufts.edu' };
+    w.users.push(assistant);
+    acceptCoachInvite(w, made.invite, assistant);
+    expect(w.teamIdsOf(assistant.id)).toContain(TEAM);
+    expect(usableInvite(w, made.invite.token)).toMatchObject({ status: 410 });
+  });
+
+  it('accepting the first coach’s invite makes the team live', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const invite = w.coachInvites.find((i) => i.teamId === OTHER_TEAM)!;
+    const pat = { ...w.user(USERS.coach.id)!, id: id(5998), email: invite.email };
+    w.users.push(pat);
+    acceptCoachInvite(w, invite, pat);
+    expect(w.teams.find((t) => t.id === OTHER_TEAM)?.status).toBe('live');
   });
 });
 
@@ -315,7 +394,7 @@ describe('team: coach invites and edits', () => {
       createdAt: new Date().toISOString(),
     });
     expect(findCoachInvite(world, 'invite-token-0000000001')?.id).toBe(id(1301));
-    world.coachInvites[0]!.revokedAt = new Date().toISOString();
+    world.coachInvites.find((i) => i.id === id(1301))!.revokedAt = new Date().toISOString();
     expect(findCoachInvite(world, 'invite-token-0000000001')).toBeNull();
   });
 
