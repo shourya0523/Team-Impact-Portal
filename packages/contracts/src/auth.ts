@@ -37,7 +37,8 @@ export const SignupRequest = z
       ctx.addIssue({
         code: 'custom',
         path: ['birthDate'],
-        message: 'You need to be 13 or older to sign up.',
+        message:
+          'You need to be 13 or older to sign up. A parent or guardian can sign up and add you to the team.',
       });
     } else if (band === 'teen') {
       if (signup.role !== 'teen') {

@@ -17,6 +17,7 @@ import {
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
+import { type MockChild, newSignupState } from './signup';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -36,6 +37,10 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
+  /** Child profiles parents run: never users, never accounts. */
+  readonly children: MockChild[] = structuredClone(fx.CHILDREN);
+  /** QR codes, coach invites and recruiters waiting on staff (`./signup.ts`). */
+  readonly signup = newSignupState();
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
