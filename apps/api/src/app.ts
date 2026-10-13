@@ -1,7 +1,8 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
 import Fastify from 'fastify';
-import type { HealthResponse } from '@team-impact/contracts';
+import { HealthResponse } from '@team-impact/contracts';
+import { useZodContracts } from './zod';
 
 export interface AppOptions {
   sessionSecret: string;
@@ -10,13 +11,13 @@ export interface AppOptions {
 }
 
 export const buildApp = async ({ sessionSecret, corsOrigins, logger = false }: AppOptions) => {
-  const app = Fastify({ logger });
+  const app = useZodContracts(Fastify({ logger }));
 
   await app.register(cors, { origin: corsOrigins, credentials: true });
   await app.register(cookie, { secret: sessionSecret });
 
-  app.get('/health', async (): Promise<HealthResponse> => ({
-    status: 'ok',
+  app.get('/health', { schema: { response: { 200: HealthResponse } } }, async () => ({
+    status: 'ok' as const,
     version: process.env.APP_VERSION ?? 'dev',
   }));
 
