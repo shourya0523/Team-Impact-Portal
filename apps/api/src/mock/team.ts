@@ -13,6 +13,7 @@ import {
   type TeamRoster,
   type UpdateTeamRequest,
 } from '@team-impact/contracts';
+import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
 import type { MockWorld } from './world';
 
@@ -58,6 +59,9 @@ export interface MockChild {
   firstName: string;
   lastInitial?: string;
   age: number;
+  /** The parent edits these on the child's profile. */
+  bio: string | null;
+  photoUrl: string | null;
 }
 
 const HOUR = 3_600_000;
@@ -346,8 +350,25 @@ export const applyJoinDecision = (
       firstName: child.firstName,
       lastInitial: child.lastInitial,
       age: child.age,
+      bio: null,
+      photoUrl: null,
     });
   }
+};
+
+/** Tells the requester they're in, pointing at the team's community (if their prefs allow). */
+const notifyTeamJoinApproved = (world: MockWorld, request: JoinRequest, approver: MockUser) => {
+  const c = world.communities.find((x) => x.kind === 'team' && x.teamId === request.teamId);
+  const t = world.teams.find((x) => x.id === request.teamId);
+  if (!c || !t) return;
+  notify(world, {
+    userId: request.requester.id,
+    kind: 'join_approved',
+    actorId: approver.id,
+    text: `${approver.firstName} ${approver.lastName} approved your request to join ${t.name}`,
+    target: { kind: 'community', id: c.id },
+    communityId: c.id,
+  });
 };
 
 /** A coach of the request's team (or staff) approves or declines it, once. */
@@ -366,6 +387,7 @@ export const decideJoinRequest = (
     return { error: 'This request was already decided', status: 409 };
   }
   applyJoinDecision(world, request, decision);
+  if (decision === 'approve') notifyTeamJoinApproved(world, request, u);
   return { request };
 };
 

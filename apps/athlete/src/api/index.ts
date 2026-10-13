@@ -1,5 +1,7 @@
+import { activity } from './activity';
 import { communities } from './communities';
 import { join } from './join';
+import { profiles } from './profiles';
 import { session } from './session';
 import { team } from './team';
 import { signup } from './signup';
@@ -13,4 +15,6 @@ export const api = {
   ...join,
   ...team,
   ...signup,
+  ...activity,
+  ...profiles,
 };

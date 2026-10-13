@@ -33,14 +33,19 @@ export const TICKET_STATUSES = ['open', 'resolved'] as const;
 export const TicketStatus = z.enum(TICKET_STATUSES);
 export type TicketStatus = z.infer<typeof TicketStatus>;
 
-/** Staff only. Reports on the same item collect into one ticket on the moderation page. */
+/**
+ * Staff only. Reports on the same item collect into one ticket on the moderation page. New posts,
+ * comments, events and communities are held here too, as tickets with no reasons and no reports:
+ * `dismiss` ("keep") approves them, `remove` takes them down.
+ */
 export const ModerationTicket = z.object({
   id: Id,
   target: CreateReportRequest.shape.target,
   /** Enough to judge it at a glance: the post text, the community name, the profile's name. */
   preview: z.string(),
-  reasons: z.array(ReportReason).min(1),
-  reportCount: z.number().int().positive(),
+  /** Empty for new content held for its first review. */
+  reasons: z.array(ReportReason),
+  reportCount: z.number().int().nonnegative(),
   status: TicketStatus,
   /** Set once resolved. `remove` takes the item down; `dismiss` leaves it up. */
   resolution: z.enum(['remove', 'dismiss']).nullable(),

@@ -37,7 +37,10 @@ export const ModerationPage = () => {
 
   return (
     <>
-      <PageHeader title="Moderation" subtitle="Reports from users, oldest open tickets last." />
+      <PageHeader
+        title="Moderation"
+        subtitle="Reports from users and new content waiting for review. Keep approves it."
+      />
       <Async state={state}>
         {(tickets) => (
           <Table
@@ -49,7 +52,11 @@ export const ModerationPage = () => {
               { header: 'What', cell: (t) => t.preview, width: '34%' },
               {
                 header: 'Why',
-                cell: (t) => t.reasons.map((r) => REASON_LABEL[r]).join(', '),
+                // New posts, comments, events and communities wait here with no reports.
+                cell: (t) =>
+                  t.reasons.length
+                    ? t.reasons.map((r) => REASON_LABEL[r]).join(', ')
+                    : 'New, waiting for review',
               },
               { header: 'Reports', cell: (t) => t.reportCount, align: 'right' },
               { header: 'Opened', cell: (t) => formatDate(t.createdAt) },

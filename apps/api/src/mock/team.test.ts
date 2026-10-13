@@ -94,6 +94,32 @@ describe('team: join approvals', () => {
     expect(res.status).toBe(403);
   });
 
+  it('approval notifies the requester, unless they turned approvals off', () => {
+    const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = world.user(USERS.coach.id)!;
+    decideJoinRequest(world, coach, KAI_REQUEST, 'approve');
+    const sent = world.notifications.filter((n) => n.userId === USERS.kai.id);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ kind: 'join_approved', actorId: coach.id });
+
+    const quiet = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    quiet.notificationPrefs.set(USERS.kai.id, {
+      approvals: false,
+      replies: true,
+      events: true,
+      announcements: true,
+      emailDigest: false,
+    });
+    decideJoinRequest(quiet, quiet.user(USERS.coach.id)!, KAI_REQUEST, 'approve');
+    expect(quiet.notifications.filter((n) => n.userId === USERS.kai.id)).toEqual([]);
+  });
+
+  it('declining sends no notification', () => {
+    const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'decline');
+    expect(world.notifications.filter((n) => n.userId === USERS.kai.id)).toEqual([]);
+  });
+
   it('staff can decide', async () => {
     const { call } = await signIn('staff');
     const res = await call('POST', `/join-requests/${KAI_REQUEST}/decision`, {

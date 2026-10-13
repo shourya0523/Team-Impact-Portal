@@ -351,6 +351,7 @@ describe('posts', () => {
       author: coach,
       community: { id: ID, name: 'Team Impact', kind: 'team_impact' },
       text: 'Big win Saturday',
+      imageUrl: null,
       official: false,
       likeCount: 0,
       commentCount: 0,
