@@ -349,10 +349,11 @@ const addCards = (
                 headline: `${team.sport} at ${team.college.name}`,
                 bio: faker.lorem.sentences(2),
                 hometown: athlete.hometown,
+                // Same shape as the contract's ExperienceEntry (TI-150): up to 3 rows.
                 experience: Array.from({ length: filled >= 75 ? 2 : 1 }, () => ({
-                  role: faker.person.jobTitle(),
-                  org: faker.company.name(),
-                  years: `${int(2021, 2025)}`,
+                  role: faker.person.jobTitle().slice(0, 60),
+                  organization: faker.company.name().slice(0, 80),
+                  period: `${int(2021, 2025)}`,
                 })),
                 interests: faker.helpers.arrayElements(INDUSTRIES, { min: 1, max: 3 }),
               }

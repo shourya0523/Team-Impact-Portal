@@ -306,12 +306,14 @@ const FrontFace = ({ card, palette, s }: FaceProps) => (
 
       <div style={s.section}>
         <div style={{ ...s.eyebrow, color: c.yellow }}>Experience</div>
-        {card.experience.map((entry) => (
-          <div key={`${entry.role}-${entry.organization}`} style={s.entry}>
+        {card.experience.map((entry, i) => (
+          <div key={`${i}-${entry.role}`} style={s.entry}>
             <div style={s.entryBar} />
             <div style={{ ...s.entryTitle, ...s.onDark, ...s.flex, ...s.ellipsis }}>
               {entry.role}
-              <span style={{ ...s.entryMeta, ...s.onDarkMuted }}> · {entry.organization}</span>
+              {entry.organization && (
+                <span style={{ ...s.entryMeta, ...s.onDarkMuted }}> · {entry.organization}</span>
+              )}
             </div>
             <div style={{ ...s.entryMeta, ...s.onDarkFaint, whiteSpace: 'nowrap' }}>
               {entry.period}

@@ -20,6 +20,7 @@ import {
   CreatePostRequest,
   CreateReportRequest,
   CreateTeamRequest,
+  ExperienceEntry,
   emailOnDomain,
   FindAlumniQuery,
   hasBaseballCard,
@@ -180,7 +181,7 @@ describe('cards', () => {
     hometown: 'Providence, RI',
     city: 'Boston, MA',
     region: 'northeast',
-    experience: 'Analyst intern',
+    experience: [{ role: 'Analyst intern', organization: 'Northbeam', period: 'Summer 2026' }],
     skills: ['Excel', 'SQL'],
     lookingFor: 'Finance internships',
     contact: { email: 'maya@tufts.edu', phone: '(401) 555-0119', linkedinUrl: null },
@@ -214,6 +215,39 @@ describe('cards', () => {
     });
     expect(issuePaths(result)).toEqual(['openToRecruiting']);
     expect(accepts(UpdateCardVisibilityRequest, { openToRecruiting: false })).toBe(true);
+  });
+
+  it('keeps experience to 3 role / organization / period entries and rejects empty ones', () => {
+    const card = { firstName: 'Maya', lastName: 'Okafor', classYear: 2028, major: 'Economics' };
+    const entry = { role: 'Treasurer', organization: 'Investment club', period: '2025 – Now' };
+    expect(accepts(CreateCardRequest, { ...card, experience: [] })).toBe(true);
+    expect(accepts(CreateCardRequest, { ...card, experience: [entry, entry, entry] })).toBe(true);
+    expect(
+      issuePaths(
+        CreateCardRequest.safeParse({ ...card, experience: [entry, entry, entry, entry] }),
+      ),
+    ).toEqual(['experience']);
+    // A row needs a role; organisation and period may be blank.
+    expect(
+      accepts(CreateCardRequest, {
+        ...card,
+        experience: [{ role: 'Captain', organization: '', period: '' }],
+      }),
+    ).toBe(true);
+    expect(
+      issuePaths(
+        CreateCardRequest.safeParse({
+          ...card,
+          experience: [{ role: '  ', organization: '', period: '' }],
+        }),
+      ),
+    ).toEqual(['experience.0.role']);
+    expect(accepts(ExperienceEntry, { ...entry, role: 'x'.repeat(61) })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, organization: 'x'.repeat(81) })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, period: 'x'.repeat(31) })).toBe(false);
+    // Free text from before TI-150 and unknown keys are rejected.
+    expect(accepts(CreateCardRequest, { ...card, experience: 'Analyst intern' })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, url: 'https://x.test' })).toBe(false);
   });
 
   it('takes jersey numbers from 0 to 99 and requires a major', () => {

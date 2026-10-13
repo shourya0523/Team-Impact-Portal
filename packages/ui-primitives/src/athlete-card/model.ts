@@ -69,7 +69,15 @@ export const prepareCard = (athlete: AthleteCardData): PreparedCard => {
     positionBadge: athlete.positionShort ?? abbreviate(athlete.position),
     school: athlete.school || null,
     stats: resume.stats.slice(0, CARD_LIMITS.stats),
-    experience: resume.experience.slice(0, CARD_LIMITS.experience),
+    // Rows as the athlete entered them (role / organisation / period), blank ones dropped.
+    experience: resume.experience
+      .map((e) => ({
+        role: e.role.trim(),
+        organization: e.organization.trim(),
+        period: e.period.trim(),
+      }))
+      .filter((e) => e.role !== '')
+      .slice(0, CARD_LIMITS.experience),
     skills: resume.skills.slice(0, CARD_LIMITS.skills),
     personalLine: joinDefined([personal.hometown, personal.pronouns], ' · '),
     bio: personal.bio || null,

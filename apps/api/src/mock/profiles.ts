@@ -4,7 +4,9 @@ import {
   type CardVersion,
   type ChildProfile,
   EXTRACTABLE_CARD_FIELDS,
+  ExperienceEntry,
   hasBaseballCard,
+  MAX_EXPERIENCE_ENTRIES,
   type MyCardState,
   type MySettings,
   type Profile,
@@ -49,6 +51,9 @@ export interface ProfileState {
 
 const SEEDED = '2026-10-05T12:00:00.000Z';
 
+/** The season a card is saved under when it's published. Earlier seasons stay in the history. */
+export const CURRENT_SEASON = 2026;
+
 export const createProfileState = (cards: MockCard[]): ProfileState => {
   const history = new Map<string, StoredVersion[]>();
   for (const card of cards.filter((c) => c.visibility.published)) {
@@ -72,7 +77,9 @@ export const createProfileState = (cards: MockCard[]): ProfileState => {
         ...structuredClone(jordan.face),
         id: fx.id(611),
         season: jordan.face.season - 1,
-        experience: 'Investment club member.',
+        experience: [
+          { role: 'Member', organization: 'Tufts Investment Club', period: '2024 – 2025' },
+        ],
         lookingFor: null,
       },
     });
@@ -274,7 +281,7 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
     hometown: null,
     city: null,
     region: null,
-    experience: null,
+    experience: [],
     lookingFor: null,
     ...base,
     ...draft,
@@ -289,7 +296,7 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
     face: {
       id: world.newId(),
       athleteId: u.id,
-      season: 2026,
+      season: CURRENT_SEASON,
       teamId: world.teamIdsOf(u.id)[0] ?? null,
       photoUrl: null,
       ...parsed.data,
@@ -303,6 +310,11 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
     },
   };
   if (!existing) world.cards.push(card);
+  // A card from an earlier season stays in the history as it was; this one starts the new season.
+  if (card.face.season < CURRENT_SEASON) {
+    card.face.id = world.newId();
+    card.face.season = CURRENT_SEASON;
+  }
   Object.assign(card.face, parsed.data);
   card.visibility.published = true;
   world.profiles.drafts.delete(u.id);
@@ -316,6 +328,21 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
     face: structuredClone(card.face),
   });
   world.profiles.history.set(u.id, versions);
+  return null;
+};
+
+/**
+ * Take the card off everyone else's screens at once: the team, families and the employer portal
+ * (search, cards and lists all read `published`). Recruiting goes off too, so republishing never
+ * puts the athlete back in front of recruiters without them turning it on again. The card and its
+ * history stay with the athlete. Returns an error message, or null.
+ */
+export const unpublishCard = (world: MockWorld, u: MockUser, now: string): string | null => {
+  const card = cardOf(world, u.id);
+  if (!card) return 'You have no Baseball Card yet.';
+  card.visibility.published = false;
+  card.visibility.openToRecruiting = false;
+  world.profiles.updatedAt.set(u.id, now);
   return null;
 };
 
@@ -350,7 +377,7 @@ const SAMPLE = [
   'Position: Midfielder',
   'Major: Economics',
   'Class: 2027',
-  'Experience: Investment club treasurer; summer intern at a credit union.',
+  'Experience: Treasurer, Investment club, 2025 – Now; Summer intern at Lowell Credit Union (Summer 2025)',
   'Skills: Excel, Financial modeling, Spanish',
   'Looking for: Finance internship, summer 2027',
 ].join('\n');
@@ -362,6 +389,25 @@ const clean = (s: string) =>
     .replace(/[\u0000-\u001f\u007f<>]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+/**
+ * "Role, Organization, Period", "Role at Organization (Period)" or just "Role", one per `;`.
+ * Entries that don't fit the card's fixed entry schema are dropped; at most three are kept.
+ */
+const experienceEntries = (raw: string): ExperienceEntry[] =>
+  raw
+    .split(';')
+    .map(clean)
+    .filter(Boolean)
+    .flatMap((part) => {
+      const at = /^(.+?)\s+at\s+(.+?)(?:\s*\(([^)]*)\))?$/i.exec(part);
+      const [role = '', organization = '', period = ''] = at
+        ? [at[1], at[2], at[3]]
+        : part.split(',').map((x) => x.trim());
+      const ok = ExperienceEntry.safeParse({ role, organization, period });
+      return ok.success ? [ok.data] : [];
+    })
+    .slice(0, MAX_EXPERIENCE_ENTRIES);
 
 /**
  * Stand-in for the real extractor. The text is untrusted data: it is only matched against known
@@ -388,9 +434,12 @@ export const extractResume = (
         ? Number(/\b(19|20)\d{2}\b/.exec(raw)?.[0])
         : key === 'skills'
           ? raw.split(/[,;]/).map(clean).filter(Boolean).slice(0, 20)
-          : key === 'jerseyNumber'
-            ? raw.replace(/^#/, '')
-            : raw;
+          : key === 'experience'
+            ? experienceEntries(raw)
+            : key === 'jerseyNumber'
+              ? raw.replace(/^#/, '')
+              : raw;
+    if (Array.isArray(value) && value.length === 0) continue;
     const ok = CardFields.shape[key].safeParse(value);
     if (ok.success) fields[key] = ok.data;
   }

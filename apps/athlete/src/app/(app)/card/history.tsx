@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { entryText } from '@/components/cardData';
 import { shortDate } from '@/components/format';
 import { Async, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
@@ -39,7 +40,11 @@ export default function CardHistory() {
                             .filter(Boolean)
                             .join(' · ')}
                         </Text>
-                        {v.face.experience && <Text variant="small">{v.face.experience}</Text>}
+                        {v.face.experience.map((e, n) => (
+                          <Text key={`${n}-${e.role}`} variant="small">
+                            {entryText(e)}
+                          </Text>
+                        ))}
                         {v.face.skills.length > 0 && (
                           <Text variant="caption" color="muted">
                             {v.face.skills.join(' · ')}

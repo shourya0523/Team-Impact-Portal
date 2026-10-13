@@ -48,14 +48,15 @@ export default function CardHome() {
   const [error, setError] = useState<string | null>(null);
   const cardWidth = Math.min(width - spacing.md * 2, MAX_CARD_WIDTH);
 
-  const publish = () =>
-    api.publishCard().then(
-      () => {
-        setError(null);
-        reload();
-      },
-      (e: Error) => setError(e.message),
-    );
+  const done = {
+    ok: () => {
+      setError(null);
+      reload();
+    },
+    fail: (e: Error) => setError(e.message),
+  };
+  const publish = () => api.publishCard().then(done.ok, done.fail);
+  const unpublish = () => api.unpublishCard().then(done.ok, done.fail);
 
   return (
     <Screen eyebrow="Baseball Card" title="My card">
@@ -139,6 +140,24 @@ export default function CardHome() {
                   />
                   <Button label="Publish" size="sm" stretch onPress={publish} />
                 </View>
+              </Card>
+            )}
+            {card && !draft && (
+              <Card>
+                <Text weight="semibold">
+                  {card.visibility.published ? 'Visible to your team' : 'Only you see this card'}
+                </Text>
+                <Text variant="small" color="secondary">
+                  {card.visibility.published
+                    ? 'Unpublishing hides it from everyone else right away, recruiters included, and turns recruiting off. You keep the card and its seasons.'
+                    : 'Publish it to show it to your team. Turn recruiting on afterwards if you want recruiters to find you.'}
+                </Text>
+                <Button
+                  label={card.visibility.published ? 'Unpublish' : 'Publish'}
+                  variant={card.visibility.published ? 'secondary' : 'primary'}
+                  size="sm"
+                  onPress={card.visibility.published ? unpublish : publish}
+                />
               </Card>
             )}
             {error && <ErrorText>{error}</ErrorText>}

@@ -29,6 +29,8 @@ export const profiles = {
   myCard: () => request<MyCardState>('/cards/me'),
   saveCardDraft: (body: UpdateCardRequest) => put<MyCardState>('/cards/me', body),
   publishCard: () => post<MyCardState>('/cards/me/publish'),
+  /** Hides the card from everyone else at once, recruiters included; recruiting goes off. */
+  unpublishCard: () => post<MyCardState>('/cards/me/unpublish'),
   cardHistory: () => request<CardVersion[]>('/cards/me/history'),
   uploadResume: (body: ResumeUploadRequest) => post<ResumeExtraction>('/cards/me/resume', body),
   confirmResume: (body: ConfirmResumeRequest) =>

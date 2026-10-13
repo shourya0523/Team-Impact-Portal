@@ -10,7 +10,14 @@ import {
 } from '@team-impact/contracts';
 import type { FastifyRequest } from 'fastify';
 import type { ZodApp } from '../../zod';
-import { cardOf, extractResume, historyFor, myCardState, publishCard } from '../profiles';
+import {
+  cardOf,
+  extractResume,
+  historyFor,
+  myCardState,
+  publishCard,
+  unpublishCard,
+} from '../profiles';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
@@ -45,6 +52,18 @@ export const registerCardRoutes = (app: ZodApp, world: MockWorld, { requireRole 
     if (problem) throw httpError(400, problem);
     return myCardState(world, u);
   });
+
+  /** Hides the card from everyone else at once, recruiter search included. Edits are kept. */
+  app.post(
+    '/cards/me/unpublish',
+    { schema: { response: { 200: MyCardState } } },
+    async (request) => {
+      const u = athlete(request);
+      const problem = unpublishCard(world, u, now());
+      if (problem) throw httpError(400, problem);
+      return myCardState(world, u);
+    },
+  );
 
   app.get(
     '/cards/me/history',

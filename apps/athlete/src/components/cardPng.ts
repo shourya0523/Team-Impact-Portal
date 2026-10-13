@@ -60,7 +60,8 @@ export const cardSvg = (face: CardFace) => {
   const meta = [face.position, `Class of ${face.classYear}`, face.major]
     .filter(Boolean)
     .join(' · ');
-  const experience = (face.experience ?? '').split(';')[0]?.trim() ?? '';
+  const first = face.experience[0];
+  const experience = first ? [first.role, first.organization].filter(Boolean).join(' · ') : '';
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${CARD_WIDTH}" height="${CARD_HEIGHT}" viewBox="0 0 ${CARD_WIDTH} ${CARD_HEIGHT}">
 <defs>

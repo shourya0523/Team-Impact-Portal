@@ -38,7 +38,7 @@ const card: CardWithContact = {
   hometown: null,
   city: 'Medford',
   region: 'northeast',
-  experience: null,
+  experience: [{ role: 'Treasurer', organization: 'Investment Club', period: '2025 – Now' }],
   skills: [],
   lookingFor: null,
   contact: { email: 'jordan.lee@tufts.edu' },
@@ -122,6 +122,11 @@ describe('athlete card view', () => {
     render(<App />);
     const contact = (await screen.findByRole('heading', { name: 'Contact' })).parentElement!;
     expect(within(contact).getByText('jordan.lee@tufts.edu')).toBeTruthy();
+
+    // Experience entries fill the card's rows; there's no full-text panel beside it.
+    expect(screen.getByText('Treasurer')).toBeTruthy();
+    expect(screen.getByText(/Investment Club/)).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Card' })).toBeNull();
 
     const athleteCard = screen.getByRole('button', { name: /athlete resume/ });
     expect(athleteCard.getAttribute('aria-pressed')).toBe('false');
