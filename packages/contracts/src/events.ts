@@ -1,20 +1,18 @@
 import { z } from 'zod';
-import { Id, NetworkAudience, TeamAudience, Timestamp } from './common';
+import { Id, Timestamp } from './common';
+import { CommunitySummary } from './communities';
 import { ModerationStatus } from './moderation';
 import { UserSummary } from './users';
-
-/** Who can see and RSVP: one team and its families, or everyone on Team IMPACT. */
-export const EventAudience = z.discriminatedUnion('scope', [TeamAudience, NetworkAudience]);
-export type EventAudience = z.infer<typeof EventAudience>;
 
 export const RSVP_STATUSES = ['going', 'not_going'] as const;
 export const RsvpStatus = z.enum(RSVP_STATUSES);
 export type RsvpStatus = z.infer<typeof RsvpStatus>;
 
 /**
- * An event is a post with a title, time, place, description and visibility. Every event shows who
- * made it and their role, so families can tell a coach's event from an unknown alumnus's. No
- * tickets or check-in. Named to stay clear of the DOM's global `Event`.
+ * An event is a post with a title, time, place and description, in one community: its members see
+ * it and can RSVP, so team events stay inside the team. Every event shows who made it and their
+ * role, so families can tell a coach's event from an unknown alumnus's. No tickets or check-in.
+ * Named to stay clear of the DOM's global `Event`.
  */
 export const CalendarEvent = z.object({
   id: Id,
@@ -24,7 +22,7 @@ export const CalendarEvent = z.object({
   endsAt: Timestamp.nullable(),
   location: z.string(),
   host: UserSummary,
-  audience: EventAudience,
+  community: CommunitySummary,
   goingCount: z.number().int().nonnegative(),
   /** The viewer's answer; null if they haven't replied. */
   myRsvp: RsvpStatus.nullable(),
@@ -41,7 +39,7 @@ export const CreateEventRequest = z
     startsAt: Timestamp,
     endsAt: Timestamp.optional(),
     location: z.string().trim().min(1, 'Where is it?').max(200),
-    audience: EventAudience,
+    communityId: Id,
   })
   .refine((e) => !e.endsAt || Date.parse(e.endsAt) > Date.parse(e.startsAt), {
     path: ['endsAt'],

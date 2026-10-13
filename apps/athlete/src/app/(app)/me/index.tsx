@@ -9,7 +9,7 @@ export default function Me() {
 
   const links: PlaceholderLink[] = [];
   if (role === 'athlete') links.push({ label: 'Contacts and recruiting', href: '/me/recruiting' });
-  if (role !== 'recruiter') links.push({ label: 'My groups', href: '/me/groups' });
+  if (role !== 'recruiter') links.push({ label: 'My communities', href: '/me/communities' });
   if (role === 'athlete' || role === 'alumni_athlete' || role === 'alumni_mentor') {
     links.push({ label: 'Browse alumni', href: '/me/alumni' });
   }

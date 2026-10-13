@@ -9,7 +9,7 @@ export default function Notifications() {
       links={[
         { label: 'A post', href: '/home/posts/1' },
         { label: 'An event', href: '/events/1' },
-        { label: 'A group', href: '/me/groups/1' },
+        { label: 'A community', href: '/me/communities/1' },
         { label: 'Notification settings', href: '/me/safety' },
       ]}
     />

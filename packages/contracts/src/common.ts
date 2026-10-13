@@ -25,11 +25,6 @@ export const HexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, 'Use a 6-digit hex colour like #1E3F7B');
 
-/** Who sees a post or event: one team (its members and families), everyone, or one group. */
-export const TeamAudience = z.object({ scope: z.literal('team'), teamId: Id });
-export const NetworkAudience = z.object({ scope: z.literal('network') });
-export const GroupAudience = z.object({ scope: z.literal('group'), groupId: Id });
-
 export const IdParams = z.object({ id: Id });
 export type IdParams = z.infer<typeof IdParams>;
 

@@ -23,7 +23,7 @@ export type ReportReason = z.infer<typeof ReportReason>;
 
 /** The reported item is hidden for the reporter straight away. Its author never learns who reported it. */
 export const CreateReportRequest = z.object({
-  target: z.object({ kind: z.enum(['post', 'comment', 'event', 'profile']), id: Id }),
+  target: z.object({ kind: z.enum(['post', 'comment', 'event', 'profile', 'community']), id: Id }),
   reason: ReportReason,
   note: z.string().trim().max(500).optional(),
 });
