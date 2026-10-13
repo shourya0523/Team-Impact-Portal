@@ -29,7 +29,7 @@ import {
   TeamSummary,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../zod';
-import { COLLEGES, COMPANIES, summaryOf, SIGN_IN_AS, TEAMS } from './fixtures';
+import { COLLEGES, COMPANIES, NEWCOMERS, SIGN_IN_AS, summaryOf, TEAMS } from './fixtures';
 import type { MockUser, MockWorld } from './world';
 
 const SESSION_COOKIE = 'ti_session';
@@ -73,7 +73,9 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     '/auth/dev-sign-in',
     { schema: { body: DevSignInRequest, response: { 200: Me } } },
     async (request, reply) => {
-      const u = SIGN_IN_AS[request.body.role];
+      const { role, newcomer } = request.body;
+      const u = newcomer ? NEWCOMERS[role] : SIGN_IN_AS[role];
+      if (!u) throw httpError(400, 'Only athletes, parents and teens can join as newcomers');
       reply.setCookie(SESSION_COOKIE, u.id, {
         signed: true,
         httpOnly: true,
@@ -159,6 +161,10 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
       const team = TEAMS.find((t) => t.id === body.teamId && t.status === 'live');
       if (!team) throw httpError(404, 'No such team');
       if (world.teamIdsOf(u.id).includes(team.id)) throw httpError(409, 'Already on this team');
+      const pending = world.joinRequests.some(
+        (r) => r.requester.id === u.id && r.teamId === team.id && r.status === 'pending',
+      );
+      if (pending) throw httpError(409, 'You already asked to join this team');
       const created: JoinRequest = {
         ...body,
         id: world.newId(),
@@ -334,6 +340,9 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
       if (!c || !world.canSeeCommunity(c, u)) throw httpError(404, 'No such community');
       if (c.kind !== 'interest') {
         throw httpError(400, 'Only interest communities can be official');
+      }
+      if (request.body.official && c.moderation !== 'approved') {
+        throw httpError(400, 'Approve the community before marking it official');
       }
       c.official = request.body.official;
       return world.staffCommunity(c, u);

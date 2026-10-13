@@ -161,12 +161,21 @@ export class MockWorld {
   });
 
   /** Ranking for the pilot: team first, then other communities, then Team Impact; newest first. */
-  private static WEIGHT = { team: 0, medical: 1, interest: 1, team_impact: 2 } as const;
+  private static WEIGHT = { team: 0, interest: 1, medical: 1, team_impact: 2 } as const;
+
+  /**
+   * Communities whose posts and events reach `u`'s home feed and events list. Medical communities
+   * never do: membership is never a ranking input outside that community's own feed (PRD §5).
+   */
+  private homeCommunities = (u: MockUser) =>
+    new Map(
+      this.communities
+        .filter((c) => c.kind !== 'medical' && this.readsCommunity(c, u))
+        .map((c) => [c.id, c]),
+    );
 
   feed = (u: MockUser): Post[] => {
-    const readable = new Map(
-      this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]),
-    );
+    const readable = this.homeCommunities(u);
     return this.posts
       .filter((p) => readable.has(p.communityId))
       .filter((p) => p.moderation === 'approved' || p.authorId === u.id)
@@ -194,9 +203,7 @@ export class MockWorld {
   };
 
   eventsFor = (u: MockUser): CalendarEvent[] => {
-    const readable = new Map(
-      this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]),
-    );
+    const readable = this.homeCommunities(u);
     return this.events
       .filter((e) => readable.has(e.communityId) && e.moderation === 'approved')
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))

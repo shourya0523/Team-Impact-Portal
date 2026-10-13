@@ -13,11 +13,14 @@
     "test": "expo export --platform web --output-dir dist"
   },
   "dependencies": {
+    "@expo-google-fonts/barlow": "^0.4.1",
+    "@expo-google-fonts/barlow-condensed": "^0.4.1",
     "@team-impact/contracts": "workspace:*",
     "@team-impact/ui-primitives": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
     "expo": "~57.0.26",
     "expo-constants": "~57.0.21",
+    "expo-font": "~57.0.4",
     "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",

@@ -77,6 +77,12 @@ export const USERS = {
   chris: user(113, 'Chris', 'Doyle', 'alumni_mentor', 'chris.doyle@example.org'),
   /** Asked to join the team; not on it yet. */
   kai: user(114, 'Kai', 'Brooks', 'athlete', 'kai.brooks@tufts.edu'),
+  /** Just signed up: no team and no request, for walking the join flow. */
+  leo: user(115, 'Leo', 'Grant', 'athlete', 'leo.grant@tufts.edu'),
+  /** A parent who just signed up, for the parent join flow. */
+  rosa: user(116, 'Rosa', 'Diaz', 'parent', 'rosa.diaz@example.org'),
+  /** A teen who just signed up. */
+  eli: user(117, 'Eli', 'Ward', 'teen', 'eli.ward@example.org'),
 } satisfies Record<string, MockUser>;
 
 /** Who mock sign-in uses for each role. */
@@ -89,6 +95,13 @@ export const SIGN_IN_AS: Record<Role, MockUser> = {
   recruiter: USERS.elena,
   alumni_athlete: USERS.priya,
   alumni_mentor: USERS.chris,
+};
+
+/** Who mock sign-in uses with `newcomer`: on no team yet. */
+export const NEWCOMERS: Partial<Record<Role, MockUser>> = {
+  athlete: USERS.leo,
+  parent: USERS.rosa,
+  teen: USERS.eli,
 };
 
 /** Profiles a parent runs. No login, no card; visible only to the team and family (PRD §2). */

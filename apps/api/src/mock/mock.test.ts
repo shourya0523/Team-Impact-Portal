@@ -195,6 +195,14 @@ describe('mock API: communities', () => {
     expect(ids((await parent.get('/communities')).body)).toContain(TEAM);
   });
 
+  it('keeps medical posts out of the home feed, even for members', async () => {
+    // Lisa started the medical community and posted in it.
+    const { get } = await signIn('parent');
+    const feed = await get('/feed');
+    expect(feed.text).not.toContain(MEDICAL);
+    expect(feed.text).not.toContain('sent meals');
+  });
+
   it('ranks the team first and shows only approved posts', async () => {
     const { get } = await signIn('athlete');
     const feed = (await get('/feed')).body.items as { community: { kind: string } }[];
@@ -208,6 +216,9 @@ describe('mock API: communities', () => {
     const ok = await send('PUT', `/staff/communities/${FINANCE}/official`, { official: true });
     expect(ok.status).toBe(200);
     expect(ok.body.community.official).toBe(true);
+    // Held for review: can't become a recruiter filter yet.
+    const held = await send('PUT', `/staff/communities/${id(306)}/official`, { official: true });
+    expect(held.status).toBe(400);
     for (const target of [MEDICAL, TEAM]) {
       const res = await send('PUT', `/staff/communities/${target}/official`, { official: true });
       expect(res.status).toBe(400);
@@ -224,6 +235,24 @@ describe('mock API: staff and join flow', () => {
     await close?.();
     const coach = await signIn('coach');
     expect((await coach.get('/staff/teams')).status).toBe(403);
+  });
+
+  it('walks a newcomer through the join flow once', async () => {
+    const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true });
+    close = () => app.close();
+    const signedIn = await app.inject({
+      method: 'POST',
+      url: '/auth/dev-sign-in',
+      payload: { role: 'athlete', newcomer: true },
+    });
+    expect(signedIn.json().teamIds).toEqual([]);
+    const cookies = { [signedIn.cookies[0]!.name]: signedIn.cookies[0]!.value };
+    const payload = { role: 'athlete', teamId: id(201), classYear: 2029 };
+    const first = await app.inject({ method: 'POST', url: '/join-requests', payload, cookies });
+    expect(first.statusCode).toBe(201);
+    expect(first.json()).toMatchObject({ status: 'pending', requester: { id: USERS.leo.id } });
+    const again = await app.inject({ method: 'POST', url: '/join-requests', payload, cookies });
+    expect(again.statusCode).toBe(409);
   });
 
   it('takes a join request for a live team, as the account’s own role', async () => {

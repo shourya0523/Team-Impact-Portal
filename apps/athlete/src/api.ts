@@ -1,4 +1,16 @@
-import type { ApiError, HealthResponse } from '@team-impact/contracts';
+import type {
+  ApiError,
+  CalendarEvent,
+  College,
+  Community,
+  CreateJoinRequest,
+  HealthResponse,
+  JoinRequest,
+  Me,
+  Post,
+  Role,
+  TeamSummary,
+} from '@team-impact/contracts';
 
 /** Set per build; the default reaches a local API from web and the iOS simulator. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -26,6 +38,22 @@ export const request = async <T>(path: string, init: RequestInit = {}): Promise<
   return body as T;
 };
 
+const post = <T>(path: string, body?: unknown) =>
+  request<T>(path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
+
 export const api = {
   health: () => request<HealthResponse>('/health'),
+  me: () => request<Me>('/me'),
+  /** Mock API only: sign in as a role's fixture user, or a newcomer on no team yet. */
+  devSignIn: (role: Role, newcomer = false) => post<Me>('/auth/dev-sign-in', { role, newcomer }),
+  signOut: () => post<void>('/auth/sign-out'),
+
+  feed: () => request<{ items: Post[]; nextCursor: string | null }>('/feed'),
+  events: () => request<CalendarEvent[]>('/events'),
+  communities: () => request<Community[]>('/communities'),
+  community: (id: string) => request<Community>(`/communities/${id}`),
+
+  colleges: () => request<College[]>('/colleges'),
+  teams: (collegeId: string) => request<TeamSummary[]>(`/teams?collegeId=${collegeId}`),
+  requestToJoin: (body: CreateJoinRequest) => post<JoinRequest>('/join-requests', body),
 };

@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Button } from 'react-native';
 import { Placeholder, type PlaceholderLink } from '@/components/Placeholder';
+import { api } from '@/api';
 import { useRole } from '@/navigation/role';
 
 /** "/me": every role has this tab. Rows depend on the role; sign out to try another role. */
@@ -22,6 +23,8 @@ export default function Me() {
       <Button
         title="Sign out / switch role"
         onPress={() => {
+          // Clear the session cookie too; go to the landing page even if the API is down.
+          void api.signOut().catch(() => undefined);
           setRole(null);
           router.replace('/welcome');
         }}
