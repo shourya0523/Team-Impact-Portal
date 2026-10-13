@@ -5,6 +5,7 @@ import type { Community, Post } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { ROLE_LABEL, shortDate } from '@/components/format';
+import { ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, IconButton, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -137,7 +138,8 @@ function Announcement({ post }: { post: Post }) {
   );
 }
 
-function PostCard({ post }: { post: Post }) {
+function PostCard({ post, onChanged }: { post: Post; onChanged?: () => void }) {
+  const { me } = useRole();
   if (post.kind === 'announcement') return <Announcement post={post} />;
   const where =
     post.community.kind === 'team'
@@ -179,6 +181,17 @@ function PostCard({ post }: { post: Post }) {
             </Text>
           </View>
         </View>
+        {me?.id !== post.author.id && (
+          <ReportButton
+            target={{ kind: 'post', id: post.id }}
+            author={
+              post.author.role === 'staff'
+                ? undefined
+                : { id: post.author.id, name: post.author.firstName }
+            }
+            onDone={onChanged}
+          />
+        )}
       </View>
       {post.moderation !== 'approved' && (
         <Badge label="Waiting for review" variant="warning" caps />
@@ -293,7 +306,7 @@ export default function Home() {
           {(page) => {
             const posts = page.items.filter(keep);
             return posts.length ? (
-              posts.map((p) => <PostCard key={p.id} post={p} />)
+              posts.map((p) => <PostCard key={p.id} post={p} onChanged={feed.reload} />)
             ) : (
               <View style={styles.empty}>
                 <Text variant="display" size="xs" color="brand">

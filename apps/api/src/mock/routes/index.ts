@@ -3,8 +3,11 @@ import type { MockWorld } from '../world';
 import { registerCommunityRoutes } from './communities';
 import { guards } from './context';
 import { registerJoinRoutes } from './join';
+import { registerListRoutes } from './lists';
 import { registerRecruiterRoutes } from './recruiter';
+import { registerSafetyRoutes } from './safety';
 import { registerSessionRoutes } from './session';
+import { registerStaffAdminRoutes } from './staff-admin';
 import { registerStaffRoutes } from './staff';
 
 /**
@@ -20,6 +23,9 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerJoinRoutes,
     registerRecruiterRoutes,
     registerStaffRoutes,
+    registerSafetyRoutes,
+    registerStaffAdminRoutes,
+    registerListRoutes,
   ]) {
     register(app, world, g);
   }

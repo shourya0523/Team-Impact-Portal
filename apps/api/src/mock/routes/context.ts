@@ -28,6 +28,11 @@ export const guards = (world: MockWorld) => {
     const unsigned = raw ? request.unsignCookie(raw) : null;
     const u = unsigned?.valid && unsigned.value ? world.user(unsigned.value) : undefined;
     if (!u) throw httpError(401, 'Sign in first');
+    // A suspended company's recruiters are locked out until staff restore it (PRD §9).
+    const company = u.companyId && world.companies.find((c) => c.id === u.companyId);
+    if (company && company.status === 'suspended') {
+      throw httpError(403, 'Your company’s access is suspended. Contact Team Impact.');
+    }
     return u;
   };
 

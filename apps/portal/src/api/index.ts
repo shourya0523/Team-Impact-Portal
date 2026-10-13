@@ -1,6 +1,8 @@
+import { lists } from './lists';
 import { recruiter } from './recruiter';
 import { session } from './session';
 import { staff } from './staff';
+import { staffAdmin } from './staff-admin';
 
 export { ApiRequestError, request } from './client';
 
@@ -8,5 +10,6 @@ export { ApiRequestError, request } from './client';
 export const api = {
   ...session,
   ...recruiter,
-  staff: { ...staff },
+  ...lists,
+  staff: { ...staff, ...staffAdmin },
 };

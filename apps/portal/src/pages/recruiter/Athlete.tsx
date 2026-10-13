@@ -4,8 +4,70 @@ import { AthleteCard } from '@team-impact/ui-primitives/web';
 import { colors, fontWeight, spacing, typography } from '@team-impact/ui-tokens';
 import { toCardData } from '../../athleteCard';
 import { api } from '../../api';
-import { Async, Button, Card, PageHeader, Text } from '../../ui';
+import { Form, FormError, useAction } from '../../forms';
+import { Async, Button, Card, PageHeader, Select, Text } from '../../ui';
 import { useApi } from '../../useApi';
+
+/** R6: save the athlete to one of your lists (or one a colleague shared with you). */
+const SaveToList = ({ athleteId }: { athleteId: string }) => {
+  const { state } = useApi(() => api.lists());
+  const { busy, error, run } = useAction();
+  const [listId, setListId] = useState('');
+  const [saved, setSaved] = useState<string | null>(null);
+  if (state.status !== 'ready') return null;
+  const lists = state.data;
+  return (
+    <Card style={{ padding: spacing.lg }}>
+      <Text as="h2" variant="display" size="xs" color="brand">
+        Save to a list
+      </Text>
+      {lists.length === 0 ? (
+        <Text variant="small" color="muted">
+          No lists yet. Create one under Lists.
+        </Text>
+      ) : (
+        <Form
+          onSubmit={() =>
+            run(
+              () => api.addToList(listId, athleteId),
+              () => setSaved(lists.find((l) => l.id === listId)?.name ?? 'the list'),
+            )
+          }
+        >
+          <Select
+            label="List"
+            required
+            value={listId}
+            onChange={(e) => {
+              setListId(e.target.value);
+              setSaved(null);
+            }}
+          >
+            <option value="">Pick a list</option>
+            {lists.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </Select>
+          <FormError>{error}</FormError>
+          {saved && (
+            <Text role="status" variant="small" color="secondary">
+              Saved to {saved}.
+            </Text>
+          )}
+          <Button
+            type="submit"
+            label="Save"
+            variant="secondary"
+            size="sm"
+            disabled={busy || !listId}
+          />
+        </Form>
+      )}
+    </Card>
+  );
+};
 
 const Row = ({ label, value }: { label: string; value: string | null | undefined }) =>
   value ? (
@@ -92,6 +154,7 @@ export const AthletePage = () => {
                   gap: spacing.md,
                 }}
               >
+                <SaveToList athleteId={card.athleteId} />
                 <Card style={{ padding: spacing.lg }}>
                   <Text as="h2" variant="display" size="xs" color="brand">
                     Contact

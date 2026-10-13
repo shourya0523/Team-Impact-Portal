@@ -1,6 +1,8 @@
-import type { CommunityKind, StaffCommunity } from '@team-impact/contracts';
+import { useState } from 'react';
+import type { Community, CommunityKind, StaffCommunity } from '@team-impact/contracts';
 import { colors, fontWeight, spacing } from '@team-impact/ui-tokens';
 import { api } from '../../api';
+import { Actions, Form, FormError, useAction } from '../../forms';
 import { useSession } from '../../session';
 import {
   Async,
@@ -10,6 +12,8 @@ import {
   formatDate,
   fullName,
   PageHeader,
+  Select,
+  Sheet,
   Table,
   Text,
 } from '../../ui';
@@ -34,6 +38,14 @@ export const CommunitiesPage = () => {
 
   const toggle = (row: StaffCommunity, official: boolean) =>
     api.staff.setOfficial(row.community.id, official).then(communities.reload);
+
+  // S10: merge duplicates of the same kind, or remove one that breaks the rules.
+  const [merging, setMerging] = useState<Community | null>(null);
+  const [into, setInto] = useState('');
+  const merge = useAction();
+  const remove = useAction();
+  const userMade = (c: Community) => c.kind === 'interest' || c.kind === 'medical';
+  const isPrivate = (c: Community) => (c.kind === 'interest' || c.kind === 'medical') && c.private;
 
   return (
     <>
@@ -111,10 +123,87 @@ export const CommunitiesPage = () => {
                     </Text>
                   ),
               },
+              {
+                header: 'Actions',
+                align: 'right',
+                cell: ({ community: c }) =>
+                  userMade(c) && c.moderation !== 'removed' ? (
+                    <Actions>
+                      <Button
+                        label="Merge…"
+                        variant="quiet"
+                        size="sm"
+                        onClick={() => {
+                          merge.setError(null);
+                          setInto('');
+                          setMerging(c);
+                        }}
+                      />
+                      <Button
+                        label="Remove"
+                        variant="secondary"
+                        size="sm"
+                        disabled={remove.busy}
+                        onClick={() =>
+                          window.confirm(`Remove ${c.name}? Its posts and events go with it.`) &&
+                          remove.run(() => api.staff.removeCommunity(c.id), communities.reload)
+                        }
+                      />
+                    </Actions>
+                  ) : null,
+              },
             ]}
           />
         )}
       </Async>
+      <FormError>{remove.error}</FormError>
+
+      <Sheet open={!!merging} title="Merge a duplicate" onClose={() => setMerging(null)}>
+        {merging && communities.state.status === 'ready' && (
+          <Form
+            onSubmit={() =>
+              merge.run(
+                () => api.staff.mergeCommunity(merging.id, into),
+                () => {
+                  setMerging(null);
+                  communities.reload();
+                },
+              )
+            }
+          >
+            <Text variant="small" color="secondary">
+              {merging.name}’s members, posts and events move into the community you pick, then{' '}
+              {merging.name} is removed. Only the same kind can merge; a private community only
+              merges into another private one. Nobody becomes findable by recruiters through a
+              merge.
+            </Text>
+            <Select
+              label="Keep this community"
+              required
+              value={into}
+              onChange={(e) => setInto(e.target.value)}
+            >
+              <option value="">Pick one</option>
+              {communities.state.data
+                .map((r) => r.community)
+                .filter(
+                  (c) =>
+                    c.id !== merging.id &&
+                    c.kind === merging.kind &&
+                    c.moderation !== 'removed' &&
+                    (!isPrivate(merging) || isPrivate(c)),
+                )
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+            </Select>
+            <FormError>{merge.error}</FormError>
+            <Button type="submit" label="Merge" disabled={merge.busy || !into} />
+          </Form>
+        )}
+      </Sheet>
 
       {flags?.identitySearch && (
         <section style={{ marginTop: spacing.xl }}>

@@ -1,5 +1,6 @@
 import { communities } from './communities';
 import { join } from './join';
+import { safety } from './safety';
 import { session } from './session';
 
 export { ApiRequestError, request } from './client';
@@ -9,4 +10,5 @@ export const api = {
   ...session,
   ...communities,
   ...join,
+  ...safety,
 };

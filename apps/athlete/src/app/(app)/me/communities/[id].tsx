@@ -7,6 +7,7 @@ import { canJoinCommunity, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
+import { ReportButton } from '@/components/Report';
 import { Async, ErrorText, SCROLL_END } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -181,11 +182,16 @@ export default function CommunityDetail() {
               </View>
 
               <View style={styles.body}>
-                <View style={styles.titleBlock}>
-                  <Text variant="display" size="lg" color="brand">
-                    {x.name}
-                  </Text>
-                  <Text color="secondary">{x.about}</Text>
+                <View style={styles.between}>
+                  <View style={[styles.titleBlock, styles.grow]}>
+                    <Text variant="display" size="lg" color="brand">
+                      {x.name}
+                    </Text>
+                    <Text color="secondary">{x.about}</Text>
+                  </View>
+                  {userMade && !isCreator && (
+                    <ReportButton target={{ kind: 'community', id: x.id }} />
+                  )}
                 </View>
 
                 <View style={styles.between}>
@@ -266,7 +272,7 @@ export default function CommunityDetail() {
                               name={`${p.author.firstName} ${p.author.lastName}`}
                               role={p.author.role}
                             />
-                            <View>
+                            <View style={styles.grow}>
                               <Text weight="semibold">
                                 {p.author.firstName} {p.author.lastName}
                               </Text>
@@ -274,6 +280,17 @@ export default function CommunityDetail() {
                                 {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
                               </Text>
                             </View>
+                            {p.author.id !== me?.id && !p.official && (
+                              <ReportButton
+                                target={{ kind: 'post', id: p.id }}
+                                author={
+                                  p.author.role === 'staff'
+                                    ? undefined
+                                    : { id: p.author.id, name: p.author.firstName }
+                                }
+                                onDone={posts.reload}
+                              />
+                            )}
                           </View>
                           <Text>
                             {p.kind === 'opportunity'

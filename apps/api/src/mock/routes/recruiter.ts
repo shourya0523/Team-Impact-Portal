@@ -9,7 +9,7 @@ import {
   RecruiterListDetail,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { COMPANIES, summaryOf } from '../fixtures';
+import { summaryOf } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, paginate, type Guards } from './context';
 
@@ -38,7 +38,7 @@ export const registerRecruiterRoutes = (
           c.members.filter((m) => m.recruiterSearchOptIn).map((m) => m.userId),
         );
         cards = cards.filter((card) => findable.has(card.face.athleteId));
-        const company = COMPANIES.find((co) => co.id === u.companyId)!;
+        const company = world.companies.find((co) => co.id === u.companyId)!;
         world.identitySearches.push({
           id: world.newId(),
           recruiter: summaryOf(u),

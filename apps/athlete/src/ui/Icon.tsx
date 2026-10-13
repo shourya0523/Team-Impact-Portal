@@ -104,6 +104,12 @@ const ICONS = {
     </>
   ),
   chevron: <Path d="m9 18 6-6-6-6" />,
+  flag: (
+    <>
+      <Path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+      <Path d="M4 22v-7" />
+    </>
+  ),
 } as const;
 
 export type IconName = keyof typeof ICONS;

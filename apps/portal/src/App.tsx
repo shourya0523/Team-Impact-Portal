@@ -7,6 +7,8 @@ import { ListPage } from './pages/recruiter/List';
 import { ListsPage } from './pages/recruiter/Lists';
 import { SearchPage } from './pages/recruiter/Search';
 import { SignInPage } from './pages/SignIn';
+import { AnnouncementsPage } from './pages/staff/Announcements';
+import { CollegesPage } from './pages/staff/Colleges';
 import { CommunitiesPage } from './pages/staff/Communities';
 import { CompaniesPage } from './pages/staff/Companies';
 import { ModerationPage } from './pages/staff/Moderation';
@@ -82,6 +84,22 @@ export const AppRoutes = () => (
         element={
           <Guard allow={['staff']}>
             <TeamsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/staff/colleges"
+        element={
+          <Guard allow={['staff']}>
+            <CollegesPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/staff/announcements"
+        element={
+          <Guard allow={['staff']}>
+            <AnnouncementsPage />
           </Guard>
         }
       />

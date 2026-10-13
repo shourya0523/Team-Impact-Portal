@@ -3,6 +3,7 @@ import {
   canJoinCommunity,
   type CardFace,
   type CardWithContact,
+  type CoachInvite,
   type Community,
   type ContactSharing,
   type FeatureFlags,
@@ -17,6 +18,7 @@ import {
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
+import { hiddenFor, type MockBlock, type MockReport } from './safety';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -36,6 +38,17 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
+  // Staff-managed records, copied so staff tools can write to them.
+  readonly colleges = structuredClone(fx.COLLEGES);
+  readonly teams = structuredClone(fx.TEAMS);
+  readonly companies = structuredClone(fx.COMPANIES);
+  readonly coachInvites: CoachInvite[] = [];
+  /** Profiles parents run (PRD §2); they go when the parent deletes their account. */
+  readonly children = structuredClone(fx.CHILDREN);
+  readonly notes = structuredClone(fx.NOTES);
+  // Trust and safety (./safety.ts).
+  readonly reports: MockReport[] = [];
+  readonly blocks: MockBlock[] = [];
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
@@ -62,7 +75,7 @@ export class MockWorld {
   });
 
   teamSummary = (teamId: string): TeamSummary => {
-    const team = fx.TEAMS.find((t) => t.id === teamId)!;
+    const team = this.teams.find((t) => t.id === teamId)!;
     const { id, name, college, sport, gender, division, color, logoUrl } = team;
     return { id, name, college, sport, gender, division, color, logoUrl };
   };
@@ -185,6 +198,7 @@ export class MockWorld {
     this.posts
       .filter((p) => readable.has(p.communityId))
       .filter((p) => p.moderation === 'approved' || p.authorId === u.id)
+      .filter((p) => !hiddenFor(this, u, p))
       .sort(
         (a, b) =>
           MockWorld.WEIGHT[readable.get(a.communityId)!.kind] -
@@ -280,6 +294,7 @@ export class MockWorld {
     const readable = this.homeCommunities(u);
     return this.events
       .filter((e) => readable.has(e.communityId) && e.moderation === 'approved')
+      .filter((e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId }))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .map(({ hostId, communityId, ...e }) => {
         const c = readable.get(communityId)!;
@@ -377,7 +392,8 @@ export class MockWorld {
       addedBy: fx.summaryOf(this.user(e.addedById)!),
       addedAt: e.addedAt,
       latestNote:
-        fx.NOTES.filter((n) => n.athleteId === e.athleteId)
+        this.notes
+          .filter((n) => n.athleteId === e.athleteId)
           .filter((n) => this.user(n.author.id)?.companyId === u.companyId)
           .at(-1) ?? null,
     })),
