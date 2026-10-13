@@ -19,7 +19,8 @@ const ALL_TABS: { name: TabName; title: string; icon: IconName }[] = [
 
 /** The signed-in tab bar. `(app)` is a group, so its screens keep clean URLs like /home. */
 export default function AppTabs() {
-  const { role } = useRole();
+  const { role, ready } = useRole();
+  if (!ready) return null; // still asking the API whether there's a session
   if (!role) return <Redirect href="/welcome" />; // not signed in → back to the landing page
 
   const allowed = TABS_BY_ROLE[role] ?? [];

@@ -7,7 +7,8 @@ import { firstTab } from '@/navigation/tabs';
  * EXPO_PUBLIC_DEMO=card, which opens the card demo straight away.
  */
 export default function Index() {
-  const { role } = useRole();
+  const { role, ready } = useRole();
+  if (!ready) return null;
   if (process.env.EXPO_PUBLIC_DEMO === 'card') return <Redirect href="/dev/card-demo" />;
   return <Redirect href={role ? firstTab(role) : '/welcome'} />;
 }
