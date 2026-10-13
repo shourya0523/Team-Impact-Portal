@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
+import { scheduleOnRN } from 'react-native-worklets';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { timing } from './motion';
 import { Text } from './Text';
@@ -24,8 +25,9 @@ export function Sheet({ visible, title, onClose, children }: SheetProps) {
       setMounted(true);
       progress.value = withTiming(1, timing.screen);
     } else {
+      // The callback runs on the UI thread on native; hand the state change back to React.
       progress.value = withTiming(0, timing.small, (done) => {
-        if (done) setMounted(false);
+        if (done) scheduleOnRN(setMounted, false);
       });
     }
   }, [visible, progress]);
