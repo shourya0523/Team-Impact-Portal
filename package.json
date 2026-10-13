@@ -12,7 +12,8 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "seed": "pnpm --filter @team-impact/api db:seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
