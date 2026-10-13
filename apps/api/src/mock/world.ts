@@ -134,17 +134,12 @@ export class MockWorld {
       case 'team_impact':
         return { ...base, kind: 'team_impact', myMembership: joined };
       case 'medical':
-        return {
-          ...base,
-          kind: 'medical',
-          createdBy: fx.summaryOf(this.user(c.createdById)!),
-          myMembership: joined,
-        };
+        return { ...base, kind: 'medical', ...this.userMade(c, u), myMembership: joined };
       case 'interest':
         return {
           ...base,
           kind: 'interest',
-          createdBy: fx.summaryOf(this.user(c.createdById)!),
+          ...this.userMade(c, u),
           official: c.official,
           myMembership: mine && {
             joinedAt: mine.joinedAt,
@@ -152,6 +147,16 @@ export class MockWorld {
           },
         };
     }
+  };
+
+  private userMade = (c: MockCommunity & { createdById: string }, u: MockUser) => {
+    if (c.kind !== 'medical' && c.kind !== 'interest') throw new Error('not user-made');
+    const request = c.requests.find((r) => r.userId === u.id);
+    return {
+      createdBy: fx.summaryOf(this.user(c.createdById)!),
+      private: c.private,
+      myJoinRequest: request ? { requestedAt: request.requestedAt } : null,
+    };
   };
 
   staffCommunity = (c: MockCommunity, staff: MockUser): StaffCommunity => ({
@@ -164,19 +169,15 @@ export class MockWorld {
   private static WEIGHT = { team: 0, interest: 1, medical: 1, team_impact: 2 } as const;
 
   /**
-   * Communities whose posts and events reach `u`'s home feed and events list. Medical communities
-   * never do: membership is never a ranking input outside that community's own feed (PRD §5).
+   * Communities whose posts and events reach `u`'s home feed and events list: every one they read,
+   * medical and private ones included (PRD v2.3). Private ones only ever reach members.
    */
   private homeCommunities = (u: MockUser) =>
-    new Map(
-      this.communities
-        .filter((c) => c.kind !== 'medical' && this.readsCommunity(c, u))
-        .map((c) => [c.id, c]),
-    );
+    new Map(this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]));
 
   feed = (u: MockUser): Post[] => this.postsIn(this.homeCommunities(u), u);
 
-  /** One community's own feed, the only place a medical community's posts appear. */
+  /** One community's own feed, for its members (and recruiters, in official ones). */
   communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
     this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
 
@@ -216,12 +217,46 @@ export class MockWorld {
     if (!canJoinCommunity(u.role, c.kind) || c.moderation !== 'approved') {
       return 'You can’t join this community';
     }
-    if (!c.members.some((m) => m.userId === u.id)) {
-      c.members.push({
-        userId: u.id,
-        joinedAt: new Date().toISOString(),
-        recruiterSearchOptIn: false,
-      });
+    if (c.members.some((m) => m.userId === u.id)) return null;
+    if (c.private) {
+      // A request the creator approves, like a team's join request.
+      if (!c.requests.some((r) => r.userId === u.id)) {
+        c.requests.push({ userId: u.id, requestedAt: new Date().toISOString() });
+      }
+      return null;
+    }
+    c.members.push({
+      userId: u.id,
+      joinedAt: new Date().toISOString(),
+      recruiterSearchOptIn: false,
+    });
+    return null;
+  };
+
+  /** Requests waiting on a private community's creator; null if `u` isn't the creator. */
+  communityJoinRequests = (c: MockCommunity, u: MockUser) => {
+    if ((c.kind !== 'interest' && c.kind !== 'medical') || c.createdById !== u.id) return null;
+    return c.requests.map((r) => ({
+      user: fx.summaryOf(this.user(r.userId)!),
+      requestedAt: r.requestedAt,
+    }));
+  };
+
+  /** The creator approves or declines one request. Returns an error message, or null. */
+  decideJoin = (
+    c: MockCommunity,
+    u: MockUser,
+    userId: string,
+    decision: 'approve' | 'decline',
+  ): string | null => {
+    if ((c.kind !== 'interest' && c.kind !== 'medical') || c.createdById !== u.id) {
+      return 'Only the creator decides who joins';
+    }
+    const request = c.requests.find((r) => r.userId === userId);
+    if (!request) return 'No such request';
+    c.requests = c.requests.filter((r) => r !== request);
+    if (decision === 'approve') {
+      c.members.push({ userId, joinedAt: new Date().toISOString(), recruiterSearchOptIn: false });
     }
     return null;
   };

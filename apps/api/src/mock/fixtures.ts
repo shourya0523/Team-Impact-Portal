@@ -216,9 +216,17 @@ export type MockCommunity = {
 } & (
   | { kind: 'team'; teamId: string }
   | { kind: 'team_impact' }
-  | { kind: 'medical'; createdById: string }
-  | { kind: 'interest'; createdById: string; official: boolean }
+  | ({ kind: 'medical' } & UserMade)
+  | ({ kind: 'interest'; official: boolean } & UserMade)
 );
+
+/** Interest and medical communities: who made them, and whether they're private (PRD v2.3). */
+interface UserMade {
+  createdById: string;
+  private: boolean;
+  /** Waiting on the creator, for private communities. */
+  requests: { userId: string; requestedAt: string }[];
+}
 
 const member = (u: MockUser, recruiterSearchOptIn?: boolean) => ({
   userId: u.id,
@@ -250,6 +258,8 @@ export const COMMUNITIES: MockCommunity[] = [
     id: id(303),
     kind: 'medical',
     createdById: USERS.lisa.id,
+    private: true,
+    requests: [],
     name: 'Heart warriors families',
     about: 'Families and friends supporting kids through long hospital stays.',
     moderation: 'approved',
@@ -261,6 +271,8 @@ export const COMMUNITIES: MockCommunity[] = [
     kind: 'interest',
     createdById: USERS.jordan.id,
     official: true,
+    private: false,
+    requests: [],
     name: 'First-gen athletes',
     about: 'First-generation college athletes helping each other out.',
     moderation: 'approved',
@@ -278,6 +290,8 @@ export const COMMUNITIES: MockCommunity[] = [
     kind: 'interest',
     createdById: USERS.priya.id,
     official: false,
+    private: false,
+    requests: [],
     name: 'Athletes in Finance',
     about: 'Mock interviews, internships and careers in finance.',
     moderation: 'approved',
@@ -289,12 +303,28 @@ export const COMMUNITIES: MockCommunity[] = [
     kind: 'interest',
     createdById: USERS.chris.id,
     official: false,
+    private: false,
+    requests: [],
     name: 'Crypto riches fast',
     about: 'DM me to double your money.',
     // Reported and held: only staff and its creator see it.
     moderation: 'in_review',
     createdAt: at(11),
     members: [member(USERS.chris)],
+  },
+  {
+    id: id(307),
+    kind: 'interest',
+    createdById: USERS.coach.id,
+    official: false,
+    // Private: findable by name, but posts and members are for members only.
+    private: true,
+    requests: [{ userId: USERS.sam.id, requestedAt: at(12) }],
+    name: 'Team captains',
+    about: 'Captains and coaches planning the season.',
+    moderation: 'approved',
+    createdAt: at(7),
+    members: [member(USERS.coach), member(USERS.jordan)],
   },
 ];
 
@@ -359,6 +389,7 @@ export const POSTS: MockPost[] = [
     },
   }),
   post(406, USERS.noah, 301, 12, 'Can’t wait for Saturday, go Jumbos!'),
+  post(408, USERS.coach, 307, 11, 'Captains: leadership meeting Wednesday after practice.'),
   post(407, USERS.chris, 302, 12, 'Make $5,000 a week from your dorm!!! DM me', {
     moderation: 'in_review',
     likeCount: 0,

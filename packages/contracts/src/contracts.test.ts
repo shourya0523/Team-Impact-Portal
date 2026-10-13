@@ -404,6 +404,12 @@ describe('communities', () => {
     );
   });
 
+  it('creates open communities unless asked to make them private', () => {
+    const create = { kind: 'interest', name: 'Captains', about: 'Team captains only.' };
+    expect(CreateCommunityRequest.parse(create).private).toBe(false);
+    expect(CreateCommunityRequest.parse({ ...create, private: true }).private).toBe(true);
+  });
+
   it('lets users create only interest and medical communities', () => {
     const create = { name: 'Cardiac families', about: 'Families of kids with heart conditions.' };
     expect(accepts(CreateCommunityRequest, { ...create, kind: 'medical' })).toBe(true);
@@ -417,6 +423,8 @@ describe('communities', () => {
       ...base,
       kind: 'interest',
       createdBy: coach,
+      private: false,
+      myJoinRequest: null,
       official: true,
       myMembership: { joinedAt: NOW, recruiterSearchOptIn: true },
     });
@@ -428,6 +436,8 @@ describe('communities', () => {
         kind,
         teamId: ID,
         createdBy: coach,
+        private: false,
+        myJoinRequest: null,
         official: true,
         myMembership: { joinedAt: NOW, recruiterSearchOptIn: true },
       });
@@ -437,7 +447,14 @@ describe('communities', () => {
   });
 
   it('needs an official flag on interest communities and a team on team communities', () => {
-    const interest = { ...base, kind: 'interest', createdBy: coach, myMembership: null };
+    const interest = {
+      ...base,
+      kind: 'interest',
+      createdBy: coach,
+      private: false,
+      myJoinRequest: null,
+      myMembership: null,
+    };
     expect(issuePaths(Community.safeParse(interest))).toEqual(['official']);
     expect(issuePaths(Community.safeParse({ ...base, kind: 'team', myMembership: null }))).toEqual([
       'teamId',

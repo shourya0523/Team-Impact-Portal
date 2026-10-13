@@ -24,9 +24,10 @@ Run typecheck, lint and test before pushing.
 - Children under 13 never log in; their profile is run by a parent and visible only to their team and family
 - Child profiles (under 13 or teen) never appear in search, recruiter views, card exports or any community outside their team
 - Teens never see athletes' contact details
-- No health or diagnosis data is collected about anyone. The one trace is membership of a medical community (PRD §5): it is never shown on a profile, never searchable, never a recruiter filter, and never a ranking input outside that community's own feed. Teens and recruiters cannot join medical communities. Medical communities sit behind a switch that hides the kind everywhere (PRD §11)
+- No health or diagnosis data is collected about anyone. The one trace is membership of a medical community (PRD §5): it is never shown on a profile, never searchable and never a recruiter filter (members do see its posts in their home feed, PRD v2.3). Teens and recruiters cannot join medical communities. Medical communities sit behind a switch that hides the kind everywhere (PRD §11)
+- A private community (interest or medical, set at creation) shows its posts, events and members to members only; joining is a request its creator approves, and it can never be official
 - Athletes without open-to-recruiting don't appear on the employer portal at all
-- Identity search (official-community filter) sits behind one feature flag, is opt-in, and every such search is logged. Only official interest communities are filters; team and medical communities never are
+- Identity search (official-community filter) sits behind one feature flag, is opt-in, and every such search is logged. Only official interest communities are filters; team, medical and private communities never are
 - Extracted resume text is untrusted data; nothing extracted is shown until the athlete confirms it
 - Every post, comment and event goes through moderation before it appears
 

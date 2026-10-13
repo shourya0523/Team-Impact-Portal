@@ -54,10 +54,60 @@ function Findable({
   );
 }
 
+/** The creator's queue for a private community: approve or decline each request. */
+function JoinRequests({ communityId, onChange }: { communityId: string; onChange: () => void }) {
+  const { state, reload } = useApi(() => api.communityJoinRequests(communityId), [communityId]);
+  const decide = (userId: string, decision: 'approve' | 'decline') =>
+    api.decideCommunityJoin(communityId, userId, decision).then(() => {
+      reload();
+      onChange();
+    });
+  return (
+    <Async state={state}>
+      {(requests) =>
+        requests.length > 0 && (
+          <Card>
+            <Text style={type.name}>Asking to join · {requests.length}</Text>
+            {requests.map((r) => (
+              <View key={r.user.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Avatar
+                  firstName={r.user.firstName}
+                  lastName={r.user.lastName}
+                  role={r.user.role}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={type.name}>
+                    {r.user.firstName} {r.user.lastName}
+                  </Text>
+                  <Text style={type.meta}>
+                    {ROLE_LABEL[r.user.role]} · asked {shortDate(r.requestedAt)}
+                  </Text>
+                </View>
+                <Button
+                  label="Decline"
+                  kind="outline"
+                  size="sm"
+                  onPress={() => decide(r.user.id, 'decline')}
+                />
+                <Button
+                  label="Approve"
+                  kind="navy"
+                  size="sm"
+                  onPress={() => decide(r.user.id, 'approve')}
+                />
+              </View>
+            ))}
+          </Card>
+        )
+      }
+    </Async>
+  );
+}
+
 /** "/me/communities/[id]": a community's page and its own feed. */
 export default function CommunityDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { role } = useRole();
+  const { role, me } = useRole();
   const insets = useSafeAreaInsets();
   const community = useApi(() => api.community(id), [id]);
   const posts = useApi(() => api.communityPosts(id), [id]);
@@ -81,6 +131,9 @@ export default function CommunityDetail() {
           const x = override ?? loaded;
           const k = KIND_STYLE[x.kind];
           const official = x.kind === 'interest' && x.official;
+          const userMade = x.kind === 'interest' || x.kind === 'medical' ? x : null;
+          const isPrivate = userMade?.private ?? false;
+          const isCreator = !!me && userMade?.createdBy.id === me.id;
           const canPost =
             x.myMembership &&
             role !== 'parent' &&
@@ -89,7 +142,7 @@ export default function CommunityDetail() {
           return (
             <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
               <View style={[styles.cover, { backgroundColor: k.band, paddingTop: insets.top }]}>
-                {x.kind === 'medical' ? (
+                {isPrivate ? (
                   <View style={styles.coverLock}>
                     <Icon name="lock" size={120} color={k.monogram} strokeWidth={1.4} />
                   </View>
@@ -108,7 +161,7 @@ export default function CommunityDetail() {
                 </Pressable>
                 <View style={styles.coverTag}>
                   <Icon
-                    name={official ? 'shield' : x.kind === 'medical' ? 'lock' : 'users'}
+                    name={official ? 'shield' : isPrivate ? 'lock' : 'users'}
                     size={13}
                     color="#fff"
                     strokeWidth={2.4}
@@ -123,8 +176,8 @@ export default function CommunityDetail() {
                   >
                     {official
                       ? 'OFFICIAL'
-                      : x.kind === 'medical'
-                        ? 'PRIVATE MEMBERSHIP'
+                      : isPrivate
+                        ? `PRIVATE ${KIND_LABEL[x.kind].toUpperCase()}`
                         : KIND_LABEL[x.kind].toUpperCase()}
                   </Text>
                 </View>
@@ -160,9 +213,23 @@ export default function CommunityDetail() {
                   ) : (
                     !x.myMembership &&
                     role &&
-                    canJoinCommunity(role, x.kind) && (
-                      <Button label="Join" kind="navy" size="sm" onPress={join} />
-                    )
+                    canJoinCommunity(role, x.kind) &&
+                    (userMade?.myJoinRequest ? (
+                      <Button
+                        label="Requested"
+                        kind="outline"
+                        size="sm"
+                        disabled
+                        onPress={() => undefined}
+                      />
+                    ) : (
+                      <Button
+                        label={isPrivate ? 'Ask to join' : 'Join'}
+                        kind="navy"
+                        size="sm"
+                        onPress={join}
+                      />
+                    ))
                   )}
                 </View>
                 {error && <Text style={{ color: c.danger, fontFamily: font.medium }}>{error}</Text>}
@@ -183,6 +250,21 @@ export default function CommunityDetail() {
                       recruiters.
                     </Text>
                   </Card>
+                )}
+
+                {isPrivate && !x.myMembership && (
+                  <Card style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                    <Icon name="lock" size={18} color={c.navy} />
+                    <Text style={[type.small, { flex: 1 }]}>
+                      {userMade?.myJoinRequest
+                        ? `You asked to join. ${userMade.createdBy.firstName} will let you in.`
+                        : `Private community. Posts and members are for members only; ${userMade?.createdBy.firstName} approves new members.`}
+                    </Text>
+                  </Card>
+                )}
+
+                {isPrivate && isCreator && (
+                  <JoinRequests communityId={x.id} onChange={() => community.reload()} />
                 )}
 
                 {x.kind === 'interest' &&

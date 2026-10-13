@@ -7,8 +7,11 @@ import {
   CardWithContact,
   College,
   Community,
+  CommunityJoinRequest,
   Company,
   CreateJoinRequest,
+  DecideJoinRequest,
+  Id,
   DevSignInRequest,
   FindTeamsQuery,
   IdentitySearchLogEntry,
@@ -144,6 +147,34 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
       const problem = world.join(c, u);
       if (problem) throw httpError(403, problem);
       return world.community(c, u);
+    },
+  );
+
+  app.get(
+    '/communities/:id/requests',
+    { schema: { params: IdParams, response: { 200: z.array(CommunityJoinRequest) } } },
+    async (request) => {
+      const { u, c } = visibleCommunity(request, request.params.id);
+      const requests = world.communityJoinRequests(c, u);
+      if (!requests) throw httpError(403, 'Only the creator sees join requests');
+      return requests;
+    },
+  );
+
+  app.post(
+    '/communities/:id/requests/:userId',
+    {
+      schema: {
+        params: z.object({ id: Id, userId: Id }),
+        body: DecideJoinRequest,
+        response: { 200: z.array(CommunityJoinRequest) },
+      },
+    },
+    async (request) => {
+      const { u, c } = visibleCommunity(request, request.params.id);
+      const problem = world.decideJoin(c, u, request.params.userId, request.body.decision);
+      if (problem) throw httpError(problem === 'No such request' ? 404 : 403, problem);
+      return world.communityJoinRequests(c, u) ?? [];
     },
   );
 
@@ -385,6 +416,9 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
       if (!c || !world.canSeeCommunity(c, u)) throw httpError(404, 'No such community');
       if (c.kind !== 'interest') {
         throw httpError(400, 'Only interest communities can be official');
+      }
+      if (request.body.official && c.private) {
+        throw httpError(400, 'Private communities can’t be official');
       }
       if (request.body.official && c.moderation !== 'approved') {
         throw httpError(400, 'Approve the community before marking it official');

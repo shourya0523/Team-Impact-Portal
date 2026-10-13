@@ -7,6 +7,7 @@ const MEDICAL = id(303);
 const FIRST_GEN = id(304); // official interest community
 const FINANCE = id(305); // interest, not official
 const TEAM = id(301);
+const CAPTAINS = id(307); // private interest community
 
 let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
@@ -195,12 +196,46 @@ describe('mock API: communities', () => {
     expect(ids((await parent.get('/communities')).body)).toContain(TEAM);
   });
 
-  it('keeps medical posts out of the home feed, even for members', async () => {
+  it('shows members their medical community’s posts in the home feed (PRD v2.3)', async () => {
     // Lisa started the medical community and posted in it.
-    const { get } = await signIn('parent');
-    const feed = await get('/feed');
-    expect(feed.text).not.toContain(MEDICAL);
-    expect(feed.text).not.toContain('sent meals');
+    const member = await signIn('parent');
+    expect((await member.get('/feed')).text).toContain('sent meals');
+    await close?.();
+    // The coach can see the community exists, but isn't a member.
+    const coach = await signIn('coach');
+    expect((await coach.get('/feed')).text).not.toContain('sent meals');
+  });
+
+  it('keeps a private community’s posts to members, and makes joining a request', async () => {
+    const outsider = await signIn('teen');
+    // Findable by name...
+    expect(ids((await outsider.get('/communities')).body)).toContain(CAPTAINS);
+    // ...but nothing inside it.
+    expect((await outsider.get(`/communities/${CAPTAINS}/posts`)).body.items).toEqual([]);
+    expect((await outsider.get('/feed')).text).not.toContain('leadership meeting');
+    const asked = await outsider.send('POST', `/communities/${CAPTAINS}/join`, {});
+    expect(asked.status).toBe(200);
+    expect(asked.body.myMembership).toBeNull();
+    expect(asked.body.myJoinRequest).not.toBeNull();
+    await close?.();
+
+    const member = await signIn('athlete');
+    expect((await member.get('/feed')).text).toContain('leadership meeting');
+  });
+
+  it('lets only the creator approve requests to a private community', async () => {
+    const athlete = await signIn('athlete');
+    expect((await athlete.get(`/communities/${CAPTAINS}/requests`)).status).toBe(403);
+    await close?.();
+    const { get, send } = await signIn('coach');
+    const waiting = await get(`/communities/${CAPTAINS}/requests`);
+    expect(waiting.body.map((r: { user: { id: string } }) => r.user.id)).toEqual([USERS.sam.id]);
+    const left = await send('POST', `/communities/${CAPTAINS}/requests/${USERS.sam.id}`, {
+      decision: 'approve',
+    });
+    expect(left.body).toEqual([]);
+    const sam = (await get(`/communities/${CAPTAINS}`)).body;
+    expect(sam.memberCount).toBe(3);
   });
 
   it('ranks the team first and shows only approved posts', async () => {
@@ -261,6 +296,10 @@ describe('mock API: communities', () => {
     const ok = await send('PUT', `/staff/communities/${FINANCE}/official`, { official: true });
     expect(ok.status).toBe(200);
     expect(ok.body.community.official).toBe(true);
+    const privateOne = await send('PUT', `/staff/communities/${CAPTAINS}/official`, {
+      official: true,
+    });
+    expect(privateOne.status).toBe(400);
     // Held for review: can't become a recruiter filter yet.
     const held = await send('PUT', `/staff/communities/${id(306)}/official`, { official: true });
     expect(held.status).toBe(400);

@@ -5,16 +5,20 @@ import type { Role } from './roles';
 import { UserSummary } from './users';
 
 /**
- * Communities (PRD v2.2 §5) replace affinity groups and feed scopes. Every post and event lives in
- * one, and the home feed merges the communities you belong to.
+ * Communities (PRD v2.3 §5) replace affinity groups and feed scopes. Every post and event lives in
+ * one, and the home feed merges every community you belong to, medical and private ones included.
  *
  * - `team`: made with the team; private to its members and their families. Team membership
  *   (coach approval or QR join) drives it, so nobody joins it directly.
  * - `team_impact`: made by staff, open to everyone; announcements and network-wide posts.
  * - `medical`: made by anyone who can join one. Membership is private to the member: never on a
- *   profile, never searchable, never a recruiter filter, never a ranking input outside its own
- *   feed. One switch hides the kind everywhere (PRD §11).
- * - `interest`: user-made and open; staff can mark one official, which makes it a recruiter filter.
+ *   profile, never searchable, never a recruiter filter. One switch hides the kind everywhere
+ *   (PRD §11).
+ * - `interest`: user-made; staff can mark an open one official, which makes it a recruiter filter.
+ *
+ * Interest and medical communities can be made private at creation, like team communities:
+ * findable by name and description, but posts, events and members are for members only, and
+ * joining is a request the creator approves.
  */
 export const COMMUNITY_KINDS = ['team', 'team_impact', 'medical', 'interest'] as const;
 export const CommunityKind = z.enum(COMMUNITY_KINDS);
@@ -62,6 +66,14 @@ const communityBase = {
   createdAt: Timestamp,
 };
 
+const userMade = {
+  createdBy: UserSummary,
+  /** Set at creation. Content and members for members only; joining needs the creator's yes. */
+  private: z.boolean(),
+  /** The viewer's own request to join a private community, while it waits on the creator. */
+  myJoinRequest: z.object({ requestedAt: Timestamp }).nullable(),
+};
+
 /**
  * A community as its viewer sees it. `myMembership` is the viewer's own and null if they haven't
  * joined; nobody is ever told who else is in a medical community.
@@ -81,14 +93,17 @@ export const Community = z.discriminatedUnion('kind', [
   z.object({
     ...communityBase,
     kind: z.literal('medical'),
-    createdBy: UserSummary,
+    ...userMade,
     myMembership: z.object(membership).nullable(),
   }),
   z.object({
     ...communityBase,
     kind: z.literal('interest'),
-    createdBy: UserSummary,
-    /** Only interest communities can be official, and only official ones are recruiter filters. */
+    ...userMade,
+    /**
+     * Only open interest communities can be official, and only official ones are recruiter
+     * filters. A private community is never official.
+     */
     official: z.boolean(),
     myMembership: z
       .object({
@@ -113,12 +128,13 @@ export type StaffCommunity = z.infer<typeof StaffCommunity>;
 
 /**
  * Interest or medical only. Names are unique per kind, ignoring case. The creator joins
- * automatically, and new interest communities aren't official.
+ * automatically, and new interest communities aren't official. `private` can only be set here.
  */
 export const CreateCommunityRequest = z.object({
   kind: CreatableCommunityKind,
   name: z.string().trim().min(1).max(60),
   about: z.string().trim().min(1, 'Say what the community is for.').max(500),
+  private: z.boolean().default(false),
 });
 export type CreateCommunityRequest = z.infer<typeof CreateCommunityRequest>;
 
@@ -126,7 +142,14 @@ export type CreateCommunityRequest = z.infer<typeof CreateCommunityRequest>;
 export const UpdateCommunityMembershipRequest = z.object({ recruiterSearchOptIn: z.boolean() });
 export type UpdateCommunityMembershipRequest = z.infer<typeof UpdateCommunityMembershipRequest>;
 
-/** Staff only, interest communities only. Un-marking removes it from recruiter filters. */
+/** Someone waiting to join a private community, as its creator sees them. */
+export const CommunityJoinRequest = z.object({
+  user: UserSummary,
+  requestedAt: Timestamp,
+});
+export type CommunityJoinRequest = z.infer<typeof CommunityJoinRequest>;
+
+/** Staff only, open interest communities only. Un-marking removes it from recruiter filters. */
 export const SetCommunityOfficialRequest = z.object({ official: z.boolean() });
 export type SetCommunityOfficialRequest = z.infer<typeof SetCommunityOfficialRequest>;
 

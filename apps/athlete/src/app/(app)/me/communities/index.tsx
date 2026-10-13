@@ -16,11 +16,17 @@ const KIND_ICON: Record<Community['kind'], IconName> = {
   medical: 'heart',
 };
 
+/** Interest and medical communities set to private at creation (PRD v2.3). */
+const isPrivate = (x: Community) => (x.kind === 'interest' || x.kind === 'medical') && x.private;
+
 const subtitle = (x: Community) => {
-  if (x.kind === 'medical') return 'Only you see you’re in it';
+  const members = `${x.memberCount} members`;
   if (x.kind === 'team_impact') return 'Everyone · news';
-  if (x.kind === 'interest' && x.official) return `Official · ${x.memberCount} members`;
-  return `${x.kind === 'team' ? 'Team' : 'Interest'} · ${x.memberCount} members`;
+  if (x.kind === 'team') return `Team · ${members}`;
+  if (x.kind === 'medical' && x.myMembership) return 'Medical · only you see you’re in it';
+  if (x.kind === 'interest' && x.official) return `Official · ${members}`;
+  const kind = x.kind === 'medical' ? 'Medical' : 'Interest';
+  return `${kind}${isPrivate(x) ? ' · private' : ''} · ${members}`;
 };
 
 const open = (id: string) => router.push({ pathname: '/me/communities/[id]', params: { id } });
@@ -31,7 +37,7 @@ function Tile({ x }: { x: Community }) {
   return (
     <Card onPress={() => open(x.id)} label={x.name} style={styles.tile}>
       <View style={[styles.band, { backgroundColor: k.band }]}>
-        {x.kind === 'medical' ? (
+        {isPrivate(x) ? (
           <View style={styles.private}>
             <Icon name="lock" size={12} color={c.navy} strokeWidth={2.6} />
             <Text style={{ fontFamily: font.bold, fontSize: 11, color: c.navy }}>PRIVATE</Text>
@@ -56,7 +62,8 @@ function Tile({ x }: { x: Community }) {
 }
 
 /**
- * "/me/communities": yours first, then ones to join. Teens and recruiters never get medical
+ * "/me/communities": yours first, then ones to join; private ones take a request the creator
+ * approves. Teens and recruiters never get medical
  * communities from the API; parents can create medical ones only (PRD §5).
  */
 export default function Communities() {
@@ -144,15 +151,27 @@ export default function Communities() {
                         </Text>
                       </View>
                     </Pressable>
-                    {role && canJoinCommunity(role, x.kind) && (
-                      <Button
-                        label={joining === x.id ? 'Joining…' : 'Join'}
-                        kind="navy"
-                        size="sm"
-                        disabled={joining === x.id}
-                        onPress={() => join(x.id)}
-                      />
-                    )}
+                    {role &&
+                      canJoinCommunity(role, x.kind) &&
+                      ((x.kind === 'interest' || x.kind === 'medical') && x.myJoinRequest ? (
+                        <Button
+                          label="Requested"
+                          kind="outline"
+                          size="sm"
+                          disabled
+                          onPress={() => undefined}
+                        />
+                      ) : (
+                        <Button
+                          label={
+                            joining === x.id ? 'Sending…' : isPrivate(x) ? 'Ask to join' : 'Join'
+                          }
+                          kind="navy"
+                          size="sm"
+                          disabled={joining === x.id}
+                          onPress={() => join(x.id)}
+                        />
+                      ))}
                   </Card>
                 ))}
                 {role && canCreateCommunity(role, 'medical') && (

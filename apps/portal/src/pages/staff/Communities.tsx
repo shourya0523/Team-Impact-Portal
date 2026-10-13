@@ -13,7 +13,7 @@ const KIND: Record<CommunityKind, { label: string; tone: 'info' | 'neutral' | 'w
 };
 
 /**
- * S4, S10: every community. Only interest communities can be marked official, which makes them a
+ * S4, S10: every community. Only open interest communities can be marked official, which makes them a
  * recruiter filter. Medical ones show a member count but never who's in them. The identity search
  * log sits underneath while the flag is on.
  */
@@ -46,7 +46,12 @@ export const CommunitiesPage = () => {
               {
                 header: 'Kind',
                 cell: ({ community: c }) => (
-                  <Badge tone={KIND[c.kind].tone}>{KIND[c.kind].label}</Badge>
+                  <span style={{ display: 'inline-flex', gap: 6 }}>
+                    <Badge tone={KIND[c.kind].tone}>{KIND[c.kind].label}</Badge>
+                    {(c.kind === 'interest' || c.kind === 'medical') && c.private && (
+                      <Badge tone="neutral">Private</Badge>
+                    )}
+                  </span>
                 ),
               },
               { header: 'Members', cell: (r) => r.community.memberCount, align: 'right' },
@@ -70,7 +75,11 @@ export const CommunitiesPage = () => {
                 header: 'Official',
                 align: 'right',
                 cell: (r) =>
-                  r.community.kind === 'interest' && r.community.moderation !== 'approved' ? (
+                  r.community.kind === 'interest' && r.community.private ? (
+                    <span style={{ color: brand.muted, fontSize: 12 }}>
+                      Private: can’t be official
+                    </span>
+                  ) : r.community.kind === 'interest' && r.community.moderation !== 'approved' ? (
                     <span style={{ color: brand.muted, fontSize: 12 }}>Approve it first</span>
                   ) : r.community.kind === 'interest' ? (
                     <button

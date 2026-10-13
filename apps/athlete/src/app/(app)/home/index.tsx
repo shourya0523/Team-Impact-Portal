@@ -14,14 +14,15 @@ const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 type Filter = 'all' | 'team' | 'communities';
 
+const isPrivate = (x: Community) =>
+  x.kind === 'team' || ((x.kind === 'interest' || x.kind === 'medical') && x.private);
+
 /**
- * A row of the communities you're in, like stories. Medical communities never show their name
- * here (PRD §5: membership stays private), only a lock that opens your communities.
+ * A row of shortcuts to the communities you're in, medical ones included (PRD v2.3): only you see
+ * this row, so it shows your own memberships. Private communities carry a small lock.
  */
 function CommunityBubbles({ communities }: { communities: Community[] }) {
-  const mine = communities.filter((x) => x.myMembership);
-  const hasPrivate = mine.some((x) => x.kind === 'medical');
-  const shown = mine.filter((x) => x.kind !== 'medical');
+  const shown = communities.filter((x) => x.myMembership);
   const open = (id: string) => router.push({ pathname: '/me/communities/[id]', params: { id } });
   return (
     <ScrollView
@@ -44,11 +45,21 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
             <View style={[styles.ring, { borderColor: c.red }]}>
               <View style={[styles.bubbleFill, { backgroundColor: k.band }]}>
                 <Text
-                  style={[styles.bubbleText, { color: x.kind === 'interest' ? c.ink : '#fff' }]}
+                  style={[
+                    styles.bubbleText,
+                    {
+                      color: x.kind === 'interest' ? c.ink : x.kind === 'medical' ? c.navy : '#fff',
+                    },
+                  ]}
                 >
                   {x.kind === 'team_impact' ? 'TI' : monogram(x.name, x.kind === 'team')}
                 </Text>
               </View>
+              {isPrivate(x) && (
+                <View style={styles.lockBadge}>
+                  <Icon name="lock" size={11} color={c.navy} strokeWidth={2.8} />
+                </View>
+              )}
             </View>
             <Text style={styles.bubbleLabel} numberOfLines={1}>
               {x.kind === 'team_impact' ? 'Team Impact' : label}
@@ -56,21 +67,6 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
           </Pressable>
         );
       })}
-      {hasPrivate && (
-        <Pressable
-          onPress={() => router.push('/me/communities')}
-          accessibilityRole="button"
-          accessibilityLabel="Your private communities"
-          style={styles.bubble}
-        >
-          <View style={[styles.ring, { borderColor: c.line }]}>
-            <View style={[styles.bubbleFill, { backgroundColor: c.navyTint }]}>
-              <Icon name="lock" size={22} color={c.navy} />
-            </View>
-          </View>
-          <Text style={styles.bubbleLabel}>Private</Text>
-        </Pressable>
-      )}
       <Pressable
         onPress={() => router.push('/me/communities')}
         accessibilityRole="button"
@@ -226,8 +222,8 @@ function PostCard({ post }: { post: Post }) {
 }
 
 /**
- * "/home": posts from your communities, team first, then your other communities, then Team
- * Impact. Medical communities' posts stay in their own feed. Parents and recruiters don't post,
+ * "/home": posts from your communities, team first, then your other communities (medical and
+ * private ones included), then Team Impact. Parents and recruiters don't post,
  * so they get no compose button (F5).
  */
 export default function Home() {
@@ -315,6 +311,19 @@ const styles = StyleSheet.create({
   ring: { width: 64, height: 64, borderRadius: 32, borderWidth: 3, padding: 3 },
   bubbleFill: { flex: 1, borderRadius: 26, alignItems: 'center', justifyContent: 'center' },
   bubbleText: { fontFamily: font.display, fontSize: 22 },
+  lockBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: c.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   bubbleLabel: { fontFamily: font.semibold, fontSize: 12, color: c.ink },
   announcement: { backgroundColor: c.navy, borderRadius: 20, padding: 18, gap: 12 },
   megaphone: {
