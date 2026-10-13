@@ -16,6 +16,7 @@ import {
   type TeamSummary,
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
+import { createProfileState } from './profiles';
 import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
 
 /**
@@ -36,6 +37,8 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
+  /** Children, card drafts, pending resumes and card history (profiles area). */
+  readonly profiles = createProfileState(this.cards);
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}

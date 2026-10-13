@@ -1,5 +1,6 @@
 import { communities } from './communities';
 import { join } from './join';
+import { profiles } from './profiles';
 import { session } from './session';
 
 export { ApiRequestError, request } from './client';
@@ -9,4 +10,5 @@ export const api = {
   ...session,
   ...communities,
   ...join,
+  ...profiles,
 };
