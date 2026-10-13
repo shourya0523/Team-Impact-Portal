@@ -1,3 +1,4 @@
+import { activity } from './activity';
 import { communities } from './communities';
 import { join } from './join';
 import { session } from './session';
@@ -9,4 +10,5 @@ export const api = {
   ...session,
   ...communities,
   ...join,
+  ...activity,
 };

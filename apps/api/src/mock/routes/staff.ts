@@ -10,6 +10,7 @@ import {
   Team,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
+import { applyResolution } from '../activity';
 import { COMPANIES, TEAMS } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -60,18 +61,8 @@ export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole
       if (!ticket) throw httpError(404, 'No such ticket');
       ticket.status = 'resolved';
       ticket.resolution = request.body.resolution;
-      if (ticket.resolution === 'remove') {
-        const { kind, id } = ticket.target;
-        const item =
-          kind === 'post'
-            ? world.posts.find((p) => p.id === id)
-            : kind === 'event'
-              ? world.events.find((e) => e.id === id)
-              : kind === 'community'
-                ? world.communities.find((c) => c.id === id)
-                : undefined;
-        if (item) item.moderation = 'removed';
-      }
+      // Remove takes the item down; keep approves anything still held for review.
+      applyResolution(world, ticket.target, ticket.resolution);
       return ticket;
     },
   );

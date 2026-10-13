@@ -334,6 +334,7 @@ export interface MockPost {
   authorId: string;
   communityId: string;
   text: string;
+  imageUrl?: string | null;
   official: boolean;
   likeCount: number;
   commentCount: number;
