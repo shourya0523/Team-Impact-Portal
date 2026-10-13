@@ -29,45 +29,40 @@ const WHAT: Record<CreateReportRequest['target']['kind'], string> = {
 
 const DOT = 20;
 
-/**
- * The report sheet (PRD §9, P5): pick a reason, add an optional note, send. Team Impact staff get
- * a ticket; the item is hidden for you at once and its author never learns who reported it.
- * Pass `author` to offer blocking them from the same sheet (P2).
- */
-export function ReportSheet({
-  target,
-  author,
-  visible,
-  onClose,
-  onDone,
-}: {
+type ReportProps = {
   target: CreateReportRequest['target'];
+  /** Offer blocking the item's author from the same form (P2). Never Team Impact staff. */
   author?: { id: string; name: string };
-  visible: boolean;
-  onClose: () => void;
   /** After a report or block, e.g. to reload a feed the item should drop out of. */
   onDone?: () => void;
-}) {
+};
+
+/**
+ * The report form (PRD §9, P5): pick a reason, add an optional note, send. Team Impact staff get
+ * a ticket; the item is hidden for you at once and its author never learns who reported it.
+ * `onDone` runs as soon as the report or block goes through; `onClose` is the confirmation's
+ * Close button.
+ */
+export function ReportForm({
+  target,
+  author,
+  onDone,
+  onClose,
+}: ReportProps & { onClose: () => void }) {
   const [reason, setReason] = useState<ReportReason | null>(null);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const close = () => {
-    if (done) onDone?.();
-    setReason(null);
-    setNote('');
-    setDone(null);
-    setError(null);
-    onClose();
-  };
-
   const run = (action: () => Promise<unknown>, message: string) => {
     setBusy(true);
     setError(null);
     action()
-      .then(() => setDone(message))
+      .then(() => {
+        setDone(message);
+        onDone?.();
+      })
       .catch((e: Error) => setError(e.message))
       .finally(() => setBusy(false));
   };
@@ -86,68 +81,86 @@ export function ReportSheet({
       `${author.name} is blocked. You won’t see each other’s posts, comments or events. Undo this in Me › Safety.`,
     );
 
+  if (done) {
+    return (
+      <>
+        <Text color="secondary" accessibilityRole="alert">
+          {done}
+        </Text>
+        <Button label="Close" onPress={onClose} />
+      </>
+    );
+  }
   return (
-    <Sheet
-      visible={visible}
-      title={done ? 'Done' : `Report this ${WHAT[target.kind]}`}
-      onClose={close}
-    >
-      {done ? (
-        <>
-          <Text color="secondary">{done}</Text>
-          <Button label="Close" onPress={close} />
-        </>
-      ) : (
-        <>
-          <Text variant="small" color="secondary">
-            Reports are private. The person you report never learns who sent it.
-          </Text>
-          <View accessibilityRole="radiogroup" style={styles.reasons}>
-            {REPORT_REASONS.map((r) => {
-              const on = reason === r;
-              return (
-                <Pressable
-                  key={r}
-                  onPress={() => setReason(r)}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: on }}
-                  style={[styles.reason, on && styles.reasonOn]}
-                >
-                  <View style={[styles.dot, on && styles.dotOn]} />
-                  <Text weight={on ? 'semibold' : 'regular'} color={on ? 'brand' : 'ink'}>
-                    {REASON_LABEL[r]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <Input
-            label="Anything staff should know? (optional)"
-            value={note}
-            onChangeText={setNote}
-            maxLength={500}
-            multiline
-          />
-          {error && <ErrorText>{error}</ErrorText>}
-          <Button label="Send report" disabled={!reason || busy} onPress={send} />
-          {author && (
-            <Button
-              label={`Block ${author.name}`}
-              variant="secondary"
-              disabled={busy}
-              onPress={block}
-            />
-          )}
-        </>
+    <>
+      <Text variant="small" color="secondary">
+        Reports are private. The person you report never learns who sent it.
+      </Text>
+      <View accessibilityRole="radiogroup" style={styles.reasons}>
+        {REPORT_REASONS.map((r) => {
+          const on = reason === r;
+          return (
+            <Pressable
+              key={r}
+              onPress={() => setReason(r)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: on }}
+              style={[styles.reason, on && styles.reasonOn]}
+            >
+              <View style={[styles.dot, on && styles.dotOn]} />
+              <Text weight={on ? 'semibold' : 'regular'} color={on ? 'brand' : 'ink'}>
+                {REASON_LABEL[r]}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      <Input
+        label="Anything staff should know? (optional)"
+        value={note}
+        onChangeText={setNote}
+        maxLength={500}
+        multiline
+      />
+      {error && <ErrorText>{error}</ErrorText>}
+      <Button label="Send report" disabled={!reason || busy} onPress={send} />
+      {author && (
+        <Button
+          label={`Block ${author.name}`}
+          variant="secondary"
+          disabled={busy}
+          onPress={block}
+        />
       )}
+    </>
+  );
+}
+
+/**
+ * The report form in a bottom sheet. It remounts on open, so each report starts fresh. `onDone`
+ * runs once the sheet closes, so a feed reload can't pull the sheet away mid-confirmation.
+ */
+export function ReportSheet({
+  visible,
+  onClose,
+  onDone,
+  ...props
+}: ReportProps & { visible: boolean; onClose: () => void }) {
+  const [acted, setActed] = useState(false);
+  const close = () => {
+    onClose();
+    if (acted) onDone?.();
+    setActed(false);
+  };
+  return (
+    <Sheet visible={visible} title={`Report this ${WHAT[props.target.kind]}`} onClose={close}>
+      {visible && <ReportForm {...props} onDone={() => setActed(true)} onClose={close} />}
     </Sheet>
   );
 }
 
 /** A flag button that opens the report sheet. Drop it next to any post, event, profile or community. */
-export function ReportButton(
-  props: Omit<Parameters<typeof ReportSheet>[0], 'visible' | 'onClose'>,
-) {
+export function ReportButton(props: ReportProps) {
   const [open, setOpen] = useState(false);
   return (
     <>

@@ -4,7 +4,9 @@ import type {
   Post,
   ReportReason,
 } from '@team-impact/contracts';
-import { summaryOf, type MockPost } from './fixtures';
+import { commentsFor } from './activity';
+import type { MockPost } from './fixtures';
+import { canSeeChild } from './profiles';
 import type { MockUser, MockWorld } from './world';
 
 /**
@@ -47,9 +49,6 @@ export const hiddenFor = (
   world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id) ||
   (!item.official && blockedBetween(world, u.id, item.authorId));
 
-/** Comments live with the feed area; this reads them if that area has added them to the world. */
-type MaybeComments = { comments?: { id: string; text: string; authorId: string }[] };
-
 /**
  * What a report points at, as `u` can see it, with a one-line preview for the staff ticket.
  * Null when it doesn't exist or `u` can't see it (which reads as 404, never "it exists").
@@ -74,8 +73,12 @@ export const reportTarget = (
       return c && world.canSeeCommunity(c, u) ? { preview: c.name } : null;
     }
     case 'comment': {
-      const c = (world as MaybeComments).comments?.find((x) => x.id === target.id);
-      return c && !blockedBetween(world, u.id, c.authorId) ? { preview: c.text } : null;
+      // Only a comment on a post the reporter can read, that they can see themselves.
+      const k = world.comments.find((x) => x.id === target.id);
+      if (!k || !world.feed(u).some((p) => p.id === k.postId)) return null;
+      return commentsFor(world, k.postId, u).some((x) => x.id === k.id)
+        ? { preview: k.text }
+        : null;
     }
     case 'profile': {
       if (target.id === u.id) return null;
@@ -83,9 +86,7 @@ export const reportTarget = (
       if (other) return { preview: `${other.firstName} ${other.lastName}` };
       // A child's profile is only visible to their team, so only the team can report it.
       const child = world.children.find((c) => c.id === target.id);
-      return child && world.teamIdsOf(u.id).includes(child.teamId)
-        ? { preview: child.firstName }
-        : null;
+      return child && canSeeChild(world, child, u) ? { preview: child.firstName } : null;
     }
   }
 };
@@ -140,20 +141,10 @@ export const myReport = (world: MockWorld, r: MockReport) => ({
   createdAt: r.createdAt,
 });
 
-/** A stored post in the shape clients read, without the visibility checks of the feed. */
-export const toPost = (world: MockWorld, p: MockPost): Post => {
-  const c = world.communities.find((x) => x.id === p.communityId)!;
-  const { authorId, communityId, opportunity, ...rest } = p;
-  void communityId;
-  const shared = {
-    ...rest,
-    author: summaryOf(world.user(authorId)!),
-    community: { id: c.id, name: c.name, kind: c.kind },
-    likedByMe: false,
-  };
-  return p.kind === 'opportunity'
-    ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
-    : { ...shared, kind: p.kind };
+/** A stored post in the shape `u` reads it, through the feed's own mapping. */
+export const toPost = (world: MockWorld, p: MockPost, u: MockUser): Post | undefined => {
+  const c = world.communities.find((x) => x.id === p.communityId);
+  return c ? world.postsIn(new Map([[c.id, c]]), u).find((x) => x.id === p.id) : undefined;
 };
 
 const removeWhere = <T>(items: T[], drop: (item: T) => boolean) => {
@@ -186,12 +177,42 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.cards, (c) => gone(c.face.athleteId));
   removeWhere(world.posts, (p) => gone(p.authorId));
   removeWhere(world.events, (e) => gone(e.hostId));
+  // Their rallies and RSVPs come off others' posts and events, with the counts.
+  for (const r of world.rallies.filter((x) => gone(x.userId))) {
+    const p = world.posts.find((x) => x.id === r.postId);
+    if (p) p.likeCount = Math.max(0, p.likeCount - 1);
+  }
+  removeWhere(world.rallies, (r) => gone(r.userId));
+  for (const r of world.rsvps.filter((x) => gone(x.userId) && x.status === 'going')) {
+    const e = world.events.find((x) => x.id === r.eventId);
+    if (e) e.goingCount = Math.max(0, e.goingCount - 1);
+  }
+  removeWhere(world.rsvps, (r) => gone(r.userId));
+  // Comments they wrote, and every comment, rally and RSVP on what they posted.
+  const postIds = new Set(world.posts.map((p) => p.id));
+  const eventIds = new Set(world.events.map((e) => e.id));
+  removeWhere(world.comments, (k) => gone(k.authorId) || !postIds.has(k.postId));
+  removeWhere(world.rallies, (r) => !postIds.has(r.postId));
+  removeWhere(world.rsvps, (r) => !eventIds.has(r.eventId));
+  removeWhere(world.notifications, (n) => gone(n.userId) || n.actorId === u.id);
+  world.notificationPrefs.delete(u.id);
+  // Card drafts, pending resumes and card history.
+  world.profiles.drafts.delete(u.id);
+  world.profiles.resumes.delete(u.id);
+  world.profiles.history.delete(u.id);
+  world.profiles.updatedAt.delete(u.id);
+  // Codes and invites they made stop working and leave the logs; their QR joins drop off too.
+  removeWhere(world.qrCodes, (q) => gone(q.createdById));
+  for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
+  removeWhere(world.coachInvites, (i) => gone(i.invitedById));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
   removeWhere(world.lists, (l) => gone(l.ownerId));
   for (const l of world.lists) {
     l.sharedWithIds = l.sharedWithIds.filter((id) => !gone(id));
     l.entries = l.entries.filter((e) => !gone(e.athleteId));
+    // A departed colleague's saves stay on the list, credited to its owner.
+    for (const e of l.entries) if (gone(e.addedById)) e.addedById = l.ownerId;
   }
 
   for (const c of [...world.communities]) {

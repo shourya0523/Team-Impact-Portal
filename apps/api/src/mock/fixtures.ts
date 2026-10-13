@@ -106,8 +106,24 @@ export const NEWCOMERS: Partial<Record<Role, MockUser>> = {
 
 /** Profiles a parent runs. No login, no card; visible only to the team and family (PRD §2). */
 export const CHILDREN = [
-  { id: id(150), parentId: USERS.lisa.id, teamId: id(201), firstName: 'Mateo', age: 9 },
-  { id: id(151), parentId: USERS.mark.id, teamId: id(201), firstName: 'Ella', age: 10 },
+  {
+    id: id(150),
+    parentId: USERS.lisa.id,
+    teamId: id(201),
+    firstName: 'Mateo',
+    age: 9,
+    bio: 'Loves goalkeeping drills and dinosaurs.',
+    photoUrl: null,
+  },
+  {
+    id: id(151),
+    parentId: USERS.mark.id,
+    teamId: id(201),
+    firstName: 'Ella',
+    age: 10,
+    bio: null,
+    photoUrl: null,
+  },
 ];
 
 export const COLLEGES: College[] = [
@@ -145,6 +161,20 @@ export const TEAMS: Omit<Team, 'memberCount'>[] = [
     // Waiting on its first coach to accept the invite.
     status: 'invited',
     createdAt: at(10),
+  },
+  {
+    // A second live sport at Tufts, so the join search's sport step has a choice.
+    id: id(210),
+    name: "Women's Basketball",
+    college: tufts,
+    sport: 'Basketball',
+    gender: 'women',
+    division: 'III',
+    color: null,
+    logoUrl: null,
+    about: null,
+    status: 'live',
+    createdAt: at(5),
   },
 ];
 
@@ -334,6 +364,7 @@ export interface MockPost {
   authorId: string;
   communityId: string;
   text: string;
+  imageUrl?: string | null;
   official: boolean;
   likeCount: number;
   commentCount: number;

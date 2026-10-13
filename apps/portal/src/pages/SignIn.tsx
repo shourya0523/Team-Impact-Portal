@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router';
 import type { Role } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { homeFor, isPortalRole, useSession } from '../session';
@@ -118,6 +118,9 @@ export const SignInPage = () => {
               </button>
             ))}
           </div>
+          <Text variant="small" color="secondary" style={{ marginTop: spacing.lg }}>
+            Recruiter at a partner company? <Link to="/sign-up">Create an account</Link>
+          </Text>
           {me && !isPortalRole(me.role) && (
             <Text role="alert" color="danger" style={{ marginTop: spacing.md }}>
               The portal is for recruiters and staff. Use the Team Impact app.

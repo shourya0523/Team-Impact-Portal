@@ -1,7 +1,11 @@
+import { activity } from './activity';
 import { communities } from './communities';
 import { join } from './join';
 import { safety } from './safety';
+import { profiles } from './profiles';
 import { session } from './session';
+import { team } from './team';
+import { signup } from './signup';
 
 export { ApiRequestError, request } from './client';
 
@@ -11,4 +15,8 @@ export const api = {
   ...communities,
   ...join,
   ...safety,
+  ...team,
+  ...signup,
+  ...activity,
+  ...profiles,
 };

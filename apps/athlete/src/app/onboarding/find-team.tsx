@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { College, TeamSummary } from '@team-impact/contracts';
 import { api } from '@/api';
 import { colors, layout, radius, spacing, typography } from '@team-impact/ui-tokens';
-import { Async, Progress } from '@/components/ui';
+import { Async, Chip, Progress } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { monogram } from '@/theme';
 import { Button, Card, Icon, TeamAvatar, Text, typeStyle } from '@/ui';
@@ -18,8 +18,23 @@ const askForTeam = (college: College) =>
     )}`,
   );
 
+/** The sports a college's teams play, in a stable order. */
+const sportsOf = (teams: TeamSummary[]) => [...new Set(teams.map((t) => t.sport))].sort();
+
+/**
+ * A college, then the sport step: when its teams play more than one sport, people pick the sport
+ * first and only that sport's teams are listed (`GET /teams?collegeId&sport`).
+ */
 function CollegeCard({ college }: { college: College }) {
-  const { state } = useApi(() => api.teams(college.id), [college.id]);
+  const all = useApi(() => api.teams(college.id), [college.id]);
+  const [sport, setSport] = useState<string | null>(null);
+  const filtered = useApi(
+    () => (sport ? api.teams(college.id, sport) : Promise.resolve<TeamSummary[]>([])),
+    [college.id, sport],
+  );
+  const sports = all.state.status === 'ready' ? sportsOf(all.state.data) : [];
+  const needsSport = sports.length > 1;
+  const state = needsSport ? filtered.state : all.state;
   return (
     <Card style={styles.college}>
       <View style={styles.collegeHead}>
@@ -30,7 +45,7 @@ function CollegeCard({ college }: { college: College }) {
         </View>
         <View style={styles.grow}>
           <Text weight="semibold">{college.name}</Text>
-          <Async state={state}>
+          <Async state={all.state}>
             {(teams) => (
               <Text variant="caption" weight="medium" color="muted">
                 {teams.length
@@ -41,57 +56,76 @@ function CollegeCard({ college }: { college: College }) {
           </Async>
         </View>
       </View>
-      <Async state={state}>
-        {(teams: TeamSummary[]) =>
-          teams.length ? (
-            teams.map((t) => (
-              <Pressable
-                key={t.id}
-                accessibilityRole="button"
-                accessibilityLabel={`Ask to join ${t.name}`}
-                onPress={() =>
-                  router.push({
-                    pathname: '/onboarding/request',
-                    params: {
-                      teamId: t.id,
-                      teamName: `${t.college.name.split(' ')[0]} ${t.name}`,
-                      division: t.division,
-                    },
-                  })
-                }
-                style={({ pressed }) => [
-                  styles.teamRow,
-                  pressed && { backgroundColor: colors.ground },
-                ]}
-              >
-                <TeamAvatar name={t.name} teamColor={t.color} />
-                <View style={styles.grow}>
-                  <Text weight="semibold">{t.name}</Text>
-                  <Text variant="caption" weight="medium" color="muted">
-                    {t.sport} · Division {t.division}
-                  </Text>
-                </View>
-                {/* Looks like a button; the whole row is the button (no nesting on web). */}
-                <View style={styles.ask}>
-                  <Text variant="small" weight="semibold" color="onBrand">
-                    Ask to join
-                  </Text>
-                </View>
-              </Pressable>
-            ))
-          ) : (
-            <View style={styles.empty}>
-              <Button
-                label="Ask us to add your team"
-                variant="secondary"
-                size="sm"
-                icon="mail"
-                onPress={() => askForTeam(college)}
+      {needsSport && (
+        <View style={styles.sports}>
+          <Text variant="small" weight="semibold" color="secondary">
+            {sport ? 'Your sport' : 'Pick your sport'}
+          </Text>
+          <View accessibilityRole="radiogroup" style={styles.chips}>
+            {sports.map((s) => (
+              <Chip
+                key={s}
+                label={s}
+                selected={sport === s}
+                onPress={() => setSport(sport === s ? null : s)}
               />
-            </View>
-          )
-        }
-      </Async>
+            ))}
+          </View>
+        </View>
+      )}
+      {needsSport && !sport ? null : (
+        <Async state={state}>
+          {(teams: TeamSummary[]) =>
+            teams.length ? (
+              teams.map((t) => (
+                <Pressable
+                  key={t.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Ask to join ${t.name}`}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/onboarding/request',
+                      params: {
+                        teamId: t.id,
+                        teamName: `${t.college.name.split(' ')[0]} ${t.name}`,
+                        division: t.division,
+                      },
+                    })
+                  }
+                  style={({ pressed }) => [
+                    styles.teamRow,
+                    pressed && { backgroundColor: colors.ground },
+                  ]}
+                >
+                  <TeamAvatar name={t.name} teamColor={t.color} />
+                  <View style={styles.grow}>
+                    <Text weight="semibold">{t.name}</Text>
+                    <Text variant="caption" weight="medium" color="muted">
+                      {t.sport} · Division {t.division}
+                    </Text>
+                  </View>
+                  {/* Looks like a button; the whole row is the button (no nesting on web). */}
+                  <View style={styles.ask}>
+                    <Text variant="small" weight="semibold" color="onBrand">
+                      Ask to join
+                    </Text>
+                  </View>
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.empty}>
+                <Button
+                  label="Ask us to add your team"
+                  variant="secondary"
+                  size="sm"
+                  icon="mail"
+                  onPress={() => askForTeam(college)}
+                />
+              </View>
+            )
+          }
+        </Async>
+      )}
     </Card>
   );
 }
@@ -205,4 +239,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   empty: { padding: spacing.md, paddingTop: spacing.none },
+  sports: {
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.md,
+  },
+  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });

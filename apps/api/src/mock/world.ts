@@ -3,12 +3,12 @@ import {
   canJoinCommunity,
   type CardFace,
   type CardWithContact,
-  type CoachInvite,
   type Community,
   type ContactSharing,
   type FeatureFlags,
   type IdentitySearchLogEntry,
   type Me,
+  type NotificationPrefs,
   type Post,
   type RecruiterList,
   type RecruiterListDetail,
@@ -16,8 +16,19 @@ import {
   type StaffCommunity,
   type TeamSummary,
 } from '@team-impact/contracts';
+import { COMMENTS, DEFAULT_PREFS } from './activity';
+import type { MockComment, MockNotification, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import type { MockCard, MockCommunity, MockList, MockUser } from './fixtures';
+import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import { createProfileState } from './profiles';
+import { newSignupState } from './signup';
+import {
+  initialCoachInvites,
+  initialQrCodes,
+  type MockChild,
+  type MockCoachInvite,
+  type MockQrCode,
+} from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
 
 /**
@@ -38,15 +49,28 @@ export class MockWorld {
   readonly joinRequests = structuredClone(fx.JOIN_REQUESTS);
   readonly teamMembers = structuredClone(fx.TEAM_MEMBERS);
   readonly identitySearches: IdentitySearchLogEntry[] = [];
-  // Staff-managed records, copied so staff tools can write to them.
-  readonly colleges = structuredClone(fx.COLLEGES);
+  /** Child profiles parents run: never users, never accounts. They leave with their parent. */
+  readonly children: MockChild[] = structuredClone(fx.CHILDREN);
+  /** Recruiters waiting on staff (`./signup.ts`). */
+  readonly signup = newSignupState();
+  // Posting, events and notifications (see activity.ts).
+  readonly comments: MockComment[] = structuredClone(COMMENTS);
+  readonly rallies: { postId: string; userId: string }[] = [];
+  readonly rsvps: MockRsvp[] = [];
+  readonly notifications: MockNotification[] = [];
+  readonly notificationPrefs = new Map<string, NotificationPrefs>();
+  /** Children, card drafts, pending resumes and card history (profiles area). */
+  readonly profiles = createProfileState(this.cards);
+  /** Coaches edit their team and a first coach makes it live, so each world has its own copy. */
   readonly teams = structuredClone(fx.TEAMS);
+  /** Team QR codes and coach invites (`./team.ts`). */
+  readonly qrCodes: MockQrCode[] = initialQrCodes();
+  readonly coachInvites: MockCoachInvite[] = initialCoachInvites();
+  // Staff-managed records (safety area), copied so staff tools can write to them.
+  readonly colleges = structuredClone(fx.COLLEGES);
   readonly companies = structuredClone(fx.COMPANIES);
-  readonly coachInvites: CoachInvite[] = [];
-  /** Profiles parents run (PRD §2); they go when the parent deletes their account. */
-  readonly children = structuredClone(fx.CHILDREN);
   readonly notes = structuredClone(fx.NOTES);
-  // Trust and safety (./safety.ts).
+  // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
   private nextId = 5000;
@@ -64,13 +88,7 @@ export class MockWorld {
     ...fx.summaryOf(u),
     email: u.email,
     teamIds: this.teamIdsOf(u.id),
-    notificationPrefs: {
-      approvals: true,
-      replies: true,
-      events: true,
-      announcements: true,
-      emailDigest: false,
-    },
+    notificationPrefs: this.notificationPrefs.get(u.id) ?? DEFAULT_PREFS,
     createdAt: u.createdAt,
   });
 
@@ -194,10 +212,13 @@ export class MockWorld {
   communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
     this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
 
-  private postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
+  /** Approved posts, plus the viewer's own while they wait for review ("Waiting for review"). */
+  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
     this.posts
       .filter((p) => readable.has(p.communityId))
-      .filter((p) => p.moderation === 'approved' || p.authorId === u.id)
+      .filter(
+        (p) => p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id),
+      )
       .filter((p) => !hiddenFor(this, u, p))
       .sort(
         (a, b) =>
@@ -214,7 +235,11 @@ export class MockWorld {
           ...rest,
           author: fx.summaryOf(this.user(p.authorId)!),
           community: { id: c.id, name: c.name, kind: c.kind },
-          likedByMe: false,
+          imageUrl: p.imageUrl ?? null,
+          commentCount: this.comments.filter(
+            (k) => k.postId === p.id && k.moderation === 'approved',
+          ).length,
+          likedByMe: this.rallies.some((r) => r.postId === p.id && r.userId === u.id),
         };
         return p.kind === 'opportunity'
           ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
@@ -290,21 +315,28 @@ export class MockWorld {
     return null;
   };
 
+  /** Approved events in `u`'s communities, plus their own while they wait for review. */
   eventsFor = (u: MockUser): CalendarEvent[] => {
     const readable = this.homeCommunities(u);
     return this.events
-      .filter((e) => readable.has(e.communityId) && e.moderation === 'approved')
+      .filter((e) => readable.has(e.communityId))
+      .filter(
+        (e) => e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id),
+      )
       .filter((e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId }))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
-      .map(({ hostId, communityId, ...e }) => {
-        const c = readable.get(communityId)!;
-        return {
-          ...e,
-          host: fx.summaryOf(this.user(hostId)!),
-          community: { id: c.id, name: c.name, kind: c.kind },
-          myRsvp: null,
-        };
-      });
+      .map((e) => this.calendarEvent(e, readable.get(e.communityId)!, u));
+  };
+
+  calendarEvent = (e: MockEvent, c: MockCommunity, u: MockUser): CalendarEvent => {
+    const { hostId, communityId, ...rest } = e;
+    void communityId;
+    return {
+      ...rest,
+      host: fx.summaryOf(this.user(hostId)!),
+      community: { id: c.id, name: c.name, kind: c.kind },
+      myRsvp: this.rsvps.find((r) => r.eventId === e.id && r.userId === u.id)?.status ?? null,
+    };
   };
 
   // Cards ----------------------------------------------------------------------------------------

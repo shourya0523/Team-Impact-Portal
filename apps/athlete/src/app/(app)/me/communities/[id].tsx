@@ -118,6 +118,15 @@ export default function CommunityDetail() {
   const [override, setOverride] = useState<Community | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const leave = () =>
+    api.leaveCommunity(id).then(
+      (x) => {
+        setOverride(x);
+        posts.reload();
+      },
+      (e: Error) => setError(e.message),
+    );
+
   const join = () =>
     api.joinCommunity(id).then(
       (x) => {
@@ -202,7 +211,13 @@ export default function CommunityDetail() {
                     {x.myMembership ? ` · joined ${shortDate(x.myMembership.joinedAt)}` : ''}
                   </Text>
                   {canPost ? (
-                    <Button label="Post" size="sm" onPress={() => router.push('/home/compose')} />
+                    <Button
+                      label="Post"
+                      size="sm"
+                      onPress={() =>
+                        router.push({ pathname: '/home/compose', params: { communityId: x.id } })
+                      }
+                    />
                   ) : (
                     !x.myMembership &&
                     role &&
@@ -226,6 +241,10 @@ export default function CommunityDetail() {
                   )}
                 </View>
                 {error && <ErrorText>{error}</ErrorText>}
+
+                {userMade && x.myMembership && !isCreator && (
+                  <Button label="Leave community" variant="secondary" size="sm" onPress={leave} />
+                )}
 
                 {x.kind === 'medical' && x.myMembership && (
                   <Card style={[styles.note, styles.noteTint]}>

@@ -1,6 +1,7 @@
 import { lists } from './lists';
 import { recruiter } from './recruiter';
 import { session } from './session';
+import { signup, staffSignup } from './signup';
 import { staff } from './staff';
 import { staffAdmin } from './staff-admin';
 
@@ -11,5 +12,7 @@ export const api = {
   ...session,
   ...recruiter,
   ...lists,
-  staff: { ...staff, ...staffAdmin },
+
+  ...signup,
+  staff: { ...staff, ...staffSignup, ...staffAdmin },
 };

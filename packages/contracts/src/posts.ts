@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import { CalendarDate, Id, Timestamp } from './common';
-import { CommunitySummary } from './communities';
+import { type Community, CommunitySummary, type CommunityKind } from './communities';
 import { ModerationStatus } from './moderation';
+import type { Role } from './roles';
 import { UserSummary } from './users';
 
 /**
@@ -15,10 +16,15 @@ const postBase = {
   author: UserSummary,
   community: CommunitySummary,
   text: z.string(),
+  /** An optional photo, already uploaded (http(s) only). */
+  imageUrl: z.url().nullable(),
   /** Posted by Team IMPACT staff. Official posts can't be blocked. */
   official: z.boolean(),
+  /** Rallies, the platform's reaction (the app labels it "Rally"). */
   likeCount: z.number().int().nonnegative(),
+  /** Approved comments only. */
   commentCount: z.number().int().nonnegative(),
+  /** Whether the viewer rallied this post. */
   likedByMe: z.boolean(),
   moderation: ModerationStatus,
   createdAt: Timestamp,
@@ -43,8 +49,33 @@ export type Post = z.infer<typeof Post>;
 export const CreatePostRequest = z.object({
   communityId: Id,
   text: z.string().trim().min(1, 'Write something first.').max(2000),
+  /** http(s) only, so a link can't run script. */
+  imageUrl: z.httpUrl().optional(),
 });
 export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
+
+/** Body of `POST /communities/:id/posts`: the community is in the path. */
+export const NewPostRequest = CreatePostRequest.omit({ communityId: true });
+export type NewPostRequest = z.infer<typeof NewPostRequest>;
+
+/**
+ * Whether `role` may post into a community it sees (PRD §5 "Who can do what"): staff, coaches,
+ * athletes and alumni post in any community they belong to; teens only in their team's; parents
+ * and recruiters never (parents comment only). Staff posts in Team Impact's are announcements.
+ */
+export const canPostIn = (role: Role, community: Pick<Community, 'kind' | 'myMembership'>) => {
+  if (role === 'parent' || role === 'recruiter') return false;
+  if (role === 'teen' && community.kind !== 'team') return false;
+  return community.myMembership !== null;
+};
+
+/**
+ * Everyone but recruiters comments on posts they can read. Teens comment only inside their team
+ * community: a comment shows their name, and a teen's profile never appears in a community
+ * outside their team (CLAUDE.md hard rules).
+ */
+export const canCommentIn = (role: Role, kind: CommunityKind) =>
+  role !== 'recruiter' && (role !== 'teen' || kind === 'team');
 
 /** Staff only, into a team community or Team Impact's. The API checks the kind. */
 export const CreateAnnouncementRequest = z.object({

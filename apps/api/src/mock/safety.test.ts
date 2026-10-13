@@ -398,3 +398,69 @@ describe('recruiter lists', () => {
     );
   });
 });
+
+describe('safety across areas', () => {
+  const commentIds = (body: { id: string }[]) => body.map((k) => k.id);
+
+  it('reports a comment, and hides it for the reporter only', async () => {
+    const w = await world();
+    const athlete = await w.as('athlete');
+    const res = await athlete.call('POST', '/reports', {
+      target: { kind: 'comment', id: id(1306) },
+      reason: 'spam',
+    });
+    expect(res.status).toBe(201);
+    expect(commentIds((await athlete.get(`/posts/${NOAH_POST}/comments`)).body)).not.toContain(
+      id(1306),
+    );
+    const parent = await w.as('parent');
+    expect(commentIds((await parent.get(`/posts/${NOAH_POST}/comments`)).body)).toContain(id(1306));
+    const staff = await w.as('staff');
+    const tickets = (await staff.get('/staff/moderation/tickets')).body;
+    expect(tickets.some((t: { target: { id: string } }) => t.target.id === id(1306))).toBe(true);
+  });
+
+  it('hides a blocked person’s comments', async () => {
+    const w = await world();
+    const athlete = await w.as('athlete');
+    expect(commentIds((await athlete.get(`/posts/${COACH_POST}/comments`)).body)).toContain(
+      id(1301),
+    );
+    await athlete.call('POST', `/blocks/${USERS.lisa.id}`);
+    expect(commentIds((await athlete.get(`/posts/${COACH_POST}/comments`)).body)).not.toContain(
+      id(1301),
+    );
+  });
+
+  it('takes a deleted parent’s comments with them', async () => {
+    const w = await world();
+    const coach = await w.as('coach');
+    const parent = await w.as('parent');
+    expect((await parent.call('DELETE', '/me')).status).toBe(204);
+    expect(commentIds((await coach.get(`/posts/${COACH_POST}/comments`)).body)).not.toContain(
+      id(1301),
+    );
+    expect((await coach.get('/notifications')).status).toBe(200);
+  });
+
+  it('puts staff coach invites in the team’s own invite store', async () => {
+    const w = await world();
+    const staff = await w.as('staff');
+    const team = await staff.call('POST', '/staff/teams', {
+      collegeId: TUFTS,
+      sport: 'Rowing',
+      gender: 'women',
+      name: "Women's Rowing",
+      division: 'III',
+      firstCoachEmail: 'row.coach@tufts.edu',
+    });
+    expect(team.status).toBe(201);
+    expect(team.body.status).toBe('invited');
+    const pending = (await staff.get(`/teams/${team.body.id}/coach-invites`)).body;
+    expect(pending.map((i: { email: string }) => i.email)).toEqual(['row.coach@tufts.edu']);
+    const again = await staff.call('POST', `/staff/teams/${team.body.id}/coach-invites`, {
+      email: 'row.coach@tufts.edu',
+    });
+    expect(again.status).toBe(409);
+  });
+});

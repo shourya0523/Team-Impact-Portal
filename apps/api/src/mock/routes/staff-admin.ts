@@ -20,10 +20,10 @@ import {
 import type { ZodApp } from '../../zod';
 import { summaryOf, type MockPost } from '../fixtures';
 import { toPost } from '../safety';
+import { coachInviteView, createCoachInvite } from '../team';
 import type { MockUser, MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
-const DAY = 24 * 60 * 60 * 1000;
 const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /**
@@ -125,20 +125,14 @@ export const registerStaffAdminRoutes = (
   const coachesOf = (teamId: string) =>
     world.teamMembers.filter((m) => m.teamId === teamId && world.user(m.userId)?.role === 'coach');
 
+  /**
+   * Coach invites share the team area's store (`../team.ts`), so `/invites/:token` accepts the ones
+   * staff send too; the first coach accepting makes an `invited` team live.
+   */
   const invite = (teamId: string, email: string, by: MockUser) => {
-    const now = new Date();
-    const created = {
-      id: world.newId(),
-      teamId,
-      email,
-      invitedBy: summaryOf(by),
-      expiresAt: new Date(now.getTime() + 7 * DAY).toISOString(),
-      acceptedAt: null,
-      revokedAt: null,
-      createdAt: now.toISOString(),
-    };
-    world.coachInvites.push(created);
-    return created;
+    const result = createCoachInvite(world, by, teamId, email);
+    if ('error' in result) throw httpError(result.status, result.error);
+    return coachInviteView(world, result.invite);
   };
 
   app.post(
@@ -242,7 +236,8 @@ export const registerStaffAdminRoutes = (
         })),
         invites: world.coachInvites
           .filter((i) => i.teamId === team.id)
-          .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+          .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+          .map((i) => coachInviteView(world, i)),
       };
     },
   );
@@ -254,20 +249,6 @@ export const registerStaffAdminRoutes = (
       const u = staffOnly(request);
       const team = findTeam(request.params.id);
       if (team.status === 'archived') throw httpError(400, 'Restore the team first');
-      const now = new Date().toISOString();
-      const pending = world.coachInvites.some(
-        (i) =>
-          i.teamId === team.id &&
-          i.email === request.body.email &&
-          !i.acceptedAt &&
-          !i.revokedAt &&
-          i.expiresAt > now,
-      );
-      if (pending) throw httpError(409, 'That coach already has a pending invite');
-      const already = coachesOf(team.id).some(
-        (m) => world.user(m.userId)?.email === request.body.email,
-      );
-      if (already) throw httpError(409, 'Already a coach on this team');
       return reply.status(201).send(invite(team.id, request.body.email, u));
     },
   );
@@ -281,7 +262,7 @@ export const registerStaffAdminRoutes = (
       if (!i) throw httpError(404, 'No such invite');
       if (i.acceptedAt) throw httpError(400, 'Already accepted');
       i.revokedAt ??= new Date().toISOString();
-      return i;
+      return coachInviteView(world, i);
     },
   );
 
@@ -400,12 +381,11 @@ export const registerStaffAdminRoutes = (
     '/staff/announcements',
     { schema: { response: { 200: z.array(Post) } } },
     async (request) => {
-      staffOnly(request);
+      const u = staffOnly(request);
       return world.posts
         .filter((p) => p.kind === 'announcement')
-        .filter((p) => world.communities.some((c) => c.id === p.communityId))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .map((p) => toPost(world, p));
+        .flatMap((p) => toPost(world, p, u) ?? []);
     },
   );
 
@@ -432,7 +412,7 @@ export const registerStaffAdminRoutes = (
         createdAt: new Date().toISOString(),
       };
       world.posts.push(post);
-      return reply.status(201).send(toPost(world, post));
+      return reply.status(201).send(toPost(world, post, u)!);
     },
   );
 };

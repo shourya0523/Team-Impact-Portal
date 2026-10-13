@@ -4,6 +4,7 @@ import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Community, Post } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, IconButton, Screen } from '@/components/ui';
@@ -83,24 +84,17 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
   );
 }
 
-function Rally({ count }: { count: number }) {
-  // Local until the like endpoint lands; the count moves so the control feels real.
-  const [on, setOn] = useState(false);
+/** Opens the post with its comments. */
+function CommentsButton({ post }: { post: Post }) {
   return (
     <Pressable
-      onPress={() => setOn((v) => !v)}
+      onPress={() => router.push({ pathname: '/home/posts/[id]', params: { id: post.id } })}
       accessibilityRole="button"
-      accessibilityState={{ selected: on }}
-      style={[styles.action, on ? styles.rallied : null]}
+      style={styles.action}
     >
-      <Icon
-        name="heart"
-        size={16}
-        color={on ? colors.actionPressed : colors.ink}
-        fill={on ? colors.actionPressed : 'none'}
-      />
-      <Text variant="small" weight="semibold" color={on ? 'action' : 'ink'}>
-        Rally · {count + (on ? 1 : 0)}
+      <Icon name="comment" size={16} color={colors.ink} />
+      <Text variant="small" weight="semibold">
+        {plural(post.commentCount, 'comment')}
       </Text>
     </Pressable>
   );
@@ -132,7 +126,8 @@ function Announcement({ post }: { post: Post }) {
         {post.text}
       </Text>
       <View style={styles.actions}>
-        <Rally count={post.likeCount} />
+        <Rally post={post} />
+        <CommentsButton post={post} />
       </View>
     </View>
   );
@@ -225,13 +220,8 @@ function PostCard({ post, onChanged }: { post: Post; onChanged?: () => void }) {
         <Text>{post.text}</Text>
       )}
       <View style={styles.actions}>
-        <Rally count={post.likeCount} />
-        <View style={styles.action}>
-          <Icon name="comment" size={16} color={colors.ink} />
-          <Text variant="small" weight="semibold">
-            {plural(post.commentCount, 'comment')}
-          </Text>
-        </View>
+        <Rally post={post} />
+        <CommentsButton post={post} />
       </View>
     </Card>
   );
@@ -428,7 +418,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.xs,
   },
-  rallied: { backgroundColor: colors.actionTint, borderColor: colors.actionTint },
   fab: {
     position: 'absolute',
     right: spacing.md,

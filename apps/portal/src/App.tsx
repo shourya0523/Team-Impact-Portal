@@ -9,6 +9,7 @@ import { SearchPage } from './pages/recruiter/Search';
 import { SignInPage } from './pages/SignIn';
 import { AnnouncementsPage } from './pages/staff/Announcements';
 import { CollegesPage } from './pages/staff/Colleges';
+import { SignUpPage } from './pages/SignUp';
 import { CommunitiesPage } from './pages/staff/Communities';
 import { CompaniesPage } from './pages/staff/Companies';
 import { ModerationPage } from './pages/staff/Moderation';
@@ -40,6 +41,7 @@ export const AppRoutes = () => (
   <Routes>
     <Route path="/" element={<Home />} />
     <Route path="/sign-in" element={<SignInPage />} />
+    <Route path="/sign-up" element={<SignUpPage />} />
     <Route
       element={
         <Guard allow={['recruiter', 'staff']}>
