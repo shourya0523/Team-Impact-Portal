@@ -22,6 +22,9 @@ export interface MockChild {
   firstName: string;
   lastInitial?: string;
   age: number;
+  /** The parent edits these on the child's profile. */
+  bio: string | null;
+  photoUrl: string | null;
 }
 
 export interface MockQrCode {
@@ -231,6 +234,8 @@ export const decideJoinRequest = (
       firstName: child.firstName,
       lastInitial: child.lastInitial,
       age: child.age,
+      bio: null,
+      photoUrl: null,
     });
   }
 };

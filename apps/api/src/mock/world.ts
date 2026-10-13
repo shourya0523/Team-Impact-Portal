@@ -21,6 +21,7 @@ import type { MockComment, MockNotification, MockRsvp } from './activity';
 import * as fx from './fixtures';
 import { type MockChild, newSignupState } from './signup';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import { createProfileState } from './profiles';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -50,6 +51,8 @@ export class MockWorld {
   readonly rsvps: MockRsvp[] = [];
   readonly notifications: MockNotification[] = [];
   readonly notificationPrefs = new Map<string, NotificationPrefs>();
+  /** Children, card drafts, pending resumes and card history (profiles area). */
+  readonly profiles = createProfileState(this.cards);
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
