@@ -15,7 +15,7 @@ export const AthleteSearchQuery = PageQuery.extend({
   major: z.string().trim().min(1).optional(),
   classYear: z.coerce.number<number>().pipe(ClassYear).optional(),
   division: Division.optional(),
-  /** Matched against the card's experience text. */
+  /** Matched against the role and organisation of the card's experience entries. */
   experience: z.string().trim().min(1).optional(),
   /**
    * Identity search: an official interest community. Behind the `identitySearch` flag, matches

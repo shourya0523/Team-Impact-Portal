@@ -27,7 +27,7 @@ const myCard: MyCard = {
   hometown: null,
   city: null,
   region: null,
-  experience: null,
+  experience: [],
   skills: [],
   lookingFor: null,
   contact: { email: 'maya@tufts.edu', phone: '(401) 555-0119', linkedinUrl: null },

@@ -60,7 +60,7 @@ export const registerRecruiterRoutes = (
             has(f.major, q.major) &&
             (!q.classYear || f.classYear === q.classYear) &&
             (!q.division || f.team?.division === q.division) &&
-            has(f.experience, q.experience),
+            has(f.experience.map((e) => `${e.role} ${e.organization}`).join(' '), q.experience),
         );
       return paginate(faces, q);
     },

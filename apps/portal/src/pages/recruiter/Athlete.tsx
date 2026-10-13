@@ -174,20 +174,6 @@ export const AthletePage = () => {
                     </Text>
                   )}
                 </Card>
-                <Card style={{ padding: spacing.lg }}>
-                  <Text as="h2" variant="display" size="xs" color="brand">
-                    Card
-                  </Text>
-                  <dl style={{ margin: 0 }}>
-                    <Row label="Major" value={card.major} />
-                    <Row label="Class of" value={String(card.classYear)} />
-                    <Row label="Position" value={card.position} />
-                    <Row label="Hometown" value={card.hometown} />
-                    <Row label="Experience" value={card.experience} />
-                    <Row label="Looking for" value={card.lookingFor} />
-                    <Row label="Skills" value={card.skills.join(', ')} />
-                  </dl>
-                </Card>
               </div>
             </div>
           </>

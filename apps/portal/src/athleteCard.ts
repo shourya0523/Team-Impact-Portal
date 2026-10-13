@@ -8,10 +8,8 @@ export const regionName = (region: CardFace['region']) => (region ? REGION_NAMES
 /**
  * Contract card → the shared card component. Only what the viewer was sent goes in: contacts come
  * from the API's `SharedContact`, which already holds just the channels shared with this viewer.
- *
- * The contract keeps experience as free text, while the component wants role / organisation /
- * period rows, so each line here may be cut short on the card; the full text shows beside it.
- * Open question for the card editor ticket.
+ * Experience entries (up to 3 role / organisation / period rows, TI-150) fill the card's
+ * experience rows directly; what the athlete is looking for goes on the back.
  */
 export const toCardData = (card: CardFace, contact?: SharedContact): AthleteCardData => ({
   id: card.id,
@@ -28,19 +26,12 @@ export const toCardData = (card: CardFace, contact?: SharedContact): AthleteCard
       ...(card.team ? [{ label: 'Div', value: card.team.division }] : []),
       ...(card.region ? [{ label: 'Region', value: regionName(card.region)! }] : []),
     ],
-    experience: [
-      ...(card.experience
-        ? [{ role: 'Experience', organization: card.experience, period: '' }]
-        : []),
-      ...(card.lookingFor
-        ? [{ role: 'Looking for', organization: card.lookingFor, period: '' }]
-        : []),
-    ],
+    experience: card.experience,
     skills: card.skills,
   },
   personal: {
     hometown: card.hometown ?? undefined,
-    bio: undefined,
+    bio: card.lookingFor ? `Looking for: ${card.lookingFor}` : undefined,
     facts: [
       { label: 'Major', value: card.major },
       { label: 'Class of', value: String(card.classYear) },

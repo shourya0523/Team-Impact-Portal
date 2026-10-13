@@ -7,6 +7,21 @@ export const REGIONS = ['northeast', 'midwest', 'south', 'west'] as const;
 export const Region = z.enum(REGIONS);
 export type Region = z.infer<typeof Region>;
 
+/** The card has room for this many experience rows (PRD §4, TI-150). */
+export const MAX_EXPERIENCE_ENTRIES = 3;
+
+/**
+ * One experience row on the card: "Analytics Intern · Lumen Logistics · Summer 2026". Plain text
+ * only. The role is required (so an empty row is rejected); organisation and period can be blank,
+ * e.g. "Team captain" with no organisation.
+ */
+export const ExperienceEntry = z.strictObject({
+  role: z.string().trim().min(1, 'Add the role.').max(60),
+  organization: z.string().trim().max(80),
+  period: z.string().trim().max(30),
+});
+export type ExperienceEntry = z.infer<typeof ExperienceEntry>;
+
 /**
  * What the athlete writes on their Baseball Card, which replaces the resume. Only athletes,
  * current or alumni, have one. No health details, addresses or birthdates.
@@ -25,7 +40,10 @@ const cardFieldShape = {
   hometown: z.string().trim().max(80).nullable(),
   city: z.string().trim().max(80).nullable(),
   region: Region.nullable(),
-  experience: z.string().trim().max(1000).nullable(),
+  /** Up to three rows, in the order the card shows them. */
+  experience: z
+    .array(ExperienceEntry)
+    .max(MAX_EXPERIENCE_ENTRIES, `Up to ${MAX_EXPERIENCE_ENTRIES} experience entries.`),
   skills: z.array(z.string().trim().min(1).max(40)).max(20),
   lookingFor: z.string().trim().max(300).nullable(),
 };
@@ -116,7 +134,8 @@ export const RESUME_UPLOAD_LIMITS = {
 } as const;
 
 /**
- * Card fields read from a resume. This is the fixed schema extractor output is validated against.
+ * Card fields read from a resume. This is the fixed schema extractor output is validated against;
+ * experience comes out as the same entries the card uses, which the athlete accepts one by one.
  * Extracted text is data, never instructions; it lands only here, and nothing from it is shown to
  * anyone until the athlete confirms. If extraction fails the athlete types the fields instead.
  */

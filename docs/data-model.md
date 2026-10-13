@@ -179,7 +179,7 @@ erDiagram
         text region "indexed filter"
         text city "indexed filter"
         text division "indexed filter"
-        jsonb payload "everything else, incl. experience"
+        jsonb payload "everything else, incl. experience: up to 3 role/organization/period entries"
     }
     INGESTED_RECORDS {
         uuid id PK

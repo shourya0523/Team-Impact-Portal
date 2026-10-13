@@ -250,12 +250,14 @@ const FrontFace = ({ card, palette, s }: FaceProps) => (
 
       <View style={s.section}>
         <Text style={[s.eyebrow, { color: c.yellow }]}>Experience</Text>
-        {card.experience.map((entry) => (
-          <View key={`${entry.role}-${entry.organization}`} style={s.entry}>
+        {card.experience.map((entry, i) => (
+          <View key={`${i}-${entry.role}`} style={s.entry}>
             <View style={s.entryBar} />
             <Text style={[s.entryTitle, s.onDark, s.flex]} numberOfLines={1}>
               {entry.role}
-              <Text style={[s.entryMeta, s.onDarkMuted]}> · {entry.organization}</Text>
+              {entry.organization ? (
+                <Text style={[s.entryMeta, s.onDarkMuted]}> · {entry.organization}</Text>
+              ) : null}
             </Text>
             <Text style={[s.entryMeta, s.onDarkFaint]} numberOfLines={1}>
               {entry.period}

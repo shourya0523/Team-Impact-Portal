@@ -1,4 +1,4 @@
-import type { CardFace, CardFields } from '@team-impact/contracts';
+import type { CardFace, CardFields, ExperienceEntry } from '@team-impact/contracts';
 
 /** Shared or own contact details; null and missing both mean "not shown". */
 type Contact = { email?: string | null; phone?: string | null; linkedinUrl?: string | null };
@@ -6,8 +6,8 @@ import type { AthleteCardData } from '@team-impact/ui-primitives/native';
 
 /**
  * A card face from the API as the shared card primitive's input. Contact details go on the back
- * only when the caller passes them (never for teen viewers or exports). Experience is still a
- * string in the contracts, so each `;`-separated part becomes one entry.
+ * only when the caller passes them (never for teen viewers or exports). Experience entries go
+ * straight onto the card's rows.
  */
 export const toCardData = (face: CardFace, contact?: Contact): AthleteCardData => ({
   id: face.athleteId,
@@ -23,11 +23,7 @@ export const toCardData = (face: CardFace, contact?: Contact): AthleteCardData =
       { label: 'Class', value: String(face.classYear) },
       { label: 'Major', value: face.major },
     ],
-    experience: (face.experience ?? '')
-      .split(';')
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((role) => ({ role, organization: '', period: '' })),
+    experience: face.experience,
     skills: face.skills,
   },
   personal: {
@@ -59,10 +55,19 @@ export const FIELD_LABEL: Record<keyof CardFields, string> = {
   lookingFor: 'Looking for',
 };
 
+/** "Treasurer · Investment club · 2025 – Now", leaving out blank parts. */
+export const entryText = (e: ExperienceEntry) =>
+  [e.role, e.organization, e.period].filter((part) => part.trim() !== '').join(' · ');
+
+const isEntry = (v: unknown): v is ExperienceEntry =>
+  typeof v === 'object' && v !== null && 'role' in v;
+
 /** A field's value as plain text, for review lists. */
-export const fieldText = (value: unknown) =>
+export const fieldText = (value: unknown): string =>
   Array.isArray(value)
-    ? value.join(', ')
+    ? value
+        .map((v) => (isEntry(v) ? entryText(v) : String(v)))
+        .join(isEntry(value[0]) ? '; ' : ', ')
     : value === null || value === undefined
       ? ''
       : String(value);

@@ -30,6 +30,27 @@ describe('prepareCard', () => {
     expect(card.jerseyNumber).toBe('#8');
   });
 
+  it('shows up to 3 experience entries in order, dropping blank rows', () => {
+    const row = (role: string, organization = 'Org', period = '2025') => ({
+      role,
+      organization,
+      period,
+    });
+    const card = prepareCard({
+      ...sampleAthlete,
+      resume: {
+        ...sampleAthlete.resume,
+        experience: [row('  '), row(' Captain ', ' '), row('Intern'), row('Tutor'), row('Fourth')],
+      },
+    });
+    expect(card.experience).toEqual([
+      { role: 'Captain', organization: '', period: '2025' },
+      row('Intern'),
+      row('Tutor'),
+    ]);
+    expect(prepareCard(sampleAthlete).experience).toHaveLength(CARD_LIMITS.experience);
+  });
+
   it('shows no contact block when contact is omitted (teen viewers)', () => {
     const card = prepareCard({
       ...sampleAthlete,
