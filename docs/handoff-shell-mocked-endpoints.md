@@ -54,6 +54,7 @@ Flags: `FLAG_IDENTITY_SEARCH` and `FLAG_MEDICAL_COMMUNITIES` (both default on). 
 - Mocks live in the API app (`apps/api`), as Fastify routes behind a `MOCK_API=1` switch, returning fixture data that is parsed through the `packages/contracts` schemas before it is sent, so a contract change breaks the mocks at build time. No database needed. If you find a better fit (for example MSW in the clients), say why before switching.
 - One fixture set: one Tufts team with a coach, athletes, two parents with a child each, a teen, a recruiter company, an alumnus, and one example of each community kind. Mirror the seed in `apps/api/src/db/seed/`.
 - Mock sign-in lets you pick a role, so every role's navigation can be checked quickly.
+- Card experience is up to 3 entries of `{ role, organization, period }` (matches `ResumeEntry` in `packages/ui-primitives`), not a free-text string. The contracts still have `experience` as a string until the ticket "Card experience as structured entries (contract and migration)" lands, so build card fixtures with the entry shape and expect the contract to change.
 - Respect the hard rules in CLAUDE.md in the fixtures too: no child or teen data in recruiter views or search, no health data, no contact details for teens, medical membership never in a profile or search response.
 - Use ticket names, not numbers, when writing to the lead. Ticket bodies are Goal / Acceptance criteria / Links only.
 
