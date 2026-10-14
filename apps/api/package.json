@@ -12,6 +12,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "db:rollback": "tsx --env-file-if-exists=../../.env src/db/rollback.ts",
+    "db:seed": "tsx --env-file-if-exists=../../.env src/db/seed/index.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -24,6 +26,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.6.0",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
