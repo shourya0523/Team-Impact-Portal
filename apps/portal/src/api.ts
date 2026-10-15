@@ -1,4 +1,4 @@
-import type { ApiError, HealthResponse } from '@team-impact/contracts';
+import type { ApiError, HealthResponse, TrackEventRequest } from '@team-impact/contracts';
 
 /** Any non-2xx response. `body` is the API's shared error shape, so forms can show `issues` inline. */
 export class ApiRequestError extends Error {
@@ -28,4 +28,12 @@ export const request = async <T>(path: string, init: RequestInit = {}): Promise<
 
 export const api = {
   health: () => request<HealthResponse>('/health'),
+};
+
+/**
+ * Logs a client-side event from `TRACKED_EVENTS` in contracts; the API logs the rest itself.
+ * Fire and forget: a failed log never gets in the way of the screen.
+ */
+export const track = (event: TrackEventRequest): void => {
+  request<void>('/events', { method: 'POST', body: JSON.stringify(event) }).catch(() => undefined);
 };

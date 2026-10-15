@@ -1,4 +1,4 @@
-import type { ApiError, HealthResponse } from '@team-impact/contracts';
+import type { ApiError, HealthResponse, TrackEventRequest } from '@team-impact/contracts';
 
 /** Set per build; the default reaches a local API from web and the iOS simulator. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -28,4 +28,12 @@ export const request = async <T>(path: string, init: RequestInit = {}): Promise<
 
 export const api = {
   health: () => request<HealthResponse>('/health'),
+};
+
+/**
+ * Logs a client-side event from `TRACKED_EVENTS` in contracts; the API logs the rest itself.
+ * Fire and forget: a failed log never gets in the way of the screen.
+ */
+export const track = (event: TrackEventRequest): void => {
+  request<void>('/events', { method: 'POST', body: JSON.stringify(event) }).catch(() => undefined);
 };

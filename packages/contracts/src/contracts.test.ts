@@ -17,6 +17,7 @@ import {
   CreatePostRequest,
   CreateReportRequest,
   CreateTeamRequest,
+  Email,
   emailOnDomain,
   FindAlumniQuery,
   hasBaseballCard,
@@ -24,6 +25,7 @@ import {
   MergeCollegeRequest,
   type MyCard,
   PageQuery,
+  PersonName,
   Phone,
   Post,
   RecruiterSignupRequest,
@@ -31,6 +33,9 @@ import {
   SignupRequest,
   StaffUpdateTeamRequest,
   TeamQrCodeHistoryEntry,
+  TRACKED_EVENT_NAMES,
+  TRACKED_EVENTS,
+  TrackEventRequest,
   UpdateAlumniProfileRequest,
   UpdateCardVisibilityRequest,
   UpdateListRequest,
@@ -427,5 +432,62 @@ describe('common', () => {
     expect(PageQuery.parse({ limit: '50' }).limit).toBe(50);
     expect(PageQuery.parse({}).limit).toBe(20);
     expect(accepts(PageQuery, { limit: '500' })).toBe(false);
+  });
+});
+
+/** True when a schema only admits ids, enums, numbers and flags, so free text can't get in. */
+const isStructured = (schema: ZodType): boolean => {
+  const def = schema._zod.def as { type: string; format?: string };
+  switch (def.type) {
+    case 'string':
+      return def.format === 'uuid';
+    case 'enum':
+    case 'literal':
+    case 'number':
+    case 'boolean':
+      return true;
+    case 'array':
+      return isStructured((def as unknown as { element: ZodType }).element);
+    case 'optional':
+    case 'nullable':
+      return isStructured((def as unknown as { innerType: ZodType }).innerType);
+    default:
+      return false;
+  }
+};
+
+describe('tracked events', () => {
+  it('carries ids, enums, counts and flags only, never names, emails or free text', () => {
+    expect(isStructured(PersonName)).toBe(false);
+    expect(isStructured(Email)).toBe(false);
+    for (const name of TRACKED_EVENT_NAMES) {
+      for (const [key, schema] of Object.entries(TRACKED_EVENTS[name].properties.shape)) {
+        expect(isStructured(schema), `${name}.${key}`).toBe(true);
+      }
+    }
+  });
+
+  it('refuses properties an event doesn’t define', () => {
+    const published = { cardId: ID, season: 2026 };
+    expect(accepts(TRACKED_EVENTS.card_published.properties, published)).toBe(true);
+    const withName = { ...published, firstName: 'Maya' };
+    expect(accepts(TRACKED_EVENTS.card_published.properties, withName)).toBe(false);
+  });
+
+  it('lets clients send only client events, each about someone', () => {
+    const view = { name: 'card_viewed', properties: { cardId: ID }, subjectId: ID };
+    expect(accepts(TrackEventRequest, view)).toBe(true);
+    expect(accepts(TrackEventRequest, { ...view, subjectId: undefined })).toBe(false);
+    const search = {
+      name: 'identity_search_run',
+      properties: { searchId: ID, groupIds: [ID], filters: [], resultCount: 3 },
+    };
+    expect(TRACKED_EVENTS.identity_search_run.properties.parse(search.properties)).toBeTruthy();
+    expect(accepts(TrackEventRequest, search)).toBe(false);
+
+    const clientNames = TRACKED_EVENT_NAMES.filter(
+      (name) => TRACKED_EVENTS[name].source === 'client',
+    );
+    expect(TrackEventRequest.options.map((option) => option.shape.name.value)).toEqual(clientNames);
   });
 });

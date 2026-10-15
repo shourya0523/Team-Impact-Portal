@@ -5,6 +5,8 @@ const EnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   DATABASE_URL: z.url(),
   SESSION_SECRET: z.string().min(32),
+  /** How long product events are kept in events_log before the daily prune deletes them. */
+  EVENTS_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
   CORS_ORIGINS: z
     .string()
     .default('http://localhost:5173')
