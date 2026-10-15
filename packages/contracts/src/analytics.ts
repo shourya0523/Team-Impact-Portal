@@ -88,13 +88,54 @@ export const TRACKED_EVENTS = {
   'coach.invited': {
     source: 'api',
     subject: false,
+    properties: z.strictObject({
+      teamId: Id,
+      inviteId: Id,
+      /** Set when staff resent an invite: this one replaces it (a pending one is revoked). */
+      replacesInviteId: Id.optional(),
+    }),
+  },
+  /** Staff or one of the team's coaches withdrew an invite before it was accepted. */
+  'coach.invite_revoked': {
+    source: 'api',
+    subject: false,
     properties: z.strictObject({ teamId: Id, inviteId: Id }),
   },
-  /** The subject is the new coach: through an accepted invite, or added by another coach. */
+  /**
+   * The subject is the new coach, through an accepted invite or added by another coach. The actor
+   * is whoever added them (for an invite, whoever sent it): PRD §3, "who added whom".
+   */
   'coach.added': {
     source: 'api',
     subject: true,
-    properties: z.strictObject({ teamId: Id, via: z.enum(['invite', 'coach']) }),
+    properties: z.strictObject({
+      teamId: Id,
+      via: z.enum(['invite', 'coach']),
+      /** The accepted invite, linking this to its `coach.invited`. */
+      inviteId: Id.optional(),
+    }),
+  },
+  /** Staff or a coach took a coach (possibly themselves) off the team. The subject is that coach. */
+  'coach.removed': {
+    source: 'api',
+    subject: true,
+    properties: z.strictObject({ teamId: Id }),
+  },
+  /** Staff archived a team, with what that closed: its pending join requests and live QR codes. */
+  'team.archived': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({
+      teamId: Id,
+      declinedRequestCount: count,
+      revokedCodeCount: count,
+    }),
+  },
+  /** Staff restored an archived team. Its old QR codes stay revoked. */
+  'team.restored': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({ teamId: Id }),
   },
   /** Staff made an interest community a recruiter filter. */
   'community.marked_official': {

@@ -1,4 +1,4 @@
-import { readableOn } from './accessibility';
+import { contrastRatio, contrastThreshold, readableOn } from './accessibility';
 import { colors } from './colors';
 
 /**
@@ -11,3 +11,14 @@ export function resolveTeamColor(teamColor?: string | null): string {
 
 /** Text colour (white or ink) that stays legible on a team's colour. */
 export const onTeamColor = readableOn;
+
+/**
+ * A team colour staff or a coach may pick: white or ink text must reach AA (4.5:1) on it, so names
+ * on the avatar and card stripe stay legible. The portal, the athlete app and the API all use this.
+ */
+export function isReadableTeamColor(hex: string): boolean {
+  return (
+    Math.max(contrastRatio(colors.surface, hex), contrastRatio(colors.ink, hex)) >=
+    contrastThreshold.normalText
+  );
+}

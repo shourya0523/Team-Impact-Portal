@@ -242,6 +242,8 @@ const addTeam = (
   const label = gender === 'women' ? "Women's" : gender === 'men' ? "Men's" : 'Coed';
   const displayName = `${college.name} ${label} ${sport}`;
   const createdAt = daysAgo(int(380, 700));
+  const color = extra.color ?? (chance(0.6) ? pick(TEAM_COLORS) : null);
+  const status = chance(0.03) ? ('archived' as const) : ('live' as const);
   rows.teams.push({
     id: teamId,
     collegeId: college.id,
@@ -249,8 +251,8 @@ const addTeam = (
     gender,
     division: college.division,
     displayName,
-    color: extra.color ?? (chance(0.6) ? pick(TEAM_COLORS) : null),
-    status: chance(0.03) ? 'archived' : 'live',
+    color,
+    status,
     createdAt,
   });
   log(staff.id, { name: 'team.created', properties: { teamId } }, createdAt);
@@ -291,6 +293,8 @@ const addTeam = (
     createdBy: coach.id,
     expiresAt: daysAhead(int(1, 7)),
     createdAt: daysAgo(int(0, 6)),
+    // Archiving a team revokes its codes.
+    ...(status === 'archived' && { revokedAt: daysAgo(0) }),
   });
   // An older code that has expired, so codes have history.
   rows.joinCodes.push({
@@ -300,6 +304,7 @@ const addTeam = (
     createdBy: coach.id,
     expiresAt: daysAgo(int(20, 60)),
     createdAt: daysAgo(int(61, 90)),
+    ...(status === 'archived' && { revokedAt: daysAgo(0) }),
   });
 
   if (chance(0.25)) {

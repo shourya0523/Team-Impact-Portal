@@ -204,10 +204,11 @@ export const registerSignupRoutes = (
       }
       // A team's first coach makes it live: it shows in the join search from now on.
       acceptCoachInvite(world, invite, coach);
-      world.track(coach.id, {
+      // Who added whom (PRD §3): the inviter did, by sending the invite the new coach accepted.
+      world.track(invite.invitedById, {
         name: 'coach.added',
         subjectId: coach.id,
-        properties: { teamId: invite.teamId, via: 'invite' },
+        properties: { teamId: invite.teamId, via: 'invite', inviteId: invite.id },
       });
       startSession(reply, coach);
       return world.me(coach);
