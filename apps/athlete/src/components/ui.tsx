@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import type { Loadable } from '@/hooks/useApi';
-import { Icon, Text, type IconName } from '@/ui';
+import { Button, Icon, Text, type IconName } from '@/ui';
 
 /**
  * App-level composites built on the src/ui primitives. Screens own their header (eyebrow plus a
@@ -207,20 +207,26 @@ export function ErrorText({ children }: { children: ReactNode }) {
   );
 }
 
-/** Loading and error states, the same on every screen. */
+/**
+ * Loading and error states, the same on every screen. Pass `onRetry` (usually `useApi`'s `reload`)
+ * so an error offers "Try again" instead of a dead end.
+ */
 export function Async<T>({
   state,
   children,
+  onRetry,
 }: {
   state: Loadable<T>;
   children: (data: T) => ReactNode;
+  onRetry?: () => void;
 }) {
   if (state.status === 'loading')
     return <ActivityIndicator color={colors.brand} style={styles.loading} />;
   if (state.status === 'error') {
     return (
-      <View style={styles.gutter}>
+      <View style={styles.error}>
         <ErrorText>Couldn’t load this: {state.error.message}</ErrorText>
+        {onRetry && <Button label="Try again" variant="secondary" size="sm" onPress={onRetry} />}
       </View>
     );
   }
@@ -237,6 +243,7 @@ const styles = StyleSheet.create({
   },
   headerText: { flex: 1, gap: spacing.xs },
   gutter: { paddingHorizontal: spacing.md },
+  error: { paddingHorizontal: spacing.md, gap: spacing.sm, alignItems: 'flex-start' },
   iconButton: {
     width: layout.minTouchTarget,
     height: layout.minTouchTarget,
