@@ -1,46 +1,109 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import type { QrCodePreview } from '@team-impact/contracts';
-import { spacing } from '@team-impact/ui-tokens';
+import { colors, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { shortDate } from '@/components/format';
-import { errorMessage } from '@/components/signup';
+import { codeFromScan, NOT_A_CODE, qrProblem, type QrProblem } from '@/components/join';
+import { QrScanner } from '@/components/QrScanner';
 import { ErrorText, Gutter, Screen } from '@/components/ui';
 import { useRole } from '@/navigation/role';
-import { Button, Card, Input, TeamAvatar, Text } from '@/ui';
+import { firstTab } from '@/navigation/tabs';
+import { Button, Card, Icon, Input, TeamAvatar, Text } from '@/ui';
 
 const teamLabel = (p: QrCodePreview) => `${p.team.college.name.split(' ')[0]} ${p.team.name}`;
 
+/** A dead or bad code: what happened and what to do next, never a dead end. */
+function ProblemCard({
+  problem,
+  signedIn,
+  onOther,
+  onRetry,
+  onEnter,
+}: {
+  problem: QrProblem;
+  signedIn: boolean;
+  onOther: () => void;
+  onRetry: () => void;
+  onEnter: () => void;
+}) {
+  return (
+    <Card style={styles.problem} accessibilityRole="alert">
+      <View style={styles.problemHead}>
+        <Icon name="flag" size={20} color={colors.danger} />
+        <Text weight="semibold" style={styles.grow}>
+          {problem.title}
+        </Text>
+      </View>
+      <Text variant="small" color="secondary">
+        {problem.body}
+      </Text>
+      {problem.next === 'retry' && <Button label="Try again" onPress={onRetry} />}
+      {problem.next === 'enter' && <Button label="Enter the app" onPress={onEnter} />}
+      {problem.next === 'other' && (
+        <>
+          <Button label="Try another code" onPress={onOther} />
+          {signedIn && (
+            <Button
+              label="Find your team instead"
+              variant="secondary"
+              onPress={() => router.push('/onboarding/find-team')}
+            />
+          )}
+        </>
+      )}
+    </Card>
+  );
+}
+
 /**
  * "/scan": join a team from the coach's QR code, the fast lane: a live code puts you on the team
- * with no approval (qr-codes contract). The camera comes later; the code's text works everywhere,
- * including the web. `?code=` arrives from a scanned link or after signing up.
+ * with no approval (qr-codes contract). The camera reads the QR; typing the code under it is the
+ * fallback when the camera is blocked or missing. `?code=` arrives from a scanned link or after
+ * signing up.
  */
 export default function ScanQR() {
   const params = useLocalSearchParams<{ code?: string }>();
   const { me, role, setMe } = useRole();
-  const [code, setCode] = useState(params.code ?? '');
+  const [typed, setTyped] = useState(params.code ?? '');
+  /** The cleaned-up code that `preview` belongs to; joining and sign-up use this one. */
+  const [code, setCode] = useState<string | null>(null);
   const [preview, setPreview] = useState<QrCodePreview | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [problem, setProblem] = useState<QrProblem | null>(null);
+  /** How the code comes in. The camera is the default; typing is the fallback, and the only way
+   *  in when the camera is blocked or missing. */
+  const [mode, setMode] = useState<'camera' | 'typing'>('camera');
 
-  const lookUp = (value = code) => {
-    const token = value.trim();
-    if (!token) return;
+  const lookUp = (value = typed) => {
+    if (!value.trim()) return;
+    const found = codeFromScan(value);
+    setPreview(null);
+    if (!found) return setProblem(NOT_A_CODE);
     setBusy(true);
-    setError(null);
-    api.qrPreview(token).then(
+    setProblem(null);
+    api.qrPreview(found).then(
       (p) => {
+        setCode(found);
         setPreview(p);
         setBusy(false);
       },
       (e: unknown) => {
-        setPreview(null);
-        setError(errorMessage(e));
+        setProblem(qrProblem(e));
         setBusy(false);
       },
     );
+  };
+
+  /**
+   * A scan: a Team IMPACT code is looked up like a typed one; anything else says so. The code also
+   * goes into `typed`, so "Try again" (which re-reads `typed`) works after a scan too.
+   */
+  const onScan = (found: string | null) => {
+    if (!found) return setProblem(NOT_A_CODE);
+    setTyped(found);
+    lookUp(found);
   };
 
   // A code in the link (or carried through sign-up) is looked up straight away.
@@ -49,22 +112,30 @@ export default function ScanQR() {
   }, [params.code]);
 
   const join = () => {
+    if (!code || !preview) return;
     setBusy(true);
-    setError(null);
+    setProblem(null);
     api
-      .joinWithQr(code.trim())
+      .joinWithQr(code)
       .then(() => api.me())
       .then(
         (updated) => {
           setMe(updated);
           // The earned moment: the Signed screen stamps it, then offers the next step.
-          router.replace({ pathname: '/signed', params: { teamId: preview?.team.id ?? '' } });
+          router.replace({ pathname: '/signed', params: { teamId: preview.team.id } });
         },
         (e: unknown) => {
-          setError(errorMessage(e));
+          setProblem(qrProblem(e));
           setBusy(false);
         },
       );
+  };
+
+  const startOver = () => {
+    setPreview(null);
+    setCode(null);
+    setProblem(null);
+    setTyped('');
   };
 
   const canJoin = role === 'athlete' || role === 'parent' || role === 'teen';
@@ -72,7 +143,17 @@ export default function ScanQR() {
   return (
     <Screen eyebrow="Fast lane" title="Scan a team QR code" back>
       <Gutter gap="md">
-        {!preview && (
+        {/* The camera hides while a lookup runs: it switches off, and comes back fresh after
+            "Try another code". `paused` only matters if it ever stays on screen. */}
+        {!preview && !problem && mode === 'camera' && !busy && (
+          <QrScanner paused={busy} onScan={onScan} onTypeInstead={() => setMode('typing')} />
+        )}
+
+        {!preview && !problem && mode === 'camera' && busy && (
+          <ActivityIndicator color={colors.brand} accessibilityLabel="Looking up the code" />
+        )}
+
+        {!preview && !problem && mode === 'typing' && (
           <>
             <Text color="secondary">
               Type the code printed under the coach’s QR. Codes last up to a week, and the coach can
@@ -80,17 +161,28 @@ export default function ScanQR() {
             </Text>
             <Input
               label="Team code"
-              value={code}
-              onChangeText={setCode}
-              autoCapitalize="none"
+              value={typed}
+              onChangeText={setTyped}
+              autoCapitalize="characters"
               autoCorrect={false}
+              editable={!busy}
               onSubmitEditing={() => lookUp()}
             />
+            {busy ? (
+              <ActivityIndicator color={colors.brand} accessibilityLabel="Looking up the code" />
+            ) : (
+              <Button
+                label="Find team"
+                size="lg"
+                disabled={!typed.trim()}
+                onPress={() => lookUp()}
+              />
+            )}
             <Button
-              label={busy ? 'Looking…' : 'Find team'}
-              size="lg"
-              disabled={!code.trim() || busy}
-              onPress={() => lookUp()}
+              label="Scan with the camera instead"
+              variant="secondary"
+              icon="qr"
+              onPress={() => setMode('camera')}
             />
           </>
         )}
@@ -99,8 +191,8 @@ export default function ScanQR() {
           <Card style={styles.team}>
             <TeamAvatar name={preview.team.name} teamColor={preview.team.color} size="lg" />
             <View style={styles.grow}>
-              <Text variant="eyebrow" color="secondary">
-                Join
+              <Text variant="eyebrow" color="success">
+                Code found
               </Text>
               <Text variant="display" size="xs" color="brand">
                 {teamLabel(preview)}
@@ -115,11 +207,19 @@ export default function ScanQR() {
           </Card>
         )}
 
-        {preview && me && canJoin && (
+        {problem && (
+          <ProblemCard
+            problem={problem}
+            signedIn={!!me}
+            onOther={startOver}
+            onRetry={() => (preview ? join() : lookUp())}
+            onEnter={() => role && router.replace(firstTab(role))}
+          />
+        )}
+
+        {preview && !problem && me && canJoin && (
           <>
-            <Text color="secondary">
-              Scanning a live code puts you on the team now, with no wait for the coach.
-            </Text>
+            <Text color="secondary">A coach’s code skips the wait. You join straight away.</Text>
             <Button
               label={busy ? 'Joining…' : `Join ${teamLabel(preview)}`}
               size="lg"
@@ -133,15 +233,15 @@ export default function ScanQR() {
           <ErrorText>Team codes are for athletes, parents and teammates.</ErrorText>
         )}
 
-        {preview && !me && (
+        {preview && !me && code && (
           <>
             <Text color="secondary">
-              Create your account first. You’ll come straight back here.
+              Create your account first. You’ll come straight back here and join.
             </Text>
             <Button
               label="Create an account to join"
               size="lg"
-              onPress={() => router.push({ pathname: '/sign-up', params: { qr: code.trim() } })}
+              onPress={() => router.push({ pathname: '/sign-up', params: { qr: code } })}
             />
             {__DEV__ && (
               <Button
@@ -153,16 +253,8 @@ export default function ScanQR() {
           </>
         )}
 
-        {error && <ErrorText>{error}</ErrorText>}
-        {preview && (
-          <Button
-            label="Use a different code"
-            variant="secondary"
-            onPress={() => {
-              setPreview(null);
-              setError(null);
-            }}
-          />
+        {preview && !problem && (
+          <Button label="Use a different code" variant="secondary" onPress={startOver} />
         )}
       </Gutter>
     </Screen>
@@ -172,4 +264,6 @@ export default function ScanQR() {
 const styles = StyleSheet.create({
   team: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   grow: { flex: 1, gap: spacing.xs },
+  problem: { gap: spacing.sm },
+  problemHead: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
 });

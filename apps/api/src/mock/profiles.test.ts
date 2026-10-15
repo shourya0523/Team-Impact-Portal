@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { id, USERS } from './fixtures';
+import { CURRENT_SEASON } from './profiles';
 
 const MATEO = id(150); // Lisa's child, on the soccer team
 const ELLA = id(151); // Mark's child, same team
@@ -344,6 +345,7 @@ describe('cards: editor, publish, history, export', () => {
       card: null,
       draft: null,
       pendingResume: null,
+      currentSeason: CURRENT_SEASON,
     });
     expect((await leo.post('/cards/me/publish')).status).toBe(400);
     await leo.put('/cards/me', { major: 'History', classYear: 2028 });

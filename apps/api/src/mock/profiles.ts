@@ -251,6 +251,7 @@ export const myCardState = (world: MockWorld, u: MockUser): MyCardState => {
       : null,
     draft: world.profiles.drafts.get(u.id) ?? null,
     pendingResume: world.profiles.resumes.get(u.id) ?? null,
+    currentSeason: CURRENT_SEASON,
   };
 };
 
@@ -308,6 +309,8 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
     card.face.season = CURRENT_SEASON;
   }
   Object.assign(card.face, parsed.data);
+  // The photo isn't a card field (CardFields strips it), so it's carried over from the draft here.
+  if (draft.photoUrl !== undefined) card.face.photoUrl = draft.photoUrl;
   card.visibility.published = true;
   world.profiles.drafts.delete(u.id);
   world.profiles.updatedAt.set(u.id, now);
