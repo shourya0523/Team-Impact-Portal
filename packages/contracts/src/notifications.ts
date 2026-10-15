@@ -61,7 +61,7 @@ export const MarkNotificationsReadRequest = z.object({ ids: z.array(Id).min(1).o
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequest>;
 
 /** An Expo push token, as the phone reports it. */
-const DeviceToken = z.string().min(1);
+export const DeviceToken = z.string().min(1);
 
 /** Registers the signed-in user's phone for push notifications. */
 export const RegisterDeviceRequest = z.object({
