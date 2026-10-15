@@ -59,3 +59,10 @@ export type NotificationList = z.infer<typeof NotificationList>;
 /** Mark these read; with no `ids`, mark everything read. */
 export const MarkNotificationsReadRequest = z.object({ ids: z.array(Id).min(1).optional() });
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequest>;
+
+/** Registers the signed-in user's phone for push notifications. */
+export const RegisterDeviceRequest = z.object({
+  token: z.string().min(1),
+  platform: z.enum(['ios', 'android']),
+});
+export type RegisterDeviceRequest = z.infer<typeof RegisterDeviceRequest>;

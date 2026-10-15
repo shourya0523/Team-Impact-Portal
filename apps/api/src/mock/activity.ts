@@ -4,6 +4,7 @@ import type {
   ModerationStatus,
   NotificationKind,
   NotificationPrefs,
+  RegisterDeviceRequest,
   RsvpStatus,
 } from '@team-impact/contracts';
 import { NOTIFICATION_PREF } from '@team-impact/contracts';
@@ -47,6 +48,23 @@ export interface MockNotification {
   communityId: string;
   read: boolean;
   createdAt: string;
+}
+
+/** A phone registered for push. Signing out on that phone removes it. */
+export interface MockDevice {
+  userId: string;
+  token: string;
+  platform: RegisterDeviceRequest['platform'];
+  createdAt: string;
+}
+
+/** A push the mock would have sent through Expo, one per device. Tests read these. */
+export interface MockPush {
+  notificationId: string;
+  userId: string;
+  token: string;
+  text: string;
+  target: MockNotification['target'];
 }
 
 const at = (day: number, hour = 12) =>
