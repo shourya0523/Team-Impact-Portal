@@ -412,6 +412,10 @@ export const registerStaffAdminRoutes = (
         createdAt: new Date().toISOString(),
       };
       world.posts.push(post);
+      world.track(u.id, {
+        name: 'post.created',
+        properties: { postId: post.id, kind: 'announcement' },
+      });
       return reply.status(201).send(toPost(world, post, u)!);
     },
   );

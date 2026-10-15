@@ -51,6 +51,14 @@ const SearchFilter = z.enum([
     ...FindAlumniQuery.keyof().options,
   ]),
 ]);
+export type SearchFilter = z.infer<typeof SearchFilter>;
+
+/** The filters a parsed search query set, for `search.run` and `search.identity_filter`. */
+export const searchFilters = (query: Record<string, unknown>): SearchFilter[] =>
+  Object.keys(query).filter(
+    (key): key is SearchFilter =>
+      SearchFilter.safeParse(key).success && query[key] !== undefined && query[key] !== '',
+  );
 
 const count = z.number().int().nonnegative();
 
@@ -110,7 +118,7 @@ export const TRACKED_EVENTS = {
     subject: false,
     properties: z.strictObject({ teamId: Id, qrCodeId: Id }),
   },
-  /** A card went from unpublished to published. The first one per athlete is "first card". */
+  /** Each publish, which saves a new version. An athlete's first one is their first card. */
   'card.published': {
     source: 'api',
     subject: false,
@@ -153,7 +161,10 @@ export const TRACKED_EVENTS = {
       resultCount: count,
     }),
   },
-  /** One row per person a search returned, with the searcher as user and them as subject. */
+  /**
+   * One row per person on the page of results a search returned, with the searcher as user and
+   * them as subject. `position` is their place on that page.
+   */
   'search.result_shown': {
     source: 'api',
     subject: true,

@@ -15,7 +15,9 @@ import {
   type SharedContact,
   type StaffCommunity,
   type TeamSummary,
+  type TrackedEvent,
 } from '@team-impact/contracts';
+import { eventRow } from '../events-log';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockNotification, MockRsvp } from './activity';
 import * as fx from './fixtures';
@@ -76,11 +78,20 @@ export class MockWorld {
   readonly blocks: MockBlock[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
+  /** What the real routes write to events_log, checked the same way (`track()`, src/events-log.ts). */
+  readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
 
   newId = () => fx.id(this.nextId++);
+
+  /** The mock's `track()`: throws on an event the contract refuses, like the real one. */
+  track = (userId: string | null, events: TrackedEvent | readonly TrackedEvent[]) => {
+    const list: readonly TrackedEvent[] = 'name' in events ? [events] : events;
+    const occurredAt = new Date().toISOString();
+    this.eventsLog.push(...list.map((event) => ({ ...eventRow(userId, event), occurredAt })));
+  };
 
   user = (userId: string) => this.users.find((u) => u.id === userId);
 

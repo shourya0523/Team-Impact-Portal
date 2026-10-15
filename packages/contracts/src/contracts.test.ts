@@ -31,6 +31,7 @@ import {
   type MyCard,
   PageQuery,
   PersonName,
+  searchFilters,
   Phone,
   Post,
   RecruiterSignupRequest,
@@ -604,6 +605,14 @@ describe('tracked events', () => {
     expect(accepts(TRACKED_EVENTS['card.published'].properties, published)).toBe(true);
     const withName = { ...published, firstName: 'Maya' };
     expect(accepts(TRACKED_EVENTS['card.published'].properties, withName)).toBe(false);
+  });
+
+  it('records which search filters were set, never their values', () => {
+    const query = { sport: 'Soccer', major: '', classYear: 2027, limit: 20, cursor: '40' };
+    expect(searchFilters({ ...query, communityId: ID, region: undefined })).toEqual([
+      'sport',
+      'classYear',
+    ]);
   });
 
   it('lets clients send only client events, each about someone', () => {

@@ -87,6 +87,7 @@ export const registerSignupRoutes = (
         role: body.role,
         email: body.email,
       });
+      world.track(u.id, { name: 'user.signed_up', properties: { role: u.role } });
       startSession(reply, u);
       return reply.status(201).send(world.me(u));
     },
@@ -124,6 +125,10 @@ export const registerSignupRoutes = (
       if ('status' in result) throw httpError(result.status, result.message);
       const { code } = result;
       if (!result.joined) throw httpError(409, 'You’re already on this team');
+      world.track(u.id, {
+        name: 'qr_code.redeemed',
+        properties: { teamId: code.teamId, qrCodeId: code.id },
+      });
       // A scan answers the scanner's own waiting request for the team. A parent's request that
       // adds children stays with the coach: children only ever join through an approval.
       for (const r of world.joinRequests) {
@@ -195,9 +200,15 @@ export const registerSignupRoutes = (
           role: 'coach',
           email: invite.email,
         });
+        world.track(coach.id, { name: 'user.signed_up', properties: { role: 'coach' } });
       }
       // A team's first coach makes it live: it shows in the join search from now on.
       acceptCoachInvite(world, invite, coach);
+      world.track(coach.id, {
+        name: 'coach.added',
+        subjectId: coach.id,
+        properties: { teamId: invite.teamId, via: 'invite' },
+      });
       startSession(reply, coach);
       return world.me(coach);
     },
@@ -278,6 +289,8 @@ export const registerSignupRoutes = (
         companyId: company.id,
         ...(pending.title ? { title: pending.title } : {}),
       });
+      // The account exists once staff approve, so that's when the recruiter counts as signed up.
+      world.track(u.id, { name: 'user.signed_up', properties: { role: 'recruiter' } });
       return {
         user: summaryOf(u),
         email: u.email,
