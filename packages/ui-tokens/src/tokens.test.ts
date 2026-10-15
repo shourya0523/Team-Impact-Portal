@@ -31,7 +31,11 @@ describe('team colour', () => {
 
 describe('generated css', () => {
   it('tokens.css is up to date (run `pnpm --filter @team-impact/ui-tokens build:css`)', () => {
-    const file = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
+    // Git on Windows (core.autocrlf) checks the file out with CRLF; only the content matters.
+    const file = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8').replace(
+      /\r\n/g,
+      '\n',
+    );
     expect(file).toBe(tokensToCss());
   });
 });
