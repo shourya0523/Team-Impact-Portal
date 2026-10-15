@@ -60,9 +60,16 @@ export type NotificationList = z.infer<typeof NotificationList>;
 export const MarkNotificationsReadRequest = z.object({ ids: z.array(Id).min(1).optional() });
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequest>;
 
+/** An Expo push token, as the phone reports it. */
+const DeviceToken = z.string().min(1);
+
 /** Registers the signed-in user's phone for push notifications. */
 export const RegisterDeviceRequest = z.object({
-  token: z.string().min(1),
+  token: DeviceToken,
   platform: z.enum(['ios', 'android']),
 });
 export type RegisterDeviceRequest = z.infer<typeof RegisterDeviceRequest>;
+
+/** `DELETE /me/devices/:token`. Clients URL-encode the token, since Expo's contains brackets. */
+export const DeviceTokenParams = z.object({ token: DeviceToken });
+export type DeviceTokenParams = z.infer<typeof DeviceTokenParams>;

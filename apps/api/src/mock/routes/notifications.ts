@@ -1,15 +1,17 @@
 import {
+  DeviceTokenParams,
   MarkNotificationsReadRequest,
   Me,
   NotificationList,
   NotificationPrefs,
+  RegisterDeviceRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { prefsOf } from '../activity';
 import { summaryOf } from '../fixtures';
 import type { MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
-import type { Guards } from './context';
+import { httpError, type Guards } from './context';
 
 /** The notification list, marking read, and the switches that govern what gets generated. */
 export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
@@ -60,6 +62,34 @@ export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { view
       const u = viewer(request);
       world.notificationPrefs.set(u.id, { ...prefsOf(world, u.id), ...request.body });
       return world.me(u);
+    },
+  );
+
+  /**
+   * Register this phone for push. A phone belongs to whoever signed in on it last, so a token
+   * already held by anyone (including the same user) is replaced rather than duplicated.
+   */
+  app.post('/me/devices', { schema: { body: RegisterDeviceRequest } }, async (request, reply) => {
+    const u = viewer(request);
+    const { token, platform } = request.body;
+    const i = world.devices.findIndex((d) => d.token === token);
+    if (i !== -1) world.devices.splice(i, 1);
+    world.devices.push({ userId: u.id, token, platform, createdAt: new Date().toISOString() });
+    return reply.status(204).send();
+  });
+
+  /** Stop pushing to one of your own phones. */
+  app.delete(
+    '/me/devices/:token',
+    { schema: { params: DeviceTokenParams } },
+    async (request, reply) => {
+      const u = viewer(request);
+      const i = world.devices.findIndex(
+        (d) => d.userId === u.id && d.token === request.params.token,
+      );
+      if (i === -1) throw httpError(404, 'This phone isn’t registered to you');
+      world.devices.splice(i, 1);
+      return reply.status(204).send();
     },
   );
 };

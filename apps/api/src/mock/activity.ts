@@ -119,19 +119,32 @@ export const holdForReview = (world: MockWorld, target: Target, preview: string)
 
 const name = (u: MockUser) => `${u.firstName} ${u.lastName}`;
 
-/** Store one notification, unless the reader turned that kind off (warnings can't be). */
+/**
+ * Store one notification and push it to each of the reader's phones, unless the reader turned that
+ * kind off (warnings can't be).
+ */
 export const notify = (
   world: MockWorld,
   n: Omit<MockNotification, 'id' | 'read' | 'createdAt'>,
 ) => {
   // Staff warnings always arrive; every other kind follows the reader's switch.
   if (n.kind !== 'warning' && !prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
-  world.notifications.push({
+  const stored: MockNotification = {
     ...n,
     id: world.newId(),
     read: false,
     createdAt: new Date().toISOString(),
-  });
+  };
+  world.notifications.push(stored);
+  for (const d of world.devices.filter((x) => x.userId === n.userId)) {
+    world.pushOutbox.push({
+      notificationId: stored.id,
+      userId: n.userId,
+      token: d.token,
+      text: n.text,
+      target: n.target,
+    });
+  }
 };
 
 /** The creator of a private community let `userId` in. */
