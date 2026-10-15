@@ -2,3 +2,5 @@ pnpm-lock.yaml
 **/dist
 **/.expo
 **/drizzle
+**/expo-env.d.ts
+packages/ui-tokens/src/tokens.css

@@ -5,12 +5,15 @@ import {
   ageBand,
   ageOn,
   CardFace,
+  canCreateCommunity,
+  canJoinCommunity,
   CardWithContact,
+  Community,
   CreateAnnouncementRequest,
   CreateCardRequest,
   CreateCompanyRequest,
   CreateEventRequest,
-  CreateGroupRequest,
+  CreateCommunityRequest,
   CreateJoinRequest,
   CreateListRequest,
   CreateOpportunityRequest,
@@ -18,10 +21,12 @@ import {
   CreateReportRequest,
   CreateTeamRequest,
   Email,
+  ExperienceEntry,
   emailOnDomain,
   FindAlumniQuery,
   hasBaseballCard,
   LinkedInUrl,
+  MergeCommunityRequest,
   MergeCollegeRequest,
   type MyCard,
   PageQuery,
@@ -181,7 +186,7 @@ describe('cards', () => {
     hometown: 'Providence, RI',
     city: 'Boston, MA',
     region: 'northeast',
-    experience: 'Analyst intern',
+    experience: [{ role: 'Analyst intern', organization: 'Northbeam', period: 'Summer 2026' }],
     skills: ['Excel', 'SQL'],
     lookingFor: 'Finance internships',
     contact: { email: 'maya@tufts.edu', phone: '(401) 555-0119', linkedinUrl: null },
@@ -215,6 +220,39 @@ describe('cards', () => {
     });
     expect(issuePaths(result)).toEqual(['openToRecruiting']);
     expect(accepts(UpdateCardVisibilityRequest, { openToRecruiting: false })).toBe(true);
+  });
+
+  it('keeps experience to 3 role / organization / period entries and rejects empty ones', () => {
+    const card = { firstName: 'Maya', lastName: 'Okafor', classYear: 2028, major: 'Economics' };
+    const entry = { role: 'Treasurer', organization: 'Investment club', period: '2025 – Now' };
+    expect(accepts(CreateCardRequest, { ...card, experience: [] })).toBe(true);
+    expect(accepts(CreateCardRequest, { ...card, experience: [entry, entry, entry] })).toBe(true);
+    expect(
+      issuePaths(
+        CreateCardRequest.safeParse({ ...card, experience: [entry, entry, entry, entry] }),
+      ),
+    ).toEqual(['experience']);
+    // A row needs a role; organisation and period may be blank.
+    expect(
+      accepts(CreateCardRequest, {
+        ...card,
+        experience: [{ role: 'Captain', organization: '', period: '' }],
+      }),
+    ).toBe(true);
+    expect(
+      issuePaths(
+        CreateCardRequest.safeParse({
+          ...card,
+          experience: [{ role: '  ', organization: '', period: '' }],
+        }),
+      ),
+    ).toEqual(['experience.0.role']);
+    expect(accepts(ExperienceEntry, { ...entry, role: 'x'.repeat(61) })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, organization: 'x'.repeat(81) })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, period: 'x'.repeat(31) })).toBe(false);
+    // Free text from before TI-150 and unknown keys are rejected.
+    expect(accepts(CreateCardRequest, { ...card, experience: 'Analyst intern' })).toBe(false);
+    expect(accepts(ExperienceEntry, { ...entry, url: 'https://x.test' })).toBe(false);
   });
 
   it('takes jersey numbers from 0 to 99 and requires a major', () => {
@@ -314,7 +352,7 @@ describe('companies', () => {
 
 describe('posts', () => {
   const opportunity = {
-    groupId: ID,
+    communityId: ID,
     title: 'Summer Analyst',
     details: 'Rising juniors in economics or finance.',
     link: 'https://northbeam.com/jobs/123',
@@ -327,37 +365,32 @@ describe('posts', () => {
     }
   });
 
-  it('posts an opportunity into a group', () => {
-    const { groupId, ...noGroup } = opportunity;
-    expect(groupId).toBe(ID);
-    expect(issuePaths(CreateOpportunityRequest.safeParse(noGroup))).toEqual(['groupId']);
+  it('posts an opportunity into a community', () => {
+    const { communityId, ...noCommunity } = opportunity;
+    expect(communityId).toBe(ID);
+    expect(issuePaths(CreateOpportunityRequest.safeParse(noCommunity))).toEqual(['communityId']);
   });
 
-  it('needs text, and a group id for group posts', () => {
-    expect(accepts(CreatePostRequest, { audience: { scope: 'group' }, text: 'Hi' })).toBe(false);
-    const groupPost = { audience: { scope: 'group', groupId: ID }, text: 'Hi' };
-    expect(accepts(CreatePostRequest, groupPost)).toBe(true);
-    expect(accepts(CreatePostRequest, { ...groupPost, text: '   ' })).toBe(false);
+  it('needs text and a community', () => {
+    expect(accepts(CreatePostRequest, { text: 'Hi' })).toBe(false);
+    const post = { communityId: ID, text: 'Hi' };
+    expect(accepts(CreatePostRequest, post)).toBe(true);
+    expect(accepts(CreatePostRequest, { ...post, text: '   ' })).toBe(false);
   });
 
-  it('sends announcements to a team or everyone, never a group', () => {
-    const announcement = {
-      audience: { scope: 'network' },
-      text: 'Family night is on Oct 19',
-      sendPush: true,
-    };
+  it('sends announcements into a community', () => {
+    const announcement = { communityId: ID, text: 'Family night is on Oct 19', sendPush: true };
     expect(accepts(CreateAnnouncementRequest, announcement)).toBe(true);
     expect(accepts(CreateAnnouncementRequest, { ...announcement, text: 'Too short' })).toBe(false);
-    const toGroup = { ...announcement, audience: { scope: 'group', groupId: ID } };
-    expect(accepts(CreateAnnouncementRequest, toGroup)).toBe(false);
   });
 
   it('carries opportunity details only on opportunity posts', () => {
     const post = {
       id: ID,
       author: coach,
-      audience: { scope: 'network' },
+      community: { id: ID, name: 'Team Impact', kind: 'team_impact' },
       text: 'Big win Saturday',
+      imageUrl: null,
       official: false,
       likeCount: 0,
       commentCount: 0,
@@ -386,18 +419,114 @@ describe('events', () => {
       startsAt: '2026-10-19T13:00:00-04:00',
       endsAt: '2026-10-19T12:00:00-04:00',
       location: 'Kraft Field',
-      audience: { scope: 'network' },
+      communityId: ID,
     };
     expect(issuePaths(CreateEventRequest.safeParse(event))).toEqual(['endsAt']);
   });
 });
 
-describe('groups', () => {
+describe('communities', () => {
+  const base = {
+    id: ID,
+    name: 'First-gen athletes',
+    about: 'For first-generation college athletes.',
+    memberCount: 12,
+    moderation: 'approved',
+    createdAt: NOW,
+  };
+
   it('needs a name of up to 60 characters and says what it’s for', () => {
-    const result = CreateGroupRequest.safeParse({ name: 'First-gen athletes', about: '   ' });
-    expect(result.error?.issues[0]?.message).toBe('Say what the group is for.');
-    const longName = { name: 'x'.repeat(61), about: 'For first-gen athletes.' };
-    expect(accepts(CreateGroupRequest, longName)).toBe(false);
+    const create = { kind: 'interest', name: 'First-gen athletes', about: '   ' };
+    const result = CreateCommunityRequest.safeParse(create);
+    expect(result.error?.issues[0]?.message).toBe('Say what the community is for.');
+    expect(accepts(CreateCommunityRequest, { ...create, about: 'Hi', name: 'x'.repeat(61) })).toBe(
+      false,
+    );
+  });
+
+  it('creates open communities unless asked to make them private', () => {
+    const create = { kind: 'interest', name: 'Captains', about: 'Team captains only.' };
+    expect(CreateCommunityRequest.parse(create).private).toBe(false);
+    expect(CreateCommunityRequest.parse({ ...create, private: true }).private).toBe(true);
+  });
+
+  it('lets users create only interest and medical communities', () => {
+    const create = { name: 'Cardiac families', about: 'Families of kids with heart conditions.' };
+    expect(accepts(CreateCommunityRequest, { ...create, kind: 'medical' })).toBe(true);
+    expect(accepts(CreateCommunityRequest, { ...create, kind: 'interest' })).toBe(true);
+    expect(accepts(CreateCommunityRequest, { ...create, kind: 'team' })).toBe(false);
+    expect(accepts(CreateCommunityRequest, { ...create, kind: 'team_impact' })).toBe(false);
+  });
+
+  it('carries the official flag and recruiter opt-in on interest communities only', () => {
+    const interest = Community.parse({
+      ...base,
+      kind: 'interest',
+      createdBy: coach,
+      private: false,
+      myJoinRequest: null,
+      official: true,
+      myMembership: { joinedAt: NOW, recruiterSearchOptIn: true },
+    });
+    expect(interest).toHaveProperty('official', true);
+
+    for (const kind of ['team', 'team_impact', 'medical'] as const) {
+      const other = Community.parse({
+        ...base,
+        kind,
+        teamId: ID,
+        createdBy: coach,
+        private: false,
+        myJoinRequest: null,
+        official: true,
+        myMembership: { joinedAt: NOW, recruiterSearchOptIn: true },
+      });
+      expect(other, kind).not.toHaveProperty('official');
+      expect(other.myMembership, kind).not.toHaveProperty('recruiterSearchOptIn');
+    }
+  });
+
+  it('needs an official flag on interest communities and a team on team communities', () => {
+    const interest = {
+      ...base,
+      kind: 'interest',
+      createdBy: coach,
+      private: false,
+      myJoinRequest: null,
+      myMembership: null,
+    };
+    expect(issuePaths(Community.safeParse(interest))).toEqual(['official']);
+    expect(issuePaths(Community.safeParse({ ...base, kind: 'team', myMembership: null }))).toEqual([
+      'teamId',
+    ]);
+  });
+
+  it('follows the PRD §5 table for who creates which kind', () => {
+    for (const role of ['staff', 'coach', 'athlete', 'alumni_athlete', 'alumni_mentor'] as const) {
+      expect(canCreateCommunity(role, 'interest'), role).toBe(true);
+      expect(canCreateCommunity(role, 'medical'), role).toBe(true);
+    }
+    expect(canCreateCommunity('parent', 'medical')).toBe(true);
+    expect(canCreateCommunity('parent', 'interest')).toBe(false);
+    for (const role of ['teen', 'recruiter'] as const) {
+      expect(canCreateCommunity(role, 'interest'), role).toBe(false);
+      expect(canCreateCommunity(role, 'medical'), role).toBe(false);
+    }
+  });
+
+  it('keeps teens and recruiters out of medical communities, and recruiters out of all', () => {
+    expect(canJoinCommunity('teen', 'medical')).toBe(false);
+    expect(canJoinCommunity('teen', 'interest')).toBe(true);
+    expect(canJoinCommunity('parent', 'medical')).toBe(true);
+    for (const kind of ['team_impact', 'medical', 'interest'] as const) {
+      expect(canJoinCommunity('recruiter', kind), kind).toBe(false);
+    }
+    expect(canJoinCommunity('staff', 'team')).toBe(false);
+  });
+
+  it('merges into another community by id', () => {
+    expect(accepts(MergeCommunityRequest, { intoId: ID })).toBe(true);
+    expect(accepts(MergeCommunityRequest, {})).toBe(false);
   });
 });
 
@@ -420,6 +549,9 @@ describe('moderation', () => {
     const report = { target: { kind: 'post', id: ID }, reason: 'spam' };
     expect(accepts(CreateReportRequest, report)).toBe(true);
     expect(accepts(CreateReportRequest, { ...report, reason: 'rude' })).toBe(false);
+    expect(accepts(CreateReportRequest, { ...report, target: { kind: 'community', id: ID } })).toBe(
+      true,
+    );
     expect(accepts(CreateReportRequest, { ...report, target: { kind: 'group', id: ID } })).toBe(
       false,
     );
@@ -468,21 +600,23 @@ describe('tracked events', () => {
   });
 
   it('refuses properties an event doesn’t define', () => {
-    const published = { cardId: ID, season: 2026 };
-    expect(accepts(TRACKED_EVENTS.card_published.properties, published)).toBe(true);
+    const published = { cardId: ID };
+    expect(accepts(TRACKED_EVENTS['card.published'].properties, published)).toBe(true);
     const withName = { ...published, firstName: 'Maya' };
-    expect(accepts(TRACKED_EVENTS.card_published.properties, withName)).toBe(false);
+    expect(accepts(TRACKED_EVENTS['card.published'].properties, withName)).toBe(false);
   });
 
   it('lets clients send only client events, each about someone', () => {
-    const view = { name: 'card_viewed', properties: { cardId: ID }, subjectId: ID };
+    const view = { name: 'card.viewed', properties: { cardId: ID }, subjectId: ID };
     expect(accepts(TrackEventRequest, view)).toBe(true);
     expect(accepts(TrackEventRequest, { ...view, subjectId: undefined })).toBe(false);
     const search = {
-      name: 'identity_search_run',
-      properties: { searchId: ID, groupIds: [ID], filters: [], resultCount: 3 },
+      name: 'search.identity_filter',
+      properties: { searchId: ID, communityId: ID, companyId: ID, filters: [], resultCount: 3 },
     };
-    expect(TRACKED_EVENTS.identity_search_run.properties.parse(search.properties)).toBeTruthy();
+    expect(accepts(TRACKED_EVENTS['search.identity_filter'].properties, search.properties)).toBe(
+      true,
+    );
     expect(accepts(TrackEventRequest, search)).toBe(false);
 
     const clientNames = TRACKED_EVENT_NAMES.filter(

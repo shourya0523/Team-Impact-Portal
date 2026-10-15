@@ -7,31 +7,34 @@ import { eventsLog, users } from './db/schema';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Logs events done by `userId`. Pass the route's transaction when it has one, so the event
- * commits or rolls back with the action it records. Properties are parsed against the contract,
- * so a spread object can't slip in a field the event doesn't define.
+ * The `events_log` row for one event, with its properties parsed against the contract, so a
+ * spread object can't slip in a field the event doesn't define. `track()` and the seed use it.
+ */
+export const eventRow = (userId: string | null, event: TrackedEvent) => {
+  const definition = TRACKED_EVENTS[event.name];
+  if (definition.subject !== (event.subjectId !== undefined)) {
+    throw new Error(`${event.name} ${definition.subject ? 'needs' : 'takes no'} subjectId`);
+  }
+  return {
+    userId,
+    event: event.name,
+    subjectId: event.subjectId ?? null,
+    properties: definition.properties.parse(event.properties),
+  };
+};
+
+/**
+ * Logs events done by `userId` (null for the system). Pass the route's transaction when it has
+ * one, so the event commits or rolls back with the action it records.
  */
 export const track = async (
   db: Db,
-  userId: string,
+  userId: string | null,
   events: TrackedEvent | readonly TrackedEvent[],
 ): Promise<void> => {
   const list: readonly TrackedEvent[] = 'name' in events ? [events] : events;
   if (list.length === 0) return;
-  await db.insert(eventsLog).values(
-    list.map((event) => {
-      const definition = TRACKED_EVENTS[event.name];
-      if (definition.subject !== (event.subjectId !== undefined)) {
-        throw new Error(`${event.name} ${definition.subject ? 'needs' : 'takes no'} subjectId`);
-      }
-      return {
-        name: event.name,
-        userId,
-        subjectId: event.subjectId ?? null,
-        properties: definition.properties.parse(event.properties),
-      };
-    }),
-  );
+  await db.insert(eventsLog).values(list.map((event) => eventRow(userId, event)));
 };
 
 /** A client event's subject must still be someone; late events about deleted users are refused. */

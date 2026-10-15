@@ -4,7 +4,6 @@ import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   ApiError,
-  type Role,
   TRACKED_EVENT_NAMES,
   type TrackedEvent,
   type TrackedEventName,
@@ -25,10 +24,17 @@ beforeAll(async () => {
 afterAll(() => testDb.close());
 beforeEach(() => testDb.db.execute(sql`truncate users cascade`));
 
-const addUser = async (role: Role = 'athlete') => {
+const addUser = async (userType: (typeof users.userType.enumValues)[number] = 'athlete') => {
   const [user] = await testDb.db
     .insert(users)
-    .values({ email: `${randomUUID()}@example.com`, passwordHash: 'x', role })
+    .values({
+      email: `${randomUUID()}@example.com`,
+      passwordHash: 'x',
+      firstName: 'Test',
+      lastName: 'User',
+      dob: '2004-05-06',
+      userType,
+    })
     .returning({ id: users.id });
   return user!.id;
 };
@@ -37,30 +43,45 @@ const loggedEvents = () => testDb.db.select().from(eventsLog);
 
 /** One of every event. Typed by name, so a new event fails to compile until it has a sample. */
 const samples = (subjectId: string): { [N in TrackedEventName]: TrackedEvent<N> } => ({
-  signed_up: { name: 'signed_up', properties: { role: 'athlete' } },
-  join_requested: {
-    name: 'join_requested',
+  'user.signed_up': { name: 'user.signed_up', properties: { role: 'athlete' } },
+  'team.created': { name: 'team.created', properties: { teamId: ID } },
+  'team.updated': { name: 'team.updated', properties: { teamId: ID, fields: ['color'] } },
+  'coach.invited': { name: 'coach.invited', properties: { teamId: ID, inviteId: ID } },
+  'coach.added': { name: 'coach.added', subjectId, properties: { teamId: ID, via: 'invite' } },
+  'community.marked_official': {
+    name: 'community.marked_official',
+    properties: { communityId: ID },
+  },
+  'join_request.created': {
+    name: 'join_request.created',
     properties: { joinRequestId: ID, teamId: ID, role: 'athlete' },
   },
-  qr_joined: { name: 'qr_joined', properties: { teamId: ID, qrCodeId: ID } },
-  card_published: { name: 'card_published', properties: { cardId: ID, season: 2026 } },
-  post_created: {
-    name: 'post_created',
-    properties: { postId: ID, kind: 'post', audience: 'team' },
-  },
-  rsvp_set: { name: 'rsvp_set', properties: { calendarEventId: ID, status: 'going' } },
-  search_run: {
-    name: 'search_run',
+  'qr_code.redeemed': { name: 'qr_code.redeemed', properties: { teamId: ID, qrCodeId: ID } },
+  'card.published': { name: 'card.published', properties: { cardId: ID } },
+  'post.created': { name: 'post.created', properties: { postId: ID, kind: 'post' } },
+  'rsvp.set': { name: 'rsvp.set', properties: { calendarEventId: ID, status: 'going' } },
+  'search.run': {
+    name: 'search.run',
     properties: { searchId: ID, surface: 'alumni', filters: ['college'], resultCount: 1 },
   },
-  identity_search_run: {
-    name: 'identity_search_run',
-    properties: { searchId: ID, groupIds: [ID], filters: [], resultCount: 1 },
+  'search.identity_filter': {
+    name: 'search.identity_filter',
+    properties: {
+      searchId: ID,
+      communityId: ID,
+      companyId: ID,
+      filters: ['sport', 'division'],
+      resultCount: 1,
+    },
   },
-  result_shown: { name: 'result_shown', subjectId, properties: { searchId: ID, position: 0 } },
-  card_viewed: { name: 'card_viewed', subjectId, properties: { cardId: ID } },
-  contact_viewed: { name: 'contact_viewed', subjectId, properties: { channel: 'email' } },
-  saved_to_list: { name: 'saved_to_list', subjectId, properties: { listId: ID } },
+  'search.result_shown': {
+    name: 'search.result_shown',
+    subjectId,
+    properties: { searchId: ID, position: 0 },
+  },
+  'card.viewed': { name: 'card.viewed', subjectId, properties: { cardId: ID } },
+  'contact.viewed': { name: 'contact.viewed', subjectId, properties: { channel: 'email' } },
+  'list.athlete_saved': { name: 'list.athlete_saved', subjectId, properties: { listId: ID } },
 });
 
 describe('track', () => {
@@ -71,9 +92,9 @@ describe('track', () => {
     await track(testDb.db, recruiter, events);
 
     const rows = await loggedEvents();
-    expect(rows.map((row) => row.name).sort()).toEqual([...TRACKED_EVENT_NAMES].sort());
+    expect(rows.map((row) => row.event).sort()).toEqual([...TRACKED_EVENT_NAMES].sort());
     for (const event of events) {
-      expect(rows.find((row) => row.name === event.name)).toMatchObject({
+      expect(rows.find((row) => row.event === event.name)).toMatchObject({
         userId: recruiter,
         subjectId: event.subjectId ?? null,
         properties: event.properties,
@@ -84,19 +105,19 @@ describe('track', () => {
   it('refuses properties the event doesn’t define and a missing subject', async () => {
     const athlete = await addUser();
     const withName = {
-      name: 'card_published',
-      properties: { cardId: ID, season: 2026, firstName: 'Maya' },
+      name: 'card.published',
+      properties: { cardId: ID, firstName: 'Maya' },
     } as TrackedEvent;
     await expect(track(testDb.db, athlete, withName)).rejects.toThrow();
-    // @ts-expect-error card_viewed has to say whose card it was
-    const noSubject: TrackedEvent = { name: 'card_viewed', properties: { cardId: ID } };
+    // @ts-expect-error card.viewed has to say whose card it was
+    const noSubject: TrackedEvent = { name: 'card.viewed', properties: { cardId: ID } };
     await expect(track(testDb.db, athlete, noSubject)).rejects.toThrow('needs subjectId');
     expect(await loggedEvents()).toEqual([]);
   });
 
   it('rolls back with the action it records', async () => {
     const athlete = await addUser();
-    const signup = samples(athlete).signed_up;
+    const signup = samples(athlete)['user.signed_up'];
     await expect(
       testDb.db.transaction(async (tx) => {
         await track(tx, athlete, signup);
@@ -128,11 +149,11 @@ describe('POST /events', () => {
   it('logs a client event for the signed-in user', async () => {
     const recruiter = await addUser('recruiter');
     const athlete = await addUser();
-    const res = await send(recruiter, samples(athlete).contact_viewed);
+    const res = await send(recruiter, samples(athlete)['contact.viewed']);
     expect(res.statusCode).toBe(204);
     expect(await loggedEvents()).toMatchObject([
       {
-        name: 'contact_viewed',
+        event: 'contact.viewed',
         userId: recruiter,
         subjectId: athlete,
         properties: { channel: 'email' },
@@ -142,14 +163,14 @@ describe('POST /events', () => {
 
   it('needs a signed-in user', async () => {
     const athlete = await addUser();
-    const res = await send(null, samples(athlete).card_viewed);
+    const res = await send(null, samples(athlete)['card.viewed']);
     expect(res.statusCode).toBe(401);
     expect(ApiError.parse(res.json()).error.code).toBe('unauthenticated');
   });
 
   it('won’t take events only the API may log', async () => {
     const recruiter = await addUser('recruiter');
-    const res = await send(recruiter, samples(recruiter).identity_search_run);
+    const res = await send(recruiter, samples(recruiter)['search.identity_filter']);
     expect(res.statusCode).toBe(400);
     expect(await loggedEvents()).toEqual([]);
   });
@@ -159,7 +180,7 @@ describe('POST /events', () => {
     const athlete = await addUser();
     await testDb.db.update(users).set({ deletedAt: new Date() }).where(eq(users.id, athlete));
     for (const subject of [randomUUID(), athlete]) {
-      const res = await send(recruiter, samples(subject).card_viewed);
+      const res = await send(recruiter, samples(subject)['card.viewed']);
       expect(res.statusCode).toBe(404);
     }
     expect(await loggedEvents()).toEqual([]);
@@ -171,12 +192,15 @@ describe('deletion and retention', () => {
     const recruiter = await addUser('recruiter');
     const athlete = await addUser();
     const other = await addUser();
-    await track(testDb.db, recruiter, [samples(athlete).result_shown, samples(other).card_viewed]);
-    await track(testDb.db, athlete, samples(athlete).card_published);
+    await track(testDb.db, recruiter, [
+      samples(athlete)['search.result_shown'],
+      samples(other)['card.viewed'],
+    ]);
+    await track(testDb.db, athlete, samples(athlete)['card.published']);
 
     await testDb.db.delete(users).where(eq(users.id, athlete));
     expect(await loggedEvents()).toMatchObject([
-      { name: 'card_viewed', userId: recruiter, subjectId: other },
+      { event: 'card.viewed', userId: recruiter, subjectId: other },
     ]);
   });
 
@@ -185,7 +209,7 @@ describe('deletion and retention', () => {
     const now = new Date();
     await testDb.db.insert(eventsLog).values(
       [400, 10].map((daysAgo) => ({
-        name: 'card_viewed',
+        event: 'card.viewed',
         userId: athlete,
         properties: { daysAgo },
         occurredAt: new Date(now.getTime() - daysAgo * DAY_MS),
@@ -200,25 +224,25 @@ describe('pilot completion query', () => {
   it('reports the completion rate and time to first card for athletes', async () => {
     const start = new Date('2026-10-01T12:00:00Z').getTime();
     const at = (hours: number) => new Date(start + hours * HOUR_MS);
-    const log = (userId: string, name: TrackedEventName, hours: number, properties = {}) =>
-      testDb.db.insert(eventsLog).values({ name, userId, properties, occurredAt: at(hours) });
+    const log = (userId: string, event: TrackedEventName, hours: number, properties = {}) =>
+      testDb.db.insert(eventsLog).values({ event, userId, properties, occurredAt: at(hours) });
 
     const [fast, slow, unfinished, alumna] = await Promise.all([
       addUser(),
       addUser(),
       addUser(),
-      addUser('alumni_athlete'),
+      addUser('alumni'),
     ]);
     const parent = await addUser('parent');
     for (const athlete of [fast!, slow!, unfinished!]) {
-      await log(athlete, 'signed_up', 0, { role: 'athlete' });
+      await log(athlete, 'user.signed_up', 0, { role: 'athlete' });
     }
-    await log(alumna!, 'signed_up', 24, { role: 'alumni_athlete' });
-    await log(parent, 'signed_up', 0, { role: 'parent' });
-    await log(fast!, 'card_published', 2);
-    await log(fast!, 'card_published', 50); // A re-publish doesn't move the first card.
-    await log(slow!, 'card_published', 10);
-    await log(alumna!, 'card_published', 30);
+    await log(alumna!, 'user.signed_up', 24, { role: 'alumni_athlete' });
+    await log(parent, 'user.signed_up', 0, { role: 'parent' });
+    await log(fast!, 'card.published', 2);
+    await log(fast!, 'card.published', 50); // A re-publish doesn't move the first card.
+    await log(slow!, 'card.published', 10);
+    await log(alumna!, 'card.published', 30);
 
     const query = await readFile(new URL('../sql/pilot-completion.sql', import.meta.url), 'utf8');
     const { rows } = await testDb.db.execute(sql.raw(query));

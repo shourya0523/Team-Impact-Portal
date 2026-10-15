@@ -13,4 +13,17 @@ describe('api', () => {
     await app.close();
     await close();
   });
+
+  it('lets the athlete app on web send PUT requests across origins', async () => {
+    const origin = 'http://localhost:8081';
+    const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [origin] });
+    const res = await app.inject({
+      method: 'OPTIONS',
+      url: '/health',
+      headers: { origin, 'access-control-request-method': 'PUT' },
+    });
+    expect(res.headers['access-control-allow-methods']).toContain('PUT');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+    await app.close();
+  });
 });

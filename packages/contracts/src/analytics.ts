@@ -4,13 +4,15 @@ import { ContactSharing } from './contacts';
 import { RsvpStatus } from './events';
 import type { Post } from './posts';
 import { Role } from './roles';
-import { FindTeamsQuery } from './teams';
+import { AthleteSearchQuery } from './search';
+import { FindTeamsQuery, StaffUpdateTeamRequest } from './teams';
 import { FindAlumniQuery } from './users';
 
 /**
- * Product events, kept in the `events_log` table in our own Postgres rather than an analytics
- * vendor, so they're backed up, access-controlled and deleted like everything else. Every event
- * name and property shape is defined here; callers pick from this list and can't invent one.
+ * Product analytics and the audit trail, kept in the `events_log` table in our own Postgres rather
+ * than an analytics vendor, so they're backed up, access-controlled and deleted like everything
+ * else. Every event name and property shape is defined here; callers pick from this list and
+ * can't invent one. Names are `object.action`, as in docs/data-model.md.
  *
  * - **Properties** are ids, enums, counts and flags: never a name, an email or anything someone
  *   typed. The contract tests walk every schema to keep it that way. The user who did the thing
@@ -22,7 +24,9 @@ import { FindAlumniQuery } from './users';
  *   transaction when there is one; clients can't send them. `client` events are things only the
  *   app sees, sent through `POST /events`.
  *
- * Check-in and interest events were dropped with those features in PRD v2.
+ * Nothing here records which communities someone posts in or joins: a medical community's
+ * membership must not leak beyond the community (PRD §5). Check-in and interest events were
+ * dropped with those features in PRD v2.
  */
 interface EventDefinition {
   source: 'api' | 'client';
@@ -35,35 +39,63 @@ const POST_KINDS = [
   'announcement',
   'opportunity',
 ] as const satisfies readonly Post['kind'][];
-const AUDIENCE_SCOPES = [
-  'team',
-  'network',
-  'group',
-] as const satisfies readonly Post['audience']['scope'][];
 
 /** Recruiters search athletes; athletes search alumni; joiners search teams. */
 export const SEARCH_SURFACES = ['athletes', 'alumni', 'teams'] as const;
 
-/**
- * Which query keys a search set, never their values. Add the recruiter athlete search's keys
- * when its query contract lands.
- */
+/** Which query keys a search set, never their values. The identity filter is its own event. */
 const SearchFilter = z.enum([
-  ...FindTeamsQuery.keyof().options,
-  ...FindAlumniQuery.keyof().options,
+  ...new Set([
+    ...AthleteSearchQuery.omit({ cursor: true, limit: true, communityId: true }).keyof().options,
+    ...FindTeamsQuery.keyof().options,
+    ...FindAlumniQuery.keyof().options,
+  ]),
 ]);
 
 const count = z.number().int().nonnegative();
 
 export const TRACKED_EVENTS = {
   /** A new account, from any sign-up path (open, coach invite, recruiter). */
-  signed_up: {
+  'user.signed_up': {
     source: 'api',
     subject: false,
     properties: z.strictObject({ role: Role }),
   },
+  /** Staff created a team. */
+  'team.created': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({ teamId: Id }),
+  },
+  /** Which settings changed, not what to. */
+  'team.updated': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({
+      teamId: Id,
+      fields: z.array(StaffUpdateTeamRequest.keyof()).min(1),
+    }),
+  },
+  /** The invite row holds the address; the log doesn't. */
+  'coach.invited': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({ teamId: Id, inviteId: Id }),
+  },
+  /** The subject is the new coach: through an accepted invite, or added by another coach. */
+  'coach.added': {
+    source: 'api',
+    subject: true,
+    properties: z.strictObject({ teamId: Id, via: z.enum(['invite', 'coach']) }),
+  },
+  /** Staff made an interest community a recruiter filter. */
+  'community.marked_official': {
+    source: 'api',
+    subject: false,
+    properties: z.strictObject({ communityId: Id }),
+  },
   /** The slow lane: a request is waiting on a coach. */
-  join_requested: {
+  'join_request.created': {
     source: 'api',
     subject: false,
     properties: z.strictObject({
@@ -73,34 +105,30 @@ export const TRACKED_EVENTS = {
     }),
   },
   /** The fast lane: a team code was redeemed and the user is on the team. */
-  qr_joined: {
+  'qr_code.redeemed': {
     source: 'api',
     subject: false,
     properties: z.strictObject({ teamId: Id, qrCodeId: Id }),
   },
   /** A card went from unpublished to published. The first one per athlete is "first card". */
-  card_published: {
+  'card.published': {
     source: 'api',
     subject: false,
-    properties: z.strictObject({ cardId: Id, season: z.number().int() }),
+    properties: z.strictObject({ cardId: Id }),
   },
   /** Posts, announcements and sponsor opportunities, when submitted (before moderation). */
-  post_created: {
+  'post.created': {
     source: 'api',
     subject: false,
-    properties: z.strictObject({
-      postId: Id,
-      kind: z.enum(POST_KINDS),
-      audience: z.enum(AUDIENCE_SCOPES),
-    }),
+    properties: z.strictObject({ postId: Id, kind: z.enum(POST_KINDS) }),
   },
-  rsvp_set: {
+  'rsvp.set': {
     source: 'api',
     subject: false,
     properties: z.strictObject({ calendarEventId: Id, status: RsvpStatus }),
   },
-  /** Any search without an identity filter. `searchId` ties it to its `result_shown` rows. */
-  search_run: {
+  /** Any search without the identity filter. `searchId` ties it to its result rows. */
+  'search.run': {
     source: 'api',
     subject: false,
     properties: z.strictObject({
@@ -111,39 +139,40 @@ export const TRACKED_EVENTS = {
     }),
   },
   /**
-   * A recruiter search filtered by official affinity groups, logged instead of `search_run`.
-   * Every one is logged: if the write fails, the search fails.
+   * A recruiter search filtered by an official community, logged instead of `search.run`. Every
+   * one is logged (the staff and counsel log reads these): if the write fails, the search fails.
    */
-  identity_search_run: {
+  'search.identity_filter': {
     source: 'api',
     subject: false,
     properties: z.strictObject({
       searchId: Id,
-      groupIds: z.array(Id).min(1),
+      communityId: Id,
+      companyId: Id,
       filters: z.array(SearchFilter),
       resultCount: count,
     }),
   },
-  /** One row per person returned by a search, with the searcher as user and them as subject. */
-  result_shown: {
+  /** One row per person a search returned, with the searcher as user and them as subject. */
+  'search.result_shown': {
     source: 'api',
     subject: true,
     properties: z.strictObject({ searchId: Id, position: count }),
   },
   /** A card opened full-screen, wherever it came from. The subject is the card's athlete. */
-  card_viewed: {
+  'card.viewed': {
     source: 'client',
     subject: true,
     properties: z.strictObject({ cardId: Id }),
   },
   /** A shared contact detail revealed, copied or tapped. The subject is its owner. */
-  contact_viewed: {
+  'contact.viewed': {
     source: 'client',
     subject: true,
     properties: z.strictObject({ channel: ContactSharing.keyof() }),
   },
   /** A recruiter added an athlete to a list. */
-  saved_to_list: {
+  'list.athlete_saved': {
     source: 'api',
     subject: true,
     properties: z.strictObject({ listId: Id }),
@@ -180,7 +209,7 @@ const clientEvent = <N extends ClientEventName>(name: N) =>
  * The API also checks the subject is someone who still exists.
  */
 export const TrackEventRequest = z.discriminatedUnion('name', [
-  clientEvent('card_viewed'),
-  clientEvent('contact_viewed'),
+  clientEvent('card.viewed'),
+  clientEvent('contact.viewed'),
 ]);
 export type TrackEventRequest = z.input<typeof TrackEventRequest>;
