@@ -1,5 +1,6 @@
 import {
   MarkNotificationsReadRequest,
+  MAX_DEVICES_PER_USER,
   Me,
   NotificationList,
   NotificationPrefs,
@@ -67,7 +68,8 @@ export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { view
 
   /**
    * Register this phone for push. A phone belongs to whoever signed in on it last, so a token
-   * already held by anyone (including the same user) is replaced rather than duplicated.
+   * already held by anyone (including the same user) is replaced rather than duplicated. New
+   * entries go on the end, so a user's first entry is their oldest and goes first past the cap.
    */
   app.post('/me/devices', { schema: { body: RegisterDeviceRequest } }, async (request, reply) => {
     const u = viewer(request);
@@ -75,6 +77,10 @@ export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { view
     const i = world.devices.findIndex((d) => d.token === token);
     if (i !== -1) world.devices.splice(i, 1);
     world.devices.push({ userId: u.id, token, platform, createdAt: new Date().toISOString() });
+    const mine = world.devices.filter((d) => d.userId === u.id);
+    for (const old of mine.slice(0, Math.max(0, mine.length - MAX_DEVICES_PER_USER))) {
+      world.devices.splice(world.devices.indexOf(old), 1);
+    }
     return reply.status(204).send();
   });
 

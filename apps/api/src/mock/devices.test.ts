@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Role } from '@team-impact/contracts';
+import { MAX_DEVICES_PER_USER, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 
 /** Expo's tokens look like this. */
@@ -57,12 +57,53 @@ describe('push devices', () => {
     expect(await parent.unregister(PHONE)).toBe(204);
   });
 
-  it('refuses an empty token, a web platform, or no sign-in', async () => {
+  it('refuses anything but an Expo token, a web platform, or no sign-in', async () => {
     const w = await api();
     const athlete = await w.as('athlete');
-    expect(await athlete.call('POST', '/me/devices', { token: '', platform: 'ios' })).toBe(400);
+    for (const token of [
+      '',
+      'not-a-token',
+      'ExponentPushToken[]',
+      'ExponentPushToken[has space]',
+      `ExponentPushToken[${'x'.repeat(200)}]`,
+    ]) {
+      expect(await athlete.call('POST', '/me/devices', { token, platform: 'ios' }), token).toBe(
+        400,
+      );
+    }
+    expect(await athlete.register('ExpoPushToken[newer-format]')).toBe(204);
     expect(await athlete.call('POST', '/me/devices', { token: PHONE, platform: 'web' })).toBe(400);
     expect(await w.anonymous('POST', '/me/devices', { token: PHONE, platform: 'ios' })).toBe(401);
+  });
+
+  it(`keeps at most ${MAX_DEVICES_PER_USER} phones per account, dropping the oldest`, async () => {
+    const w = await api();
+    const athlete = await w.as('athlete');
+    const parent = await w.as('parent');
+    await parent.register(TABLET);
+    const tokens = Array.from(
+      { length: MAX_DEVICES_PER_USER + 2 },
+      (_, n) => `ExponentPushToken[phone-${n}]`,
+    );
+    for (const token of tokens) expect(await athlete.register(token)).toBe(204);
+    expect(await athlete.unregister(tokens[0]!)).toBe(404);
+    expect(await athlete.unregister(tokens[1]!)).toBe(404);
+    for (const token of tokens.slice(2)) expect(await athlete.unregister(token)).toBe(204);
+    // Someone else's phones don't count toward the athlete's cap.
+    expect(await parent.unregister(TABLET)).toBe(204);
+  });
+
+  it('re-registering a phone makes it the newest, so the cap drops another', async () => {
+    const athlete = await (await api()).as('athlete');
+    const tokens = Array.from(
+      { length: MAX_DEVICES_PER_USER },
+      (_, n) => `ExponentPushToken[phone-${n}]`,
+    );
+    for (const token of tokens) await athlete.register(token);
+    await athlete.register(tokens[0]!);
+    await athlete.register('ExponentPushToken[one-more]');
+    expect(await athlete.unregister(tokens[0]!)).toBe(204);
+    expect(await athlete.unregister(tokens[1]!)).toBe(404);
   });
 
   it('takes the token to unregister in the body, never the path', async () => {

@@ -60,10 +60,23 @@ export type NotificationList = z.infer<typeof NotificationList>;
 export const MarkNotificationsReadRequest = z.object({ ids: z.array(Id).min(1).optional() });
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequest>;
 
-/** An Expo push token, as the phone reports it. */
-export const DeviceToken = z.string().min(1);
+/**
+ * An Expo push token, as the phone reports it: `ExponentPushToken[…]` (or the newer
+ * `ExpoPushToken[…]`). Anything else is refused, so an account can't fill the table with junk.
+ */
+export const DeviceToken = z
+  .string()
+  .max(200)
+  .regex(/^Expo(nent)?PushToken\[[^\]\s]+\]$/, 'Not an Expo push token');
 
-/** Registers the signed-in user's phone for push notifications. */
+/** Phones one account can have registered at once; registering another drops the oldest. */
+export const MAX_DEVICES_PER_USER = 10;
+
+/**
+ * Registers the signed-in user's phone for push notifications. A phone belongs to whoever signed in
+ * on it last: a token already registered to anyone moves to this user. Past
+ * `MAX_DEVICES_PER_USER`, the user's oldest phone is dropped.
+ */
 export const RegisterDeviceRequest = z.object({
   token: DeviceToken,
   platform: z.enum(['ios', 'android']),
