@@ -24,6 +24,17 @@ describe('track', () => {
     );
   });
 
+  it('sends the session cookie, so the API knows who it was', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, status: 204 });
+    vi.stubGlobal('fetch', fetch);
+    track(view);
+    await settle();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(init.credentials).toBe('include');
+    expect(init.headers).toMatchObject({ 'content-type': 'application/json' });
+  });
+
   it('drops failures instead of throwing', async () => {
     const error = { error: { code: 'unauthenticated', message: 'Sign in first.' } };
     vi.stubGlobal(
