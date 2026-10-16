@@ -8,8 +8,9 @@ describe('env', () => {
     expect(env.SESSION_SECRET.length).toBeGreaterThanOrEqual(32);
   });
 
-  it('needs a database and a session secret otherwise', () => {
+  it('needs a database, a bucket and a session secret otherwise', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
+    expect(() => loadEnv({})).toThrow(/S3_BUCKET/);
     expect(() => loadEnv({ MOCK_API: '1', NODE_ENV: 'production' })).toThrow(/SESSION_SECRET/);
   });
 

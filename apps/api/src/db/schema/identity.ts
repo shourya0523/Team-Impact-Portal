@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   boolean,
   date,
   index,
@@ -19,6 +20,7 @@ import {
   userStatus,
   userType,
 } from './enums';
+import { media } from './cards';
 import { orgs } from './employer';
 import { colleges, teams } from './teams';
 
@@ -96,7 +98,10 @@ export const children = pgTable(
     // Copied from the parent's membership at join time.
     teamId: uuid('team_id').references(() => teams.id, { onDelete: 'set null' }),
     firstName: text('first_name').notNull(),
-    photoStorageKey: text('photo_storage_key'),
+    // The current photo. Uploaded through media like every other file, never a raw storage key.
+    photoMediaId: uuid('photo_media_id').references((): AnyPgColumn => media.id, {
+      onDelete: 'set null',
+    }),
     age: smallint('age').notNull(),
     bio: text('bio'),
     createdAt: createdAt(),
@@ -104,6 +109,7 @@ export const children = pgTable(
   (t) => [
     index('children_parent_user_id_idx').on(t.parentUserId),
     index('children_team_id_idx').on(t.teamId),
+    index('children_photo_media_id_idx').on(t.photoMediaId),
   ],
 );
 
