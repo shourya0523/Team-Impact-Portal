@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
-import { DISCREET_PUSH_TEXT, notify, notifyJoinApproved } from './activity';
+import { canReceive, DISCREET_PUSH_TEXT, notify, notifyJoinApproved } from './activity';
+import { suspend } from './staff-tools';
 import { id, USERS } from './fixtures';
 import { MockWorld } from './world';
 
@@ -495,5 +496,56 @@ describe('push text', () => {
       });
     }
     expect(w.pushOutbox.map((p) => p.text)).toEqual(NOTIFICATION_KINDS.map((k) => `A ${k}`));
+  });
+});
+
+describe('who gets a push', () => {
+  /** A world where Jordan (a member of the medical community) has one phone. */
+  const withPhone = (flags: FeatureFlags = { identitySearch: true, medicalCommunities: true }) => {
+    const w = new MockWorld(flags);
+    w.devices.push({
+      userId: USERS.jordan.id,
+      token: 'jordan-phone',
+      platform: 'ios',
+      createdAt: new Date().toISOString(),
+    });
+    return w;
+  };
+  const tellJordan = (w: MockWorld, communityId: string) =>
+    notify(w, {
+      userId: USERS.jordan.id,
+      kind: 'event',
+      actorId: null,
+      text: 'Something happened',
+      target: { kind: 'community', id: communityId },
+      communityId,
+    });
+
+  it('sends nothing to a suspended account', () => {
+    const w = withPhone();
+    expect(suspend(w, w.user(USERS.staff.id)!, w.user(USERS.jordan.id)!)).toBeNull();
+    tellJordan(w, TEAM_IMPACT);
+    expect(w.pushOutbox).toEqual([]);
+  });
+
+  it('sends nothing about a community the reader can’t see', () => {
+    const off = withPhone({ identitySearch: true, medicalCommunities: false });
+    tellJordan(off, MEDICAL);
+    expect(off.pushOutbox).toEqual([]);
+
+    const removed = withPhone();
+    removed.communities.find((c) => c.id === FINANCE)!.moderation = 'removed';
+    tellJordan(removed, FINANCE);
+    expect(removed.pushOutbox).toEqual([]);
+  });
+
+  it('agrees with the in-app list, which uses the same check', () => {
+    const w = withPhone({ identitySearch: true, medicalCommunities: false });
+    tellJordan(w, MEDICAL);
+    tellJordan(w, TEAM_IMPACT);
+    const jordan = w.user(USERS.jordan.id)!;
+    const listed = w.notifications.filter((n) => canReceive(w, jordan.id, n.communityId));
+    expect(w.pushOutbox.map((p) => p.notificationId)).toEqual(listed.map((n) => n.id));
+    expect(listed.map((n) => n.communityId)).toEqual([TEAM_IMPACT]);
   });
 });

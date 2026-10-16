@@ -8,7 +8,7 @@ import {
   UnregisterDeviceRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { prefsOf } from '../activity';
+import { canReceive, prefsOf } from '../activity';
 import { summaryOf } from '../fixtures';
 import type { MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
@@ -16,13 +16,11 @@ import { httpError, type Guards } from './context';
 
 /** The notification list, marking read, and the switches that govern what gets generated. */
 export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
-  /** Newest first; anything about a community the reader can no longer see is left out. */
+  /** Newest first; anything the reader may no longer be told about (`canReceive`) is left out. */
   const listFor = (u: MockUser): NotificationList => {
-    const mine = world.notifications.filter((n) => {
-      if (n.userId !== u.id) return false;
-      const c = world.communities.find((x) => x.id === n.communityId);
-      return !!c && world.canSeeCommunity(c, u);
-    });
+    const mine = world.notifications.filter(
+      (n) => n.userId === u.id && canReceive(world, u.id, n.communityId),
+    );
     return {
       items: [...mine]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

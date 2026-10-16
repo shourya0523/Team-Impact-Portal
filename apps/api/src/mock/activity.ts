@@ -11,6 +11,7 @@ import { NOTIFICATION_PREF } from '@team-impact/contracts';
 import { id, summaryOf, USERS } from './fixtures';
 import type { MockCommunity, MockUser } from './fixtures';
 import { hiddenFor } from './safety';
+import { isSuspended } from './staff-tools';
 import type { MockWorld } from './world';
 
 /**
@@ -128,6 +129,17 @@ const name = (u: MockUser) => `${u.firstName} ${u.lastName}`;
  */
 export const DISCREET_PUSH_TEXT = 'You have a new notification in Team Impact';
 
+/**
+ * Whether `userId` may be told about something in `communityId`, by any channel. The in-app list
+ * and push both ask this, so they can't drift apart: a suspended account, or a community the
+ * reader can no longer see (removed, left, or medical with the switch off), gets nothing.
+ */
+export const canReceive = (world: MockWorld, userId: string, communityId: string) => {
+  const u = world.user(userId);
+  const c = world.communities.find((x) => x.id === communityId);
+  return !!u && !!c && !isSuspended(world, userId) && world.canSeeCommunity(c, u);
+};
+
 /** True when push text must not say anything about the community. Unknown counts as discreet. */
 const isDiscreet = (world: MockWorld, communityId: string) => {
   const c = world.communities.find((x) => x.id === communityId);
@@ -151,6 +163,9 @@ export const notify = (
     createdAt: new Date().toISOString(),
   };
   world.notifications.push(stored);
+  // The in-app list re-checks `canReceive` each time it's read; a push can't be taken back, so
+  // it's checked once, now.
+  if (!canReceive(world, n.userId, n.communityId)) return;
   const pushText = isDiscreet(world, n.communityId) ? DISCREET_PUSH_TEXT : n.text;
   for (const d of world.devices.filter((x) => x.userId === n.userId)) {
     world.pushOutbox.push({
