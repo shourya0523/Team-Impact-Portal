@@ -5,11 +5,10 @@ import type { Role, TrackedEventName } from '@team-impact/contracts';
 import { useZodContracts } from '../zod';
 import { id, USERS } from './fixtures';
 import { registerMockRoutes } from './routes';
-import { INVITE_TOKENS, QR_TOKENS } from './team';
+import { QR_TOKENS } from './team';
 import { MockWorld } from './world';
 
 const SOCCER = id(201);
-const LACROSSE = id(202); // invited by staff, waiting on its first coach
 const TEAM = id(301); // the soccer team's community
 const FIRST_GEN = id(304); // official interest community
 const FAMILY_NIGHT = id(502); // approved event in Team Impact's community
@@ -50,103 +49,6 @@ describe('mock API: tracked events', () => {
     expect(res.status).toBe(201);
     expect(logged('user.signed_up')).toMatchObject([
       { userId: res.body.id, properties: { role: 'athlete' } },
-    ]);
-  });
-
-  it('logs a new coach and who added them', async () => {
-    const { call, logged } = await setup();
-    const accepted = await call('POST', `/invites/${INVITE_TOKENS.lacrosse}/accept`, {
-      newAccount: {
-        firstName: 'Pat',
-        lastName: 'Nguyen',
-        password: 'correct horse battery',
-        acceptTerms: true,
-      },
-    });
-    expect(accepted.status).toBe(200);
-    expect(logged('user.signed_up')).toMatchObject([
-      { userId: accepted.body.id, properties: { role: 'coach' } },
-    ]);
-    // Staff sent the lacrosse team's first-coach invite, so staff added Pat: not Pat themselves.
-    expect(logged('coach.added')).toEqual([
-      expect.objectContaining({
-        userId: USERS.staff.id,
-        subjectId: accepted.body.id,
-        properties: expect.objectContaining({ teamId: LACROSSE, via: 'invite' }),
-      }),
-    ]);
-  });
-
-  it('logs the coach who sent the invite as the one who added the new coach', async () => {
-    const { world, call, signInAs, logged } = await setup();
-    await signInAs('coach');
-    const invited = await call('POST', `/teams/${SOCCER}/coach-invites`, {
-      email: 'assistant.coach@tufts.edu',
-    });
-    expect(invited.status).toBe(201);
-    expect(logged('coach.invited')).toEqual([
-      expect.objectContaining({
-        userId: USERS.coach.id,
-        properties: { teamId: SOCCER, inviteId: invited.body.id },
-      }),
-    ]);
-    // The link is only ever emailed; the new coach opens it signed out.
-    await call('POST', '/auth/sign-out');
-    const token = world.coachInvites.find((i) => i.id === invited.body.id)!.token;
-    const accepted = await call('POST', `/invites/${token}/accept`, {
-      newAccount: {
-        firstName: 'Alex',
-        lastName: 'Moore',
-        password: 'correct horse battery',
-        acceptTerms: true,
-      },
-    });
-    expect(accepted.status).toBe(200);
-    expect(logged('coach.added')).toEqual([
-      expect.objectContaining({
-        userId: USERS.coach.id,
-        subjectId: accepted.body.id,
-        properties: expect.objectContaining({ teamId: SOCCER, via: 'invite' }),
-      }),
-    ]);
-  });
-
-  it('logs each inviter when one coach accepts invites from staff and from a coach', async () => {
-    const { world, call, signInAs, logged } = await setup();
-    const email = 'alex.moore@tufts.edu';
-    const tokenOf = (inviteId: string) => world.coachInvites.find((i) => i.id === inviteId)!.token;
-    await signInAs('coach');
-    const fromDana = await call('POST', `/teams/${SOCCER}/coach-invites`, { email });
-    await signInAs('staff');
-    const fromStaff = await call('POST', `/staff/teams/${LACROSSE}/coach-invites`, { email });
-    expect([fromDana.status, fromStaff.status]).toEqual([201, 201]);
-
-    // Alex creates their account through staff's invite, which signs them in...
-    await call('POST', '/auth/sign-out');
-    const alex = await call('POST', `/invites/${tokenOf(fromStaff.body.id)}/accept`, {
-      newAccount: {
-        firstName: 'Alex',
-        lastName: 'Moore',
-        password: 'correct horse battery',
-        acceptTerms: true,
-      },
-    });
-    expect(alex.status).toBe(200);
-    // ...then accepts Dana's while signed in.
-    expect((await call('POST', `/invites/${tokenOf(fromDana.body.id)}/accept`, {})).status).toBe(
-      200,
-    );
-    expect(logged('coach.added')).toEqual([
-      expect.objectContaining({
-        userId: USERS.staff.id,
-        subjectId: alex.body.id,
-        properties: expect.objectContaining({ teamId: LACROSSE, via: 'invite' }),
-      }),
-      expect.objectContaining({
-        userId: USERS.coach.id,
-        subjectId: alex.body.id,
-        properties: expect.objectContaining({ teamId: SOCCER, via: 'invite' }),
-      }),
     ]);
   });
 

@@ -7,7 +7,6 @@ import type {
 import { commentsFor } from './activity';
 import type { MockPost } from './fixtures';
 import { canSeeChild } from './profiles';
-import { isLastCoach } from './team';
 import type { MockUser, MockWorld } from './world';
 
 /**
@@ -162,8 +161,14 @@ const removeWhere = <T>(items: T[], drop: (item: T) => boolean) => {
 export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] | null => {
   if (u.role === 'staff') return [403, 'Staff accounts are closed by Team Impact, not in the app'];
   // A live team always keeps at least one coach (PRD §3).
-  if (world.teamIdsOf(u.id).some((teamId) => isLastCoach(world, teamId, u.id))) {
-    return [409, 'You’re this team’s only coach. Ask Team Impact to add another coach first.'];
+  for (const teamId of world.teamIdsOf(u.id)) {
+    const team = world.teams.find((t) => t.id === teamId);
+    const coaches = world.teamMembers.filter(
+      (m) => m.teamId === teamId && world.user(m.userId)?.role === 'coach',
+    );
+    if (u.role === 'coach' && team?.status === 'live' && coaches.length === 1) {
+      return [409, 'You’re this team’s only coach. Ask Team Impact to add another coach first.'];
+    }
   }
 
   const gone = (id: string) => id === u.id;

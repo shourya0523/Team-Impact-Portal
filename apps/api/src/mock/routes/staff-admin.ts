@@ -16,24 +16,11 @@ import {
   StaffUpdateTeamRequest,
   Team,
   TeamCoaches,
-  type TrackedEvent,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { summaryOf, type MockPost } from '../fixtures';
 import { toPost } from '../safety';
-import { isSuspended } from '../staff-tools';
-import {
-  archiveTeam,
-  changedTeamFields,
-  coachInviteView,
-  createCoachInvite,
-  resendCoachInvite,
-  renameTeamCommunity,
-  restoreTeam,
-  revokeCoachInvite,
-  UNREADABLE_COLOR_MESSAGE,
-  unreadableTeamColor,
-} from '../team';
+import { coachInviteView, createCoachInvite } from '../team';
 import type { MockUser, MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
@@ -88,11 +75,7 @@ export const registerStaffAdminRoutes = (
         throw httpError(409, 'That college is already listed');
       }
       college.name = request.body.name;
-      for (const t of world.teams) {
-        if (t.college.id !== college.id) continue;
-        t.college = { ...college };
-        renameTeamCommunity(world, t);
-      }
+      for (const t of world.teams) if (t.college.id === college.id) t.college = { ...college };
       return college;
     },
   );
@@ -113,11 +96,7 @@ export const registerStaffAdminRoutes = (
           ),
       );
       if (clash) throw httpError(409, `${into.name} already has a ${clash.name} team`);
-      for (const t of world.teams) {
-        if (t.college.id !== from.id) continue;
-        t.college = { ...into };
-        renameTeamCommunity(world, t);
-      }
+      for (const t of world.teams) if (t.college.id === from.id) t.college = { ...into };
       world.colleges.splice(world.colleges.indexOf(from), 1);
       return into;
     },
@@ -166,7 +145,6 @@ export const registerStaffAdminRoutes = (
       if (duplicateTeam(college.id, b.sport, b.gender)) {
         throw httpError(409, `${college.name} already has a ${b.gender}'s ${b.sport} team`);
       }
-      if (unreadableTeamColor(b.color)) throw httpError(400, UNREADABLE_COLOR_MESSAGE);
       const now = new Date().toISOString();
       const team = {
         id: world.newId(),
@@ -175,8 +153,7 @@ export const registerStaffAdminRoutes = (
         sport: b.sport,
         gender: b.gender,
         division: b.division,
-        // Stored upper case, so the same colour never looks like an edit.
-        color: b.color?.toUpperCase() ?? null,
+        color: b.color ?? null,
         logoUrl: null,
         about: null,
         // Waiting on its first coach.
@@ -195,11 +172,7 @@ export const registerStaffAdminRoutes = (
         createdAt: now,
         members: [],
       });
-      const firstInvite = invite(team.id, b.firstCoachEmail, u);
-      world.track(u.id, [
-        { name: 'team.created', properties: { teamId: team.id } },
-        { name: 'coach.invited', properties: { teamId: team.id, inviteId: firstInvite.id } },
-      ]);
+      invite(team.id, b.firstCoachEmail, u);
       return reply.status(201).send(teamOut(team));
     },
   );
@@ -208,7 +181,7 @@ export const registerStaffAdminRoutes = (
     '/staff/teams/:id',
     { schema: { params: IdParams, body: StaffUpdateTeamRequest, response: { 200: Team } } },
     async (request) => {
-      const u = staffOnly(request);
+      staffOnly(request);
       const team = findTeam(request.params.id);
       const { archived, collegeId, ...b } = request.body;
       const college = collegeId ? findCollege(collegeId) : team.college;
@@ -217,33 +190,20 @@ export const registerStaffAdminRoutes = (
       if (duplicateTeam(college.id, sport, gender, team.id)) {
         throw httpError(409, `${college.name} already has a ${gender}'s ${sport} team`);
       }
-      if (unreadableTeamColor(b.color)) throw httpError(400, UNREADABLE_COLOR_MESSAGE);
-      const fields = changedTeamFields(team, request.body);
       Object.assign(team, {
         ...(b.name !== undefined && { name: b.name }),
-        ...(b.color !== undefined && { color: b.color?.toUpperCase() ?? null }),
+        ...(b.color !== undefined && { color: b.color }),
         ...(b.about !== undefined && { about: b.about }),
         ...(b.division !== undefined && { division: b.division }),
         college: { ...college },
         sport,
         gender,
       });
-      if (fields.includes('name') || fields.includes('collegeId')) renameTeamCommunity(world, team);
-      const events: TrackedEvent[] = [];
-      if (fields.length) {
-        events.push({ name: 'team.updated', properties: { teamId: team.id, fields } });
-      }
-      if (archived === true && team.status !== 'archived') {
-        events.push({
-          name: 'team.archived',
-          properties: { teamId: team.id, ...archiveTeam(world, team) },
-        });
-      }
+      if (archived === true) team.status = 'archived';
+      // Restoring brings a team back live if it still has a coach, else back to waiting on one.
       if (archived === false && team.status === 'archived') {
-        restoreTeam(world, team);
-        events.push({ name: 'team.restored', properties: { teamId: team.id } });
+        team.status = coachesOf(team.id).length ? 'live' : 'invited';
       }
-      world.track(u.id, events);
       return teamOut(team);
     },
   );
@@ -252,12 +212,10 @@ export const registerStaffAdminRoutes = (
     '/staff/teams/:id/archive',
     { schema: { params: IdParams, response: { 200: Team } } },
     async (request) => {
-      const u = staffOnly(request);
+      staffOnly(request);
       const team = findTeam(request.params.id);
-      if (team.status !== 'archived') {
-        const closed = archiveTeam(world, team);
-        world.track(u.id, { name: 'team.archived', properties: { teamId: team.id, ...closed } });
-      }
+      // Out of the join search; its QR codes stop working (S7).
+      team.status = 'archived';
       return teamOut(team);
     },
   );
@@ -275,7 +233,6 @@ export const registerStaffAdminRoutes = (
           user: summaryOf(world.user(m.userId)!),
           joinedVia: m.joinedVia,
           joinedAt: m.joinedAt,
-          suspended: isSuspended(world, m.userId),
         })),
         invites: world.coachInvites
           .filter((i) => i.teamId === team.id)
@@ -291,12 +248,8 @@ export const registerStaffAdminRoutes = (
     async (request, reply) => {
       const u = staffOnly(request);
       const team = findTeam(request.params.id);
-      const sent = invite(team.id, request.body.email, u);
-      world.track(u.id, {
-        name: 'coach.invited',
-        properties: { teamId: team.id, inviteId: sent.id },
-      });
-      return reply.status(201).send(sent);
+      if (team.status === 'archived') throw httpError(400, 'Restore the team first');
+      return reply.status(201).send(invite(team.id, request.body.email, u));
     },
   );
 
@@ -304,36 +257,12 @@ export const registerStaffAdminRoutes = (
     '/staff/coach-invites/:id/revoke',
     { schema: { params: IdParams, response: { 200: CoachInvite } } },
     async (request) => {
-      const u = staffOnly(request);
+      staffOnly(request);
       const i = world.coachInvites.find((x) => x.id === request.params.id);
       if (!i) throw httpError(404, 'No such invite');
-      const result = revokeCoachInvite(i);
-      if ('error' in result) throw httpError(result.status, result.error);
-      if (result.changed) {
-        world.track(u.id, {
-          name: 'coach.invite_revoked',
-          properties: { teamId: i.teamId, inviteId: i.id },
-        });
-      }
+      if (i.acceptedAt) throw httpError(400, 'Already accepted');
+      i.revokedAt ??= new Date().toISOString();
       return coachInviteView(world, i);
-    },
-  );
-
-  /** A fresh link and 7 more days for the same email; the old link stops working. */
-  app.post(
-    '/staff/coach-invites/:id/resend',
-    { schema: { params: IdParams, response: { 201: CoachInvite } } },
-    async (request, reply) => {
-      const u = staffOnly(request);
-      const old = world.coachInvites.find((x) => x.id === request.params.id);
-      if (!old) throw httpError(404, 'No such invite');
-      const result = resendCoachInvite(world, u, old);
-      if ('error' in result) throw httpError(result.status, result.error);
-      world.track(u.id, {
-        name: 'coach.invited',
-        properties: { teamId: old.teamId, inviteId: result.invite.id, replacesInviteId: old.id },
-      });
-      return reply.status(201).send(coachInviteView(world, result.invite));
     },
   );
 

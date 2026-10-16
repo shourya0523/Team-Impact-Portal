@@ -6,7 +6,6 @@ import type {
 } from '@team-impact/contracts';
 import { notify } from './activity';
 import { summaryOf } from './fixtures';
-import { goLiveIfCoached, isLastCoach } from './team';
 import type { MockUser, MockWorld } from './world';
 
 /**
@@ -109,7 +108,15 @@ export const cannotSuspend = (world: MockWorld, u: MockUser): Failure | null => 
   if (u.role !== 'coach') return null;
   for (const teamId of world.teamIdsOf(u.id)) {
     const team = world.teams.find((t) => t.id === teamId);
-    if (team && isLastCoach(world, teamId, u.id)) {
+    if (!team || team.status === 'archived') continue;
+    const otherCoaches = world.teamMembers.filter(
+      (m) =>
+        m.teamId === teamId &&
+        m.userId !== u.id &&
+        world.user(m.userId)?.role === 'coach' &&
+        !isSuspended(world, m.userId),
+    );
+    if (otherCoaches.length === 0) {
       return {
         status: 409,
         message: `${name(u)} is the last coach of ${team.name}. Add another coach before suspending them.`,
@@ -150,9 +157,6 @@ export const unsuspend = (world: MockWorld, staff: MockUser, u: MockUser) => {
   const kept = world.staffTools.suspensions.filter((s) => s.userId !== u.id);
   if (kept.length === before) return false;
   world.staffTools.suspensions.splice(0, before, ...kept);
-  // A team restored while its only coach was suspended was left waiting on a coach; now it has one.
-  if (u.role === 'coach')
-    for (const teamId of world.teamIdsOf(u.id)) goLiveIfCoached(world, teamId);
   logAction(world, staff, 'unsuspend', userTarget(u));
   return true;
 };

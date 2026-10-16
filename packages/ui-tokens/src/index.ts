@@ -25,7 +25,7 @@ export {
   uiPairs,
   type ColorPair,
 } from './accessibility';
-export { isReadableTeamColor, resolveTeamColor, onTeamColor } from './team';
+export { resolveTeamColor, onTeamColor } from './team';
 export { tokensToCss } from './css';
 
 export const tokens = { colors, spacing, radius, layout, typography, motion } as const;

@@ -65,18 +65,8 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     '/teams/:id',
     { schema: { params: IdParams, body: UpdateTeamRequest, response: { 200: Team } } },
     async (request) => {
-      const u = managedTeam(request, request.params.id);
-      if (area.unreadableTeamColor(request.body.color)) {
-        throw httpError(400, area.UNREADABLE_COLOR_MESSAGE);
-      }
-      const t = world.teams.find((x) => x.id === request.params.id)!;
-      const fields = area.changedTeamFields(t, request.body);
-      const updated = area.updateTeam(world, t.id, request.body)!;
-      if (fields.includes('name')) area.renameTeamCommunity(world, t);
-      if (fields.length) {
-        world.track(u.id, { name: 'team.updated', properties: { teamId: t.id, fields } });
-      }
-      return updated;
+      managedTeam(request, request.params.id);
+      return area.updateTeam(world, request.params.id, request.body)!;
     },
   );
 
@@ -119,12 +109,8 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request) => {
       const { id, userId } = request.params;
       const u = managedTeam(request, id);
-      const wasCoach = world.user(userId)?.role === 'coach';
       const result = area.removeMember(world, id, userId);
       if ('error' in result) throw httpError(result.status, result.error);
-      if (wasCoach) {
-        world.track(u.id, { name: 'coach.removed', subjectId: userId, properties: { teamId: id } });
-      }
       return { roster: area.roster(world, id, u)!, removedChildren: result.removedChildren };
     },
   );
@@ -191,10 +177,6 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       const u = managedTeam(request, request.params.id);
       const result = area.createCoachInvite(world, u, request.params.id, request.body.email);
       if ('error' in result) throw httpError(result.status, result.error);
-      world.track(u.id, {
-        name: 'coach.invited',
-        properties: { teamId: request.params.id, inviteId: result.invite.id },
-      });
       return reply.status(201).send(area.coachInviteView(world, result.invite));
     },
   );
@@ -205,15 +187,8 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request) => {
       const invite = world.coachInvites.find((i) => i.id === request.params.id);
       if (!invite) throw httpError(404, 'No such invite');
-      const u = managedTeam(request, invite.teamId);
-      const result = area.revokeCoachInvite(invite);
-      if ('error' in result) throw httpError(result.status, result.error);
-      if (result.changed) {
-        world.track(u.id, {
-          name: 'coach.invite_revoked',
-          properties: { teamId: invite.teamId, inviteId: invite.id },
-        });
-      }
+      managedTeam(request, invite.teamId);
+      invite.revokedAt ??= new Date().toISOString();
       return area.coachInviteView(world, invite);
     },
   );

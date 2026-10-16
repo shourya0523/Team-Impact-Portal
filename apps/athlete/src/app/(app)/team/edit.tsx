@@ -4,7 +4,8 @@ import { StyleSheet, View } from 'react-native';
 import { HexColor, type Team } from '@team-impact/contracts';
 import {
   colors,
-  isReadableTeamColor,
+  contrastRatio,
+  contrastThreshold,
   layout,
   onTeamColor,
   radius,
@@ -19,6 +20,11 @@ import { Button, Card, Input, Text } from '@/ui';
 
 const SWATCH = layout.avatar.lg;
 
+/** White or ink text must reach AA on the team colour, as staff's portal check requires. */
+const readable = (hex: string) =>
+  Math.max(contrastRatio(colors.surface, hex), contrastRatio(colors.ink, hex)) >=
+  contrastThreshold.normalText;
+
 function EditForm({ team }: { team: Team }) {
   const [name, setName] = useState(team.name);
   const [about, setAbout] = useState(team.about ?? '');
@@ -31,7 +37,7 @@ function EditForm({ team }: { team: Team }) {
     ? undefined
     : !HexColor.safeParse(typed).success
       ? `Use a 6-digit hex colour like ${colors.brand}`
-      : !isReadableTeamColor(typed)
+      : !readable(typed)
         ? 'Text can’t be read on this colour. Pick a darker or lighter one.'
         : undefined;
   const nameError = name.trim() ? undefined : 'The team needs a name.';

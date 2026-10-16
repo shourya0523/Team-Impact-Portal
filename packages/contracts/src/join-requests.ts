@@ -33,8 +33,6 @@ const joinRequestBase = {
   status: JoinRequestStatus,
   createdAt: Timestamp,
   decidedAt: Timestamp.nullable(),
-  /** Why it was declined, when Team Impact did it rather than a coach (archiving the team). */
-  decisionNote: z.string().optional(),
 };
 
 /** What the coach (or staff) sees when deciding. */

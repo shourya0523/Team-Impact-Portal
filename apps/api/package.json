@@ -20,7 +20,6 @@
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@team-impact/contracts": "workspace:*",
-    "@team-impact/ui-tokens": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
     "postgres": "^3.4.9",

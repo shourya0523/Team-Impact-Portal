@@ -37,7 +37,6 @@ import {
   RecruiterSignupRequest,
   SaveCollegeRequest,
   SignupRequest,
-  SPORTS,
   StaffUpdateTeamRequest,
   TeamQrCodeHistoryEntry,
   TRACKED_EVENT_NAMES,
@@ -302,46 +301,6 @@ describe('teams', () => {
     const edit = { name: 'Jumbos', collegeId: ID, archived: true };
     expect(UpdateTeamRequest.parse(edit)).toEqual({ name: 'Jumbos' });
     expect(StaffUpdateTeamRequest.parse(edit)).toEqual(edit);
-  });
-
-  it('creates a team only for a sport on the fixed list', () => {
-    expect(accepts(CreateTeamRequest, { ...team, sport: 'Ice Hockey' })).toBe(true);
-    for (const sport of ['Hockey', 'soccer', 'SOCCER', 'Quidditch', '']) {
-      expect(issuePaths(CreateTeamRequest.safeParse({ ...team, sport })), sport).toEqual(['sport']);
-    }
-    expect(accepts(CreateTeamRequest, { ...team, sport: undefined })).toBe(false);
-  });
-
-  it('accepts every listed sport, and lists each one once whatever its case', () => {
-    expect(SPORTS.length).toBeGreaterThan(0);
-    for (const sport of SPORTS)
-      expect(accepts(CreateTeamRequest, { ...team, sport }), sport).toBe(true);
-    const folded = SPORTS.map((s) => s.trim().toLowerCase());
-    expect(new Set(folded).size).toBe(SPORTS.length);
-  });
-
-  it('keeps a staff edit’s sport on the list too', () => {
-    expect(accepts(StaffUpdateTeamRequest, { sport: 'Rowing' })).toBe(true);
-    expect(accepts(StaffUpdateTeamRequest, {})).toBe(true);
-    expect(issuePaths(StaffUpdateTeamRequest.safeParse({ sport: 'Hockey' }))).toEqual(['sport']);
-    expect(issuePaths(StaffUpdateTeamRequest.safeParse({ sport: 'rowing' }))).toEqual(['sport']);
-  });
-
-  it('never lets a coach change the team’s college, sport, gender, division or status', () => {
-    const edit = {
-      color: '#1E3F7B',
-      collegeId: ID,
-      sport: 'Rowing',
-      gender: 'men',
-      division: 'I',
-      archived: false,
-    };
-    expect(UpdateTeamRequest.parse(edit)).toEqual({ color: '#1E3F7B' });
-  });
-
-  it('lets staff and coaches clear the colour back to navy', () => {
-    expect(UpdateTeamRequest.parse({ color: null })).toEqual({ color: null });
-    expect(StaffUpdateTeamRequest.parse({ color: null })).toEqual({ color: null });
   });
 
   it('asks parents whether they’re a parent or guardian, and nothing about children', () => {
@@ -639,88 +598,6 @@ describe('tracked events', () => {
         expect(isStructured(schema), `${name}.${key}`).toBe(true);
       }
     }
-  });
-
-  describe('team onboarding events', () => {
-    const OTHER = '7f1d6a2e-3b4c-4d5e-8f60-cba987654321';
-    /** One valid property set per event staff onboarding logs, and whether it names a person. */
-    const onboarding = {
-      'team.created': { subject: false, valid: { teamId: ID } },
-      'team.updated': { subject: false, valid: { teamId: ID, fields: ['sport', 'color'] } },
-      'team.archived': {
-        subject: false,
-        valid: { teamId: ID, declinedRequestCount: 1, revokedCodeCount: 2 },
-      },
-      'team.restored': { subject: false, valid: { teamId: ID } },
-      'coach.invited': { subject: false, valid: { teamId: ID, inviteId: OTHER } },
-      'coach.invite_revoked': { subject: false, valid: { teamId: ID, inviteId: OTHER } },
-      'coach.added': { subject: true, valid: { teamId: ID, via: 'invite' } },
-      'coach.removed': { subject: true, valid: { teamId: ID } },
-    } as const;
-
-    it('defines every event staff onboarding writes, logged by the API only', () => {
-      for (const [name, { subject }] of Object.entries(onboarding)) {
-        expect(TRACKED_EVENT_NAMES, name).toContain(name);
-        const definition = TRACKED_EVENTS[name as keyof typeof onboarding];
-        expect(definition.source, name).toBe('api');
-        // Removing or adding a coach is about that coach; the rest are about the team.
-        expect(definition.subject, name).toBe(subject);
-      }
-    });
-
-    it.each(Object.entries(onboarding))(
-      '%s takes its own properties and nothing else',
-      (name, { valid }) => {
-        const schema = TRACKED_EVENTS[name as keyof typeof onboarding].properties;
-        expect(accepts(schema, valid)).toBe(true);
-        for (const extra of [
-          { email: 'pat.nguyen@tufts.edu' },
-          { name: 'Pat Nguyen' },
-          { teamName: "Men's Lacrosse" },
-          { collegeName: 'Tufts University' },
-        ]) {
-          expect(accepts(schema, { ...valid, ...extra }), JSON.stringify(extra)).toBe(false);
-        }
-        const { teamId, ...withoutTeam } = valid;
-        void teamId;
-        expect(accepts(schema, withoutTeam)).toBe(false);
-        expect(accepts(schema, { ...valid, teamId: 'tufts-lacrosse' })).toBe(false);
-      },
-    );
-
-    it('records a resent invite against the one it replaces, by id', () => {
-      const schema = TRACKED_EVENTS['coach.invited'].properties;
-      expect(accepts(schema, { teamId: ID, inviteId: OTHER, replacesInviteId: ID })).toBe(true);
-      expect(
-        accepts(schema, { teamId: ID, inviteId: OTHER, replacesInviteId: 'pat.nguyen@tufts.edu' }),
-      ).toBe(false);
-    });
-
-    it('counts what archiving closed in whole, non-negative numbers', () => {
-      const schema = TRACKED_EVENTS['team.archived'].properties;
-      const ok = { teamId: ID, declinedRequestCount: 0, revokedCodeCount: 0 };
-      expect(accepts(schema, ok)).toBe(true);
-      expect(accepts(schema, { ...ok, declinedRequestCount: -1 })).toBe(false);
-      expect(accepts(schema, { ...ok, revokedCodeCount: 1.5 })).toBe(false);
-      expect(accepts(schema, { teamId: ID })).toBe(false);
-    });
-
-    it('logs the names of the fields a team edit changed, never their values', () => {
-      const schema = TRACKED_EVENTS['team.updated'].properties;
-      const fields = ['collegeId', 'sport', 'gender', 'name', 'division', 'color', 'about'];
-      expect(accepts(schema, { teamId: ID, fields })).toBe(true);
-      expect(accepts(schema, { teamId: ID, fields: ['Ice Hockey'] })).toBe(false);
-      expect(accepts(schema, { teamId: ID, fields: ['email'] })).toBe(false);
-      expect(accepts(schema, { teamId: ID, fields: [] })).toBe(false);
-    });
-
-    it('can’t be sent by the apps', () => {
-      for (const [name, { valid }] of Object.entries(onboarding)) {
-        expect(accepts(TrackEventRequest, { name, properties: valid, subjectId: ID }), name).toBe(
-          false,
-        );
-      }
-    });
   });
 
   it('refuses properties an event doesn’t define', () => {

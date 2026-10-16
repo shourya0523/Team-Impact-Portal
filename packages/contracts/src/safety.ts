@@ -44,8 +44,7 @@ export type Block = z.infer<typeof Block>;
 
 /** A team's coaches and its coach invites (pending, accepted or revoked), for staff (S8). */
 export const TeamCoaches = z.object({
-  /** Suspended coaches stay on the team but can't act for it, so they don't count as its coach. */
-  coaches: z.array(TeamMember.extend({ suspended: z.boolean() })),
+  coaches: z.array(TeamMember),
   invites: z.array(CoachInvite),
 });
 export type TeamCoaches = z.infer<typeof TeamCoaches>;
