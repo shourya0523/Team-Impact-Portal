@@ -1,9 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
-import { canReceive, DISCREET_PUSH_TEXT, notify, notifyJoinApproved } from './activity';
-import { suspend } from './staff-tools';
+import {
+  canReceive,
+  DEFAULT_PREFS,
+  DISCREET_PUSH_TEXT,
+  notify,
+  notifyJoinApproved,
+} from './activity';
 import { id, USERS } from './fixtures';
+import { suspend, warn } from './staff-tools';
 import { MockWorld } from './world';
 
 const TEAM = id(301);
@@ -537,6 +543,17 @@ describe('who gets a push', () => {
     removed.communities.find((c) => c.id === FINANCE)!.moderation = 'removed';
     tellJordan(removed, FINANCE);
     expect(removed.pushOutbox).toEqual([]);
+  });
+
+  it('pushes a staff warning even with every switch off, as the in-app one arrives', () => {
+    const w = withPhone();
+    const allOff = Object.fromEntries(Object.keys(DEFAULT_PREFS).map((k) => [k, false]));
+    w.notificationPrefs.set(USERS.jordan.id, allOff as typeof DEFAULT_PREFS);
+    const ticket = { id: id(9998), target: { kind: 'post' as const, id: id(9999) }, preview: '…' };
+    warn(w, w.user(USERS.staff.id)!, w.user(USERS.jordan.id)!, ticket, null);
+    expect(w.notifications.map((n) => n.kind)).toEqual(['warning']);
+    expect(w.pushOutbox).toHaveLength(1);
+    expect(w.pushOutbox[0]!.text).toBe(w.notifications[0]!.text);
   });
 
   it('agrees with the in-app list, which uses the same check', () => {
