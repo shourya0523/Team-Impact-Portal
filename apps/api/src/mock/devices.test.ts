@@ -2,10 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 
-/** Expo's tokens look like this, brackets and all, so the DELETE path has to be URL-encoded. */
+/** Expo's tokens look like this. */
 const PHONE = 'ExponentPushToken[phone-0001]';
 const TABLET = 'ExponentPushToken[tablet-0002]';
-const path = (token: string) => `/me/devices/${encodeURIComponent(token)}`;
 
 let closers: (() => Promise<void>)[] = [];
 afterEach(async () => {
@@ -17,7 +16,7 @@ type Method = 'POST' | 'DELETE';
 
 /**
  * One mock API shared by several clients. The world isn't reachable from here, so whether a phone
- * is still registered is read back through DELETE: 204 if it was yours, 404 if not.
+ * is still registered is read back through `unregister`: 204 if it was yours, 404 if not.
  */
 const api = async () => {
   const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true });
@@ -33,6 +32,7 @@ const api = async () => {
     return {
       call: (method: Method, url: string, payload?: object) => send(method, url, payload, cookies),
       register: (token: string) => send('POST', '/me/devices', { token, platform: 'ios' }, cookies),
+      unregister: (token: string) => send('DELETE', '/me/devices', { token }, cookies),
     };
   };
   return { as, anonymous: send };
@@ -43,8 +43,8 @@ describe('push devices', () => {
     const athlete = await (await api()).as('athlete');
     expect(await athlete.register(PHONE)).toBe(204);
     expect(await athlete.register(PHONE)).toBe(204);
-    expect(await athlete.call('DELETE', path(PHONE))).toBe(204);
-    expect(await athlete.call('DELETE', path(PHONE))).toBe(404);
+    expect(await athlete.unregister(PHONE)).toBe(204);
+    expect(await athlete.unregister(PHONE)).toBe(404);
   });
 
   it('a phone belongs to whoever signed in on it last', async () => {
@@ -53,8 +53,8 @@ describe('push devices', () => {
     const parent = await w.as('parent');
     await athlete.register(PHONE);
     await parent.register(PHONE);
-    expect(await athlete.call('DELETE', path(PHONE))).toBe(404);
-    expect(await parent.call('DELETE', path(PHONE))).toBe(204);
+    expect(await athlete.unregister(PHONE)).toBe(404);
+    expect(await parent.unregister(PHONE)).toBe(204);
   });
 
   it('refuses an empty token, a web platform, or no sign-in', async () => {
@@ -65,13 +65,21 @@ describe('push devices', () => {
     expect(await w.anonymous('POST', '/me/devices', { token: PHONE, platform: 'ios' })).toBe(401);
   });
 
+  it('takes the token to unregister in the body, never the path', async () => {
+    const athlete = await (await api()).as('athlete');
+    await athlete.register(PHONE);
+    expect(await athlete.call('DELETE', `/me/devices/${encodeURIComponent(PHONE)}`)).toBe(404);
+    expect(await athlete.call('DELETE', '/me/devices')).toBe(400);
+    expect(await athlete.unregister(PHONE)).toBe(204);
+  });
+
   it('signing out with a token removes only that phone', async () => {
     const athlete = await (await api()).as('athlete');
     await athlete.register(PHONE);
     await athlete.register(TABLET);
     expect(await athlete.call('POST', '/auth/sign-out', { token: PHONE })).toBe(204);
-    expect(await athlete.call('DELETE', path(PHONE))).toBe(404);
-    expect(await athlete.call('DELETE', path(TABLET))).toBe(204);
+    expect(await athlete.unregister(PHONE)).toBe(404);
+    expect(await athlete.unregister(TABLET)).toBe(204);
   });
 
   it('signing out works with no body (the portal) and with no session', async () => {
@@ -80,6 +88,6 @@ describe('push devices', () => {
     await athlete.register(PHONE);
     expect(await athlete.call('POST', '/auth/sign-out')).toBe(204);
     expect(await w.anonymous('POST', '/auth/sign-out', { token: PHONE })).toBe(204);
-    expect(await athlete.call('DELETE', path(PHONE))).toBe(404);
+    expect(await athlete.unregister(PHONE)).toBe(404);
   });
 });

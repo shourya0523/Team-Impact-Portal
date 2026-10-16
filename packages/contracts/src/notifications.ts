@@ -70,6 +70,9 @@ export const RegisterDeviceRequest = z.object({
 });
 export type RegisterDeviceRequest = z.infer<typeof RegisterDeviceRequest>;
 
-/** `DELETE /me/devices/:token`. Clients URL-encode the token, since Expo's contains brackets. */
-export const DeviceTokenParams = z.object({ token: DeviceToken });
-export type DeviceTokenParams = z.infer<typeof DeviceTokenParams>;
+/**
+ * `DELETE /me/devices`. The token goes in the body, not the path: paths end up in access logs,
+ * proxies and error trackers, and a token alone is enough to push to that phone.
+ */
+export const UnregisterDeviceRequest = z.object({ token: DeviceToken });
+export type UnregisterDeviceRequest = z.infer<typeof UnregisterDeviceRequest>;

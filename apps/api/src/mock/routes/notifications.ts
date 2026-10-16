@@ -1,10 +1,10 @@
 import {
-  DeviceTokenParams,
   MarkNotificationsReadRequest,
   Me,
   NotificationList,
   NotificationPrefs,
   RegisterDeviceRequest,
+  UnregisterDeviceRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { prefsOf } from '../activity';
@@ -80,13 +80,11 @@ export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { view
 
   /** Stop pushing to one of your own phones. */
   app.delete(
-    '/me/devices/:token',
-    { schema: { params: DeviceTokenParams } },
+    '/me/devices',
+    { schema: { body: UnregisterDeviceRequest } },
     async (request, reply) => {
       const u = viewer(request);
-      const i = world.devices.findIndex(
-        (d) => d.userId === u.id && d.token === request.params.token,
-      );
+      const i = world.devices.findIndex((d) => d.userId === u.id && d.token === request.body.token);
       if (i === -1) throw httpError(404, 'This phone isn’t registered to you');
       world.devices.splice(i, 1);
       return reply.status(204).send();
