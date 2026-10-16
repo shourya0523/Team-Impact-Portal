@@ -751,9 +751,41 @@ describe('tracked events', () => {
     );
     expect(accepts(TrackEventRequest, search)).toBe(false);
 
+    // Written out, so marking another event `client` has to change this test too.
+    const allowed = ['card.viewed', 'contact.viewed'];
+    const requestNames = TrackEventRequest.options.map((option) => option.shape.name.value);
+    expect([...requestNames].sort()).toEqual(allowed);
     const clientNames = TRACKED_EVENT_NAMES.filter(
       (name) => TRACKED_EVENTS[name].source === 'client',
     );
-    expect(TrackEventRequest.options.map((option) => option.shape.name.value)).toEqual(clientNames);
+    expect([...clientNames].sort()).toEqual(allowed);
+  });
+
+  it('refuses well-formed API events from clients, even with a subject', () => {
+    const forged = [
+      { name: 'search.result_shown', properties: { searchId: ID, position: 0 } },
+      {
+        name: 'search.identity_filter',
+        properties: { searchId: ID, communityId: ID, companyId: ID, filters: [], resultCount: 3 },
+      },
+      { name: 'list.athlete_saved', properties: { listId: ID } },
+      { name: 'coach.added', properties: { teamId: ID, via: 'invite' } },
+    ] as const;
+    for (const event of forged) {
+      expect(accepts(TRACKED_EVENTS[event.name].properties, event.properties), event.name).toBe(
+        true,
+      );
+      expect(accepts(TrackEventRequest, { ...event, subjectId: ID }), event.name).toBe(false);
+    }
+  });
+
+  it('leaves who and when to the server', () => {
+    const view = { name: 'card.viewed', properties: { cardId: ID }, subjectId: ID };
+    for (const forged of [{ userId: ID }, { occurredAt: NOW }]) {
+      const parsed = TrackEventRequest.safeParse({ ...view, ...forged });
+      // Refused, or parsed without the field: either way the client can't set it.
+      const kept = parsed.success && Object.keys(forged).some((key) => key in parsed.data);
+      expect(kept, Object.keys(forged)[0]).toBe(false);
+    }
   });
 });
