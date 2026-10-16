@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { FeatureFlags, Role } from '@team-impact/contracts';
+import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
+import { DISCREET_PUSH_TEXT, notify, notifyJoinApproved } from './activity';
 import { id, USERS } from './fixtures';
+import { MockWorld } from './world';
 
 const TEAM = id(301);
 const TEAM_IMPACT = id(302);
@@ -425,5 +427,73 @@ describe('notifications', () => {
     for (const role of ['teen', 'recruiter', 'coach'] as const) {
       expect((await (await as(role)).get('/notifications')).body.items, role).toHaveLength(0);
     }
+  });
+});
+
+describe('push text', () => {
+  /** A world where Jordan has one phone. */
+  const withPhone = () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    w.devices.push({
+      userId: USERS.jordan.id,
+      token: 'jordan-phone',
+      platform: 'ios',
+      createdAt: new Date().toISOString(),
+    });
+    return w;
+  };
+  const community = (w: MockWorld, communityId: string) =>
+    w.communities.find((c) => c.id === communityId)!;
+  const eventIn = (w: MockWorld, communityId: string) =>
+    notify(w, {
+      userId: USERS.jordan.id,
+      kind: 'event',
+      actorId: USERS.lisa.id,
+      text: `Lisa Nguyen added Meal train in ${community(w, communityId).name}`,
+      target: { kind: 'event', id: id(9999) },
+      communityId,
+    });
+
+  it('never names a medical community on the lock screen, but keeps it in the app', () => {
+    const w = withPhone();
+    const c = community(w, MEDICAL);
+    notifyJoinApproved(w, c, USERS.jordan.id, w.user(USERS.lisa.id)!);
+    expect(w.pushOutbox.map((p) => p.text)).toEqual([DISCREET_PUSH_TEXT]);
+    expect(w.notifications[0]!.text).toContain(c.name);
+  });
+
+  it('keeps a medical community discreet even when it isn’t private', () => {
+    const w = withPhone();
+    Object.assign(community(w, MEDICAL), { private: false });
+    eventIn(w, MEDICAL);
+    expect(w.pushOutbox[0]!.text).toBe(DISCREET_PUSH_TEXT);
+    expect(w.pushOutbox[0]!.text).not.toContain('Meal train');
+  });
+
+  it('never names a private interest community either', () => {
+    const w = withPhone();
+    eventIn(w, CAPTAINS);
+    expect(w.pushOutbox[0]!.text).toBe(DISCREET_PUSH_TEXT);
+  });
+
+  it('sends the full text for an open community', () => {
+    const w = withPhone();
+    eventIn(w, FINANCE);
+    expect(w.pushOutbox[0]!.text).toBe(w.notifications[0]!.text);
+  });
+
+  it('pushes every kind, not just join approvals', () => {
+    const w = withPhone();
+    for (const kind of NOTIFICATION_KINDS) {
+      notify(w, {
+        userId: USERS.jordan.id,
+        kind,
+        actorId: null,
+        text: `A ${kind}`,
+        target: { kind: 'community', id: TEAM_IMPACT },
+        communityId: TEAM_IMPACT,
+      });
+    }
+    expect(w.pushOutbox.map((p) => p.text)).toEqual(NOTIFICATION_KINDS.map((k) => `A ${k}`));
   });
 });

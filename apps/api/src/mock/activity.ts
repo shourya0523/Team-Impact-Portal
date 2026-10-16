@@ -63,6 +63,7 @@ export interface MockPush {
   notificationId: string;
   userId: string;
   token: string;
+  /** The notification's text, or `DISCREET_PUSH_TEXT` for medical and private communities. */
   text: string;
   target: MockNotification['target'];
 }
@@ -120,8 +121,22 @@ export const holdForReview = (world: MockWorld, target: Target, preview: string)
 const name = (u: MockUser) => `${u.firstName} ${u.lastName}`;
 
 /**
+ * What a push says instead of the in-app text when the community is medical or private. Push text
+ * shows on lock screens and passes through Expo, Apple and Google, so it never names the community,
+ * an event or a person in one (CLAUDE.md: medical membership is never shown; private communities
+ * show nothing to non-members).
+ */
+export const DISCREET_PUSH_TEXT = 'You have a new notification in Team Impact';
+
+/** True when push text must not say anything about the community. Unknown counts as discreet. */
+const isDiscreet = (world: MockWorld, communityId: string) => {
+  const c = world.communities.find((x) => x.id === communityId);
+  return !c || c.kind === 'medical' || ('private' in c && c.private);
+};
+
+/**
  * Store one notification and push it to each of the reader's phones, unless the reader turned that
- * kind off (warnings can't be).
+ * kind off (warnings can't be). The in-app text is kept whole; the push may be generic.
  */
 export const notify = (
   world: MockWorld,
@@ -136,12 +151,13 @@ export const notify = (
     createdAt: new Date().toISOString(),
   };
   world.notifications.push(stored);
+  const pushText = isDiscreet(world, n.communityId) ? DISCREET_PUSH_TEXT : n.text;
   for (const d of world.devices.filter((x) => x.userId === n.userId)) {
     world.pushOutbox.push({
       notificationId: stored.id,
       userId: n.userId,
       token: d.token,
-      text: n.text,
+      text: pushText,
       target: n.target,
     });
   }
