@@ -1,25 +1,26 @@
 import {
   MarkNotificationsReadRequest,
+  MAX_DEVICES_PER_USER,
   Me,
   NotificationList,
   NotificationPrefs,
+  RegisterDeviceRequest,
+  UnregisterDeviceRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { prefsOf } from '../activity';
+import { canReceive, prefsOf } from '../activity';
 import { summaryOf } from '../fixtures';
 import type { MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
-import type { Guards } from './context';
+import { httpError, type Guards } from './context';
 
 /** The notification list, marking read, and the switches that govern what gets generated. */
 export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
-  /** Newest first; anything about a community the reader can no longer see is left out. */
+  /** Newest first; anything the reader may no longer be told about (`canReceive`) is left out. */
   const listFor = (u: MockUser): NotificationList => {
-    const mine = world.notifications.filter((n) => {
-      if (n.userId !== u.id) return false;
-      const c = world.communities.find((x) => x.id === n.communityId);
-      return !!c && world.canSeeCommunity(c, u);
-    });
+    const mine = world.notifications.filter(
+      (n) => n.userId === u.id && canReceive(world, u.id, n.communityId),
+    );
     return {
       items: [...mine]
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -60,6 +61,37 @@ export const registerNotificationRoutes = (app: ZodApp, world: MockWorld, { view
       const u = viewer(request);
       world.notificationPrefs.set(u.id, { ...prefsOf(world, u.id), ...request.body });
       return world.me(u);
+    },
+  );
+
+  /**
+   * Register this phone for push. A phone belongs to whoever signed in on it last, so a token
+   * already held by anyone (including the same user) is replaced rather than duplicated. New
+   * entries go on the end, so a user's first entry is their oldest and goes first past the cap.
+   */
+  app.post('/me/devices', { schema: { body: RegisterDeviceRequest } }, async (request, reply) => {
+    const u = viewer(request);
+    const { token, platform } = request.body;
+    const i = world.devices.findIndex((d) => d.token === token);
+    if (i !== -1) world.devices.splice(i, 1);
+    world.devices.push({ userId: u.id, token, platform, createdAt: new Date().toISOString() });
+    const mine = world.devices.filter((d) => d.userId === u.id);
+    for (const old of mine.slice(0, Math.max(0, mine.length - MAX_DEVICES_PER_USER))) {
+      world.devices.splice(world.devices.indexOf(old), 1);
+    }
+    return reply.status(204).send();
+  });
+
+  /** Stop pushing to one of your own phones. */
+  app.delete(
+    '/me/devices',
+    { schema: { body: UnregisterDeviceRequest } },
+    async (request, reply) => {
+      const u = viewer(request);
+      const i = world.devices.findIndex((d) => d.userId === u.id && d.token === request.body.token);
+      if (i === -1) throw httpError(404, 'This phone isn’t registered to you');
+      world.devices.splice(i, 1);
+      return reply.status(204).send();
     },
   );
 };

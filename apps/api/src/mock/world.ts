@@ -17,7 +17,7 @@ import {
   type TeamSummary,
 } from '@team-impact/contracts';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
-import type { MockComment, MockNotification, MockRsvp } from './activity';
+import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
@@ -60,6 +60,9 @@ export class MockWorld {
   readonly rsvps: MockRsvp[] = [];
   readonly notifications: MockNotification[] = [];
   readonly notificationPrefs = new Map<string, NotificationPrefs>();
+  /** Phones registered for push, and the pushes sent to them (nothing leaves the mock). */
+  readonly devices: MockDevice[] = [];
+  readonly pushOutbox: MockPush[] = [];
   /** Children, card drafts, pending resumes and card history (profiles area). */
   readonly profiles = createProfileState(this.cards);
   /** Coaches edit their team and a first coach makes it live, so each world has its own copy. */

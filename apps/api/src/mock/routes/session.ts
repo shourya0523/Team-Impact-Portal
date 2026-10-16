@@ -1,5 +1,4 @@
-import type { FastifyReply } from 'fastify';
-import { DevSignInRequest, Me } from '@team-impact/contracts';
+import { DevSignInRequest, Me, SignOutRequest } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { NEWCOMERS, SIGN_IN_AS } from '../fixtures';
 import type { MockWorld } from '../world';
@@ -24,7 +23,14 @@ export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }:
     },
   );
 
-  app.post('/auth/sign-out', async (_request, reply: FastifyReply) => {
+  app.post('/auth/sign-out', { schema: { body: SignOutRequest } }, async (request, reply) => {
+    // Holding the token is proof of the phone, so this works without a session: a suspended
+    // or expired user can still stop pushes to the phone they're signing out of.
+    const token = request.body?.token;
+    if (token) {
+      const i = world.devices.findIndex((d) => d.token === token);
+      if (i !== -1) world.devices.splice(i, 1);
+    }
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
     return reply.status(204).send();
   });

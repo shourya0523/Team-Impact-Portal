@@ -198,6 +198,10 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.rsvps, (r) => !eventIds.has(r.eventId));
   removeWhere(world.notifications, (n) => gone(n.userId) || n.actorId === u.id);
   world.notificationPrefs.delete(u.id);
+  // Their phones stop getting pushes now. The real API must do this when `deleted_at` is set: the
+  // `device_tokens` cascade only runs at the hard delete, up to 30 days later (TI-79).
+  removeWhere(world.devices, (d) => gone(d.userId));
+  removeWhere(world.pushOutbox, (p) => gone(p.userId));
   // Card drafts, pending resumes and card history.
   world.profiles.drafts.delete(u.id);
   world.profiles.resumes.delete(u.id);
