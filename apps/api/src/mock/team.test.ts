@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
+import { DEFAULT_PREFS } from './activity';
 import { CHILDREN, id, USERS } from './fixtures';
 import {
   acceptCoachInvite,
@@ -118,6 +119,46 @@ describe('team: join approvals', () => {
     const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
     decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'decline');
     expect(world.notifications.filter((n) => n.userId === USERS.kai.id)).toEqual([]);
+  });
+
+  /** A world where Kai has two phones and someone else has one. */
+  const withPhones = () => {
+    const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const at = new Date().toISOString();
+    world.devices.push(
+      { userId: USERS.kai.id, token: 'kai-phone', platform: 'ios', createdAt: at },
+      { userId: USERS.kai.id, token: 'kai-tablet', platform: 'android', createdAt: at },
+      { userId: USERS.jordan.id, token: 'jordan-phone', platform: 'ios', createdAt: at },
+    );
+    return world;
+  };
+
+  it('approval pushes to each of the requester’s phones, and no one else’s', () => {
+    const world = withPhones();
+    decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'approve');
+    const notification = world.notifications.find((n) => n.userId === USERS.kai.id)!;
+    expect(world.pushOutbox.map((p) => p.token).sort()).toEqual(['kai-phone', 'kai-tablet']);
+    for (const push of world.pushOutbox) {
+      expect(push).toMatchObject({
+        notificationId: notification.id,
+        userId: USERS.kai.id,
+        text: notification.text,
+        target: notification.target,
+      });
+    }
+  });
+
+  it('approval pushes nothing when the requester turned approvals off', () => {
+    const world = withPhones();
+    world.notificationPrefs.set(USERS.kai.id, { ...DEFAULT_PREFS, approvals: false });
+    decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'approve');
+    expect(world.pushOutbox).toEqual([]);
+  });
+
+  it('declining pushes nothing', () => {
+    const world = withPhones();
+    decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'decline');
+    expect(world.pushOutbox).toEqual([]);
   });
 
   it('staff can decide', async () => {

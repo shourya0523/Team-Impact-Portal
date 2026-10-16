@@ -4,12 +4,14 @@ import type {
   ModerationStatus,
   NotificationKind,
   NotificationPrefs,
+  RegisterDeviceRequest,
   RsvpStatus,
 } from '@team-impact/contracts';
 import { NOTIFICATION_PREF } from '@team-impact/contracts';
 import { id, summaryOf, USERS } from './fixtures';
 import type { MockCommunity, MockUser } from './fixtures';
 import { hiddenFor } from './safety';
+import { isSuspended } from './staff-tools';
 import type { MockWorld } from './world';
 
 /**
@@ -47,6 +49,24 @@ export interface MockNotification {
   communityId: string;
   read: boolean;
   createdAt: string;
+}
+
+/** A phone registered for push. Signing out on that phone removes it. */
+export interface MockDevice {
+  userId: string;
+  token: string;
+  platform: RegisterDeviceRequest['platform'];
+  createdAt: string;
+}
+
+/** A push the mock would have sent through Expo, one per device. Tests read these. */
+export interface MockPush {
+  notificationId: string;
+  userId: string;
+  token: string;
+  /** The notification's text, or `DISCREET_PUSH_TEXT` for medical and private communities. */
+  text: string;
+  target: MockNotification['target'];
 }
 
 const at = (day: number, hour = 12) =>
@@ -101,19 +121,61 @@ export const holdForReview = (world: MockWorld, target: Target, preview: string)
 
 const name = (u: MockUser) => `${u.firstName} ${u.lastName}`;
 
-/** Store one notification, unless the reader turned that kind off (warnings can't be). */
+/**
+ * What a push says instead of the in-app text when the community is medical or private. Push text
+ * shows on lock screens and passes through Expo, Apple and Google, so it never names the community,
+ * an event or a person in one (CLAUDE.md: medical membership is never shown; private communities
+ * show nothing to non-members).
+ */
+export const DISCREET_PUSH_TEXT = 'You have a new notification in Team Impact';
+
+/**
+ * Whether `userId` may be told about something in `communityId`, by any channel. The in-app list
+ * and push both ask this, so they can't drift apart: a suspended account, or a community the
+ * reader can no longer see (removed, left, or medical with the switch off), gets nothing.
+ */
+export const canReceive = (world: MockWorld, userId: string, communityId: string) => {
+  const u = world.user(userId);
+  const c = world.communities.find((x) => x.id === communityId);
+  return !!u && !!c && !isSuspended(world, userId) && world.canSeeCommunity(c, u);
+};
+
+/** True when push text must not say anything about the community. Unknown counts as discreet. */
+const isDiscreet = (world: MockWorld, communityId: string) => {
+  const c = world.communities.find((x) => x.id === communityId);
+  return !c || c.kind === 'medical' || ('private' in c && c.private);
+};
+
+/**
+ * Store one notification and push it to each of the reader's phones, unless the reader turned that
+ * kind off (warnings can't be). The in-app text is kept whole; the push may be generic.
+ */
 export const notify = (
   world: MockWorld,
   n: Omit<MockNotification, 'id' | 'read' | 'createdAt'>,
 ) => {
   // Staff warnings always arrive; every other kind follows the reader's switch.
   if (n.kind !== 'warning' && !prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
-  world.notifications.push({
+  const stored: MockNotification = {
     ...n,
     id: world.newId(),
     read: false,
     createdAt: new Date().toISOString(),
-  });
+  };
+  world.notifications.push(stored);
+  // The in-app list re-checks `canReceive` each time it's read; a push can't be taken back, so
+  // it's checked once, now.
+  if (!canReceive(world, n.userId, n.communityId)) return;
+  const pushText = isDiscreet(world, n.communityId) ? DISCREET_PUSH_TEXT : n.text;
+  for (const d of world.devices.filter((x) => x.userId === n.userId)) {
+    world.pushOutbox.push({
+      notificationId: stored.id,
+      userId: n.userId,
+      token: d.token,
+      text: pushText,
+      target: n.target,
+    });
+  }
 };
 
 /** The creator of a private community let `userId` in. */

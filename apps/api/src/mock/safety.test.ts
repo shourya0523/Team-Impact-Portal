@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { id, USERS } from './fixtures';
+import { deleteAccount } from './safety';
+import { MockWorld } from './world';
 
 const TEAM_COMMUNITY = id(301);
 const TEAM_IMPACT = id(302);
@@ -188,6 +190,22 @@ describe('account deletion', () => {
     // The medical community Lisa created passes to its longest-standing member.
     const medical = (await athlete.get(`/communities/${MEDICAL}`)).body;
     expect(medical.createdBy.id).toBe(USERS.jordan.id);
+  });
+
+  it('unregisters their phones and drops their queued pushes, and no one else’s', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const at = new Date().toISOString();
+    const target = { kind: 'community' as const, id: MEDICAL };
+    for (const [userId, token] of [
+      [USERS.lisa.id, 'lisa-phone'],
+      [USERS.jordan.id, 'jordan-phone'],
+    ] as const) {
+      w.devices.push({ userId, token, platform: 'ios', createdAt: at });
+      w.pushOutbox.push({ notificationId: id(9999), userId, token, text: 'Hi', target });
+    }
+    expect(deleteAccount(w, w.user(USERS.lisa.id)!)).toBeNull();
+    expect(w.devices.map((d) => d.token)).toEqual(['jordan-phone']);
+    expect(w.pushOutbox.map((p) => p.token)).toEqual(['jordan-phone']);
   });
 
   it('won’t let staff, or a live team’s only coach, delete themselves', async () => {
