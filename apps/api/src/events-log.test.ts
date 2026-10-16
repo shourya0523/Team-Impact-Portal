@@ -46,8 +46,21 @@ const samples = (subjectId: string): { [N in TrackedEventName]: TrackedEvent<N> 
   'user.signed_up': { name: 'user.signed_up', properties: { role: 'athlete' } },
   'team.created': { name: 'team.created', properties: { teamId: ID } },
   'team.updated': { name: 'team.updated', properties: { teamId: ID, fields: ['color'] } },
-  'coach.invited': { name: 'coach.invited', properties: { teamId: ID, inviteId: ID } },
+  'coach.invited': {
+    name: 'coach.invited',
+    properties: { teamId: ID, inviteId: ID, replacesInviteId: ID },
+  },
+  'coach.invite_revoked': {
+    name: 'coach.invite_revoked',
+    properties: { teamId: ID, inviteId: ID },
+  },
   'coach.added': { name: 'coach.added', subjectId, properties: { teamId: ID, via: 'invite' } },
+  'coach.removed': { name: 'coach.removed', subjectId, properties: { teamId: ID } },
+  'team.archived': {
+    name: 'team.archived',
+    properties: { teamId: ID, declinedRequestCount: 1, revokedCodeCount: 2 },
+  },
+  'team.restored': { name: 'team.restored', properties: { teamId: ID } },
   'community.marked_official': {
     name: 'community.marked_official',
     properties: { communityId: ID },

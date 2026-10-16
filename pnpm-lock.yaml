@@ -38,6 +38,9 @@ importers:
       '@team-impact/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@team-impact/ui-tokens':
+        specifier: workspace:*
+        version: link:../../packages/ui-tokens
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@electric-sql/pglite@0.5.10)(postgres@3.4.9)
