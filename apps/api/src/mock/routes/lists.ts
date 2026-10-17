@@ -152,6 +152,11 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       }
       list.entries.push({ athleteId, addedById: u.id, addedAt: new Date().toISOString() });
       touch(list);
+      world.track(u.id, {
+        name: 'list.athlete_saved',
+        subjectId: athleteId,
+        properties: { listId: list.id },
+      });
       return world.listDetail(list, u);
     },
   );

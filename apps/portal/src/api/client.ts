@@ -1,4 +1,4 @@
-import type { ApiError } from '@team-impact/contracts';
+import type { ApiError, TrackEventRequest } from '@team-impact/contracts';
 
 /** Any non-2xx response. `body` is the API's shared error shape, so forms can show `issues` inline. */
 export class ApiRequestError extends Error {
@@ -36,3 +36,11 @@ export const query = (params: Record<string, string | number | undefined>) => {
 };
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
+
+/**
+ * Logs a client-side event from `TRACKED_EVENTS` in contracts; the API logs the rest itself.
+ * Fire and forget: a failed log never gets in the way of the screen.
+ */
+export const track = (event: TrackEventRequest): void => {
+  post<void>('/events', event).catch(() => undefined);
+};

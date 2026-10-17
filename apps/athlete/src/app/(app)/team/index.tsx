@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import type { JoinRequest, TeamMember, TeamRoster } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
-import { api } from '@/api';
+import { api, track } from '@/api';
 import { ROLE_LABEL, shortDate } from '@/components/format';
 import { fullName, joinedLine, nameList, NoTeam, PersonRow, useTeamId } from '@/components/team';
 import { Async, ErrorText, Gutter, Screen, Segmented } from '@/components/ui';
@@ -110,7 +110,14 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
                 variant="small"
                 color="brand"
                 accessibilityRole="link"
-                onPress={() => Linking.openURL(`mailto:${p.contact!.email}`)}
+                onPress={() => {
+                  track({
+                    name: 'contact.viewed',
+                    properties: { channel: 'email' },
+                    subjectId: p.user.id,
+                  });
+                  Linking.openURL(`mailto:${p.contact!.email}`);
+                }}
               >
                 {p.contact.email}
               </Text>
@@ -120,7 +127,14 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
                 variant="small"
                 color="brand"
                 accessibilityRole="link"
-                onPress={() => Linking.openURL(`tel:${p.contact!.phone!.replace(/[^+\d]/g, '')}`)}
+                onPress={() => {
+                  track({
+                    name: 'contact.viewed',
+                    properties: { channel: 'phone' },
+                    subjectId: p.user.id,
+                  });
+                  Linking.openURL(`tel:${p.contact!.phone!.replace(/[^+\d]/g, '')}`);
+                }}
               >
                 {p.contact.phone}
               </Text>

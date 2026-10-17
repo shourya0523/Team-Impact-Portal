@@ -73,6 +73,10 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       };
       world.posts.push(created);
       holdForReview(world, { kind: 'post', id: created.id }, created.text);
+      world.track(u.id, {
+        name: 'post.created',
+        properties: { postId: created.id, kind: created.kind },
+      });
       return reply.status(201).send(postView(c, u, created.id)!);
     },
   );

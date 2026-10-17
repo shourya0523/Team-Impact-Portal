@@ -15,6 +15,13 @@
       "when": 1791900606607,
       "tag": "0001_card_experience_entries",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1792098984361,
+      "tag": "0002_events_log_subject",
+      "breakpoints": true
     }
   ]
 }
