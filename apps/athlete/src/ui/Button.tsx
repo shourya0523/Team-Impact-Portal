@@ -224,14 +224,15 @@ export function Button({
       style={[
         styles.base,
         { minHeight: height },
-        padding,
         l.border ? { borderWidth: 1, borderColor: l.border } : null,
         stretch && styles.stretch,
         disabled && styles.disabled,
         face,
       ]}
     >
-      {content}
+      {/* Padding sits on the content, not the pressable, so stretched buttons share a row
+          equally whatever their variant (flex-basis 0 still counts a pressable's padding). */}
+      <View style={padding}>{content}</View>
     </AnimatedPressable>
   );
 }

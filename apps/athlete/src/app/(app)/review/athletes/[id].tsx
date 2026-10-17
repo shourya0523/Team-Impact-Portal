@@ -7,7 +7,7 @@ import { colors, spacing } from '@team-impact/ui-tokens';
 import { api, ApiRequestError } from '@/api';
 import { toCardData } from '@/components/cardData';
 import { shortDate } from '@/components/format';
-import { ListDot, ListPickerSheet } from '@/components/recruiter-parts';
+import { ListDot, ListPickerSheet, SavedFlash } from '@/components/recruiter-parts';
 import {
   fullName,
   REGION_NAME,
@@ -17,7 +17,7 @@ import {
 } from '@/components/recruiter-state';
 import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
-import { Button, Card, Icon, Input, Text, type IconName } from '@/ui';
+import { Button, Card, haptics, Icon, Input, Text, type IconName } from '@/ui';
 
 const MAX_CARD_WIDTH = 360;
 
@@ -71,6 +71,7 @@ export default function RecruiterCard() {
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
+  const [flash, setFlash] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState<string | undefined>();
@@ -99,10 +100,15 @@ export default function RecruiterCard() {
     saveToTarget(id)
       .then(
         (r) => {
+          haptics.success();
+          setFlash((n) => n + 1);
           setStatus(r.already ? `Already in ${r.list}` : `Saved to ${r.list}`);
           lists.reload();
         },
-        (e: Error) => setError(e.message),
+        (e: Error) => {
+          haptics.error();
+          setError(e.message);
+        },
       )
       .finally(() => setBusy(false));
   };
@@ -235,13 +241,15 @@ export default function RecruiterCard() {
                         <Text color="secondary">Not on any of your lists yet.</Text>
                       )}
                       <View style={styles.actions}>
-                        <Button
-                          label={`Save to ${targetName(target)}`}
-                          icon="heart"
-                          stretch
-                          disabled={busy}
-                          onPress={save}
-                        />
+                        <SavedFlash flash={flash} stretch>
+                          <Button
+                            label={`Save to ${targetName(target)}`}
+                            stretch
+                            icon="heart"
+                            disabled={busy}
+                            onPress={save}
+                          />
+                        </SavedFlash>
                         <Button
                           label="Change list"
                           variant="secondary"

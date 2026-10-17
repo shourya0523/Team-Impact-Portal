@@ -11,28 +11,36 @@ import type { Community, Post } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL } from '@/components/format';
+import { Confetti, ScoreDigits } from '@/components/game-day';
 import { Chip } from '@/components/ui';
-import { Icon, springConfig, Text, timing, useReducedMotion } from '@/ui';
+import { haptics, Icon, springConfig, Text, timing, useReducedMotion } from '@/ui';
 
 /** How big the heart grows when a post is rallied, before it springs back. */
 const RALLY_POP = 1.35;
 
 /**
- * Rally, the platform's reaction. Optimistic: the count moves at once and settles on the API's
- * answer. Held posts can't be rallied, so the button is off for them. Rallying is an earned
- * moment, so the heart pops and springs back (the spring token); un-rallying just changes colour,
- * and so does everything under reduced motion.
+ * Rally, the platform's reaction ("Crowd rally"). Optimistic: the count moves at once and settles
+ * on the API's answer. Held posts can't be rallied, so the button is off for them. Rallying is an
+ * earned moment: the heart pops and springs back (the spring token), throws confetti in the
+ * Baseball Card colours, and plays two light claps. The count is a scoreboard whose digits roll
+ * over. Un-rallying just changes colour and plays nothing; under reduced motion there is no pop,
+ * confetti or roll (the claps still play: haptics aren't motion).
  */
 export function Rally({ post, onChange }: { post: Post; onChange?: (p: Post) => void }) {
   const [state, setState] = useState({ on: post.likedByMe, count: post.likeCount });
+  const [shot, setShot] = useState(0);
   const held = post.moderation !== 'approved';
   const reduced = useReducedMotion();
   const scale = useSharedValue(1);
   const heart = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
   const toggle = () => {
     const on = !state.on;
-    if (on && !reduced) {
-      scale.value = withSequence(withTiming(RALLY_POP, timing.tap), withSpring(1, springConfig));
+    if (on) {
+      haptics.clap();
+      if (!reduced) {
+        scale.value = withSequence(withTiming(RALLY_POP, timing.tap), withSpring(1, springConfig));
+        setShot((n) => n + 1);
+      }
     }
     setState({ on, count: state.count + (on ? 1 : -1) });
     (on ? api.rally(post.id) : api.unrally(post.id)).then(
@@ -52,17 +60,21 @@ export function Rally({ post, onChange }: { post: Post; onChange?: (p: Post) => 
       accessibilityState={{ selected: state.on, disabled: held }}
       style={[styles.action, state.on ? styles.rallied : null, held && styles.disabled]}
     >
-      <Animated.View style={heart}>
-        <Icon
-          name="heart"
-          size={16}
-          color={state.on ? colors.actionPressed : colors.ink}
-          fill={state.on ? colors.actionPressed : 'none'}
-        />
-      </Animated.View>
+      <View>
+        <Animated.View style={heart}>
+          <Icon
+            name="heart"
+            size={16}
+            color={state.on ? colors.actionPressed : colors.ink}
+            fill={state.on ? colors.actionPressed : 'none'}
+          />
+        </Animated.View>
+        <Confetti shot={shot} reduced={reduced} />
+      </View>
       <Text variant="small" weight="semibold" color={state.on ? 'action' : 'ink'}>
-        Rally · {state.count}
+        Rally
       </Text>
+      <ScoreDigits value={state.count} reduced={reduced} />
     </Pressable>
   );
 }
@@ -146,7 +158,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    gap: spacing.sm,
   },
   rallied: { backgroundColor: colors.actionTint, borderColor: colors.actionTint },
   disabled: { opacity: 0.4 },

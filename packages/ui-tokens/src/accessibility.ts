@@ -75,6 +75,36 @@ export const textPairs: readonly ColorPair[] = [
   text('onBrand muted on brand', colors.onBrand.muted, colors.brand),
   // Jersey buttons: the number slot on a navy button (src/ui/Button.tsx).
   text('card yellow on brand', colors.card.art.yellow, colors.brand),
+  // Rally scoreboard digits (src/components/scoreboard.tsx).
+  text('card yellow on ink (scoreboard digits)', colors.card.art.yellow, colors.ink),
+  // Ticket RSVP (src/components/ticket.tsx): navy on light grounds, navyDeep on a navy hero,
+  // success green once Going.
+  text('onBrand text on brand (ticket title)', colors.onBrand.text, colors.brand),
+  text(
+    'onBrand text on card navyDeep (hero ticket)',
+    colors.onBrand.text,
+    colors.card.art.navyDeep,
+  ),
+  text(
+    'onBrand secondary on card navyDeep (hero ticket kicker)',
+    colors.onBrand.secondary,
+    colors.card.art.navyDeep,
+  ),
+  text(
+    'card yellow on card navyDeep (hero ticket stub)',
+    colors.card.art.yellow,
+    colors.card.art.navyDeep,
+  ),
+  text(
+    'onBrand text on success text (Going ticket, Saved button)',
+    colors.onBrand.text,
+    colors.success.text,
+  ),
+  text(
+    'onBrand secondary on success text (Going ticket kicker)',
+    colors.onBrand.secondary,
+    colors.success.text,
+  ),
   text('brand on brand tint', colors.brand, colors.brandTint),
   // HoldButton `sign` (src/ui/HoldButton.tsx): the label once the fill has darkened under it.
   text('surface on navy deep (hold to sign, held)', colors.surface, colors.card.art.navyDeep),

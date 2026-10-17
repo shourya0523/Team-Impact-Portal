@@ -1,10 +1,10 @@
 import { router, Stack } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import type { Loadable } from '@/hooks/useApi';
-import { Icon, Text, type IconName } from '@/ui';
+import { haptics, Icon, Text, type IconName } from '@/ui';
 
 /**
  * App-level composites built on the src/ui primitives. Screens own their header (eyebrow plus a
@@ -100,6 +100,13 @@ export function IconButton({
   );
 }
 
+/** How long after a press a chip waits for its `selected` to change before giving up. */
+const CHANGE_WINDOW_MS = 500;
+
+/**
+ * A filter or choice chip. Plays a selection tick when pressing it actually changes its
+ * `selected` (so an action chip like "Edit filters", or re-pressing the chosen one, stays quiet).
+ */
 export function Chip({
   label,
   selected,
@@ -109,9 +116,18 @@ export function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const pressedFrom = useRef<boolean | null>(null);
+  useEffect(() => {
+    if (pressedFrom.current !== null && pressedFrom.current !== selected) haptics.select();
+    pressedFrom.current = null;
+  }, [selected]);
   return (
     <Pressable
-      onPress={onPress}
+      onPress={() => {
+        pressedFrom.current = selected;
+        setTimeout(() => (pressedFrom.current = null), CHANGE_WINDOW_MS);
+        onPress();
+      }}
       accessibilityRole="button"
       accessibilityState={{ selected }}
       style={[styles.chip, selected ? styles.chipOn : styles.chipOff]}
@@ -123,7 +139,7 @@ export function Chip({
   );
 }
 
-/** A segmented control, like the design's All / My team / Going. */
+/** A segmented control, like the design's All / My team / Going. A change plays a selection tick. */
 export function Segmented<T extends string>({
   options,
   value,
@@ -142,7 +158,11 @@ export function Segmented<T extends string>({
         return (
           <Pressable
             key={o.value}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              if (on) return;
+              haptics.select();
+              onChange(o.value);
+            }}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             style={[styles.segment, on && { backgroundColor: colors.surface }]}

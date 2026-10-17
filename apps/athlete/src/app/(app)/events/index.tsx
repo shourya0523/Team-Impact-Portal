@@ -5,6 +5,7 @@ import type { CalendarEvent } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { fromNow, monthDay, ROLE_LABEL } from '@/components/format';
+import { TicketRsvp, ticketKicker } from '@/components/ticket';
 import { Async, Gutter, Screen, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -12,7 +13,9 @@ import { KIND_STYLE } from '@/theme';
 import { Badge, Button, Card, Icon, Text } from '@/ui';
 
 type Show = 'all' | 'team' | 'going';
-type Rsvp = Record<string, 'going' | 'not_going'>;
+/** Answers given on this device; null means a Going was given back. */
+type Rsvp = Record<string, 'going' | 'not_going' | null>;
+const answerFor = (rsvp: Rsvp, e: CalendarEvent) => (e.id in rsvp ? rsvp[e.id] : e.myRsvp);
 
 function NextUp({
   event,
@@ -24,8 +27,11 @@ function NextUp({
   setRsvp: (r: Rsvp) => void;
 }) {
   const d = monthDay(event.startsAt);
-  const answer = rsvp[event.id] ?? event.myRsvp;
-  const going = event.goingCount + (answer === 'going' && event.myRsvp !== 'going' ? 1 : 0);
+  const answer = answerFor(rsvp, event);
+  const going =
+    event.goingCount +
+    (answer === 'going' && event.myRsvp !== 'going' ? 1 : 0) -
+    (answer !== 'going' && event.myRsvp === 'going' ? 1 : 0);
   return (
     <View style={styles.hero}>
       <Text variant="decor" size="lg" style={styles.heroDate}>
@@ -59,21 +65,21 @@ function NextUp({
           By {event.host.firstName} {event.host.lastName} · {ROLE_LABEL[event.host.role]}
         </Text>
       </View>
-      <View style={styles.row}>
-        <Button
-          label="Going"
-          icon={answer === 'going' ? 'check' : undefined}
-          variant={answer === 'going' ? 'onBrand' : 'ghostOnBrand'}
-          stretch
-          onPress={() => setRsvp({ ...rsvp, [event.id]: 'going' })}
-        />
-        <Button
-          label="Can't make it"
-          variant={answer === 'not_going' ? 'onBrand' : 'ghostOnBrand'}
-          stretch
-          onPress={() => setRsvp({ ...rsvp, [event.id]: 'not_going' })}
-        />
-      </View>
+      <TicketRsvp
+        kicker={ticketKicker(event.startsAt, event.location)}
+        title={event.title}
+        going={answer === 'going'}
+        onToggle={(on) => setRsvp({ ...rsvp, [event.id]: on ? 'going' : null })}
+        ground={colors.brand}
+        onNavy
+      />
+      <Button
+        label="Can't make it"
+        icon={answer === 'not_going' ? 'check' : undefined}
+        variant={answer === 'not_going' ? 'onBrand' : 'ghostOnBrand'}
+        accessibilityState={{ selected: answer === 'not_going' }}
+        onPress={() => setRsvp({ ...rsvp, [event.id]: 'not_going' })}
+      />
     </View>
   );
 }
@@ -149,7 +155,7 @@ export default function Events() {
               );
             }
             const [next, ...rest] = events;
-            const isGoing = (e: CalendarEvent) => (rsvp[e.id] ?? e.myRsvp) === 'going';
+            const isGoing = (e: CalendarEvent) => answerFor(rsvp, e) === 'going';
             const list = rest.filter((e) =>
               show === 'all' ? true : show === 'going' ? isGoing(e) : e.community.kind === 'team',
             );

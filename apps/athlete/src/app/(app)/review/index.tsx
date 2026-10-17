@@ -7,7 +7,12 @@ import { CARD_ASPECT, cardHeightFor } from '@team-impact/ui-primitives/native';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { SwipeCard, type Swipe, type SwipeCardHandle } from '@/components/recruiter-deck';
-import { ListPickerSheet } from '@/components/recruiter-parts';
+import {
+  ListPickerSheet,
+  SavedFlash,
+  SaveListChip,
+  type Landed,
+} from '@/components/recruiter-parts';
 import {
   filterLabels,
   saveToTarget,
@@ -17,7 +22,7 @@ import {
 } from '@/components/recruiter-state';
 import { Async, Chip, Gutter, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
-import { Badge, Button, Text } from '@/ui';
+import { Badge, Button, haptics, Text } from '@/ui';
 
 const MAX_CARD_WIDTH = 340;
 /** Height of everything on the screen but the card: header, filters, buttons, tab bar. */
@@ -37,6 +42,9 @@ export default function QuickReview() {
   const [index, setIndex] = useState(0);
   const [status, setStatus] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  // "Deal to list": each landed save bumps the list chip and flashes the Save button.
+  const [landed, setLanded] = useState<Landed | null>(null);
+  const [flash, setFlash] = useState(0);
   const top = useRef<SwipeCardHandle>(null);
 
   // New filters, new deck.
@@ -56,6 +64,9 @@ export default function QuickReview() {
   const listName = targetName(target);
   const labels = filterLabels(filters);
 
+  // A different list, a different count.
+  useEffect(() => setLanded(null), [target?.id]);
+
   const decide = (card: CardFace, dir: Swipe) => {
     setIndex((i) => i + 1);
     if (dir < 0) {
@@ -64,13 +75,28 @@ export default function QuickReview() {
     }
     setStatus(`Saving ${card.firstName}…`);
     saveToTarget(card.athleteId).then(
-      (r) =>
+      (r) => {
+        haptics.success();
+        setFlash((n) => n + 1);
+        setLanded((prev) => ({
+          seq: (prev?.seq ?? 0) + 1,
+          listId: r.listId,
+          // Quick saves can overlap; never let a slower answer count backwards.
+          count:
+            prev?.listId === r.listId
+              ? Math.max(r.count, prev.count + (r.already ? 0 : 1))
+              : r.count,
+        }));
         setStatus(
           r.already
             ? `${card.firstName} is already in ${r.list}`
             : `Saved ${card.firstName} to ${r.list}`,
-        ),
-      (e: Error) => setStatus(`Couldn’t save ${card.firstName}: ${e.message}`),
+        );
+      },
+      (e: Error) => {
+        haptics.error();
+        setStatus(`Couldn’t save ${card.firstName}: ${e.message}`);
+      },
     );
   };
 
@@ -93,7 +119,7 @@ export default function QuickReview() {
           <Text variant="small" color="secondary">
             Swipe right saves to
           </Text>
-          <Chip label={`${listName} ▾`} selected={false} onPress={() => setPicking(true)} />
+          <SaveListChip landed={landed} onPress={() => setPicking(true)} />
         </View>
       </Gutter>
 
@@ -192,13 +218,15 @@ export default function QuickReview() {
                   accessibilityLabel={`Open ${card.firstName}’s full card and contacts`}
                   onPress={() => router.push(`/review/athletes/${card.athleteId}`)}
                 />
-                <Button
-                  label="Save"
-                  icon="heart"
-                  stretch
-                  accessibilityLabel={`Save ${card.firstName} to ${listName}`}
-                  onPress={() => top.current?.fling(1)}
-                />
+                <SavedFlash flash={flash} stretch>
+                  <Button
+                    label="Save"
+                    stretch
+                    icon="heart"
+                    accessibilityLabel={`Save ${card.firstName} to ${listName}`}
+                    onPress={() => top.current?.fling(1)}
+                  />
+                </SavedFlash>
               </View>
               <Text
                 variant="small"

@@ -7,7 +7,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
-import { Text, timing, useReducedMotion } from '@/ui';
+import { haptics, Text, timing, useReducedMotion } from '@/ui';
 
 const SWITCH_W = 56;
 const SWITCH_H = 32;
@@ -20,7 +20,7 @@ const TRAVEL = SWITCH_W - KNOB - INSET * 2;
  * A labelled on/off switch row, like the community page's "Recruiters can find me" switch. The
  * whole row is the control (one target, no nested buttons). The knob slides and the track fades
  * between muted and navy (duration.small); under reduced motion the knob jumps and only the
- * colour fades.
+ * colour fades. Every toggle plays a selection tick.
  */
 export function SwitchRow({
   label,
@@ -48,7 +48,10 @@ export function SwitchRow({
   }));
   return (
     <Pressable
-      onPress={() => onChange(!value)}
+      onPress={() => {
+        haptics.select();
+        onChange(!value);
+      }}
       disabled={disabled}
       accessibilityRole="switch"
       accessibilityLabel={label}

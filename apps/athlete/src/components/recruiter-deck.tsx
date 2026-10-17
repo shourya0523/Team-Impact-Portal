@@ -8,7 +8,7 @@ import { AthleteCard } from '@team-impact/ui-primitives/native';
 import { motion, spacing } from '@team-impact/ui-tokens';
 import { toCardData } from '@/components/cardData';
 import { fullName } from '@/components/recruiter-state';
-import { Badge, timing, useReducedMotion } from '@/ui';
+import { Badge, haptics, timing, useReducedMotion } from '@/ui';
 
 /** 1 saves (right), -1 skips (left). */
 export type Swipe = 1 | -1;
@@ -20,11 +20,16 @@ const DECIDE_AT = 0.33;
 const PX_PER_DEGREE = 18;
 /** Stamps sit slightly askew, like the mockup's; flat under reduced motion. */
 const STAMP_DEGREES = 12;
+/** A plain function reference, so the gesture worklet can hand it back to the JS thread. */
+const edgeTick = haptics.edge;
 
 /**
  * One card in quick review. Drag right to save, left to skip; the parent's Save and Skip buttons
  * call `fling` so the swipe is never the only way. The card face is display-only here (its own
  * flip gesture is off), so the drag belongs to the deck; the full card screen flips.
+ *
+ * Crossing the save or skip line while dragging plays one edge haptic (and again if the drag
+ * comes back across it).
  *
  * Reduced motion: the card never moves or tilts. Dragging fades it and its stamp, and a decision
  * fades it out instead of throwing it off screen.
@@ -48,6 +53,8 @@ export function SwipeCard({
   const gone = useSharedValue(0);
   const appear = useSharedValue(0);
   const decided = useSharedValue(false);
+  /** Which side of the decision line the drag is on: 1 save, -1 skip, 0 neither. */
+  const side = useSharedValue(0);
   const data = useMemo(() => toCardData(card), [card]);
 
   useEffect(() => {
@@ -72,15 +79,25 @@ export function SwipeCard({
     return Gesture.Pan()
       .activeOffsetX([-10, 10])
       .failOffsetY([-14, 14])
+      .onBegin(() => {
+        side.value = 0;
+      })
       .onUpdate((e) => {
-        if (!decided.value) tx.value = e.translationX;
+        if (decided.value) return;
+        tx.value = e.translationX;
+        // One Rigid tick each time the drag crosses the line (either way), not continuously.
+        const now = e.translationX > threshold ? 1 : e.translationX < -threshold ? -1 : 0;
+        if (now !== side.value) {
+          side.value = now;
+          scheduleOnRN(edgeTick);
+        }
       })
       .onEnd((e) => {
         if (e.translationX > threshold) fling(1);
         else if (e.translationX < -threshold) fling(-1);
         else tx.value = withTiming(0, timing.small);
       });
-  }, [reduced, threshold, away, tx, gone, decided, onDecide]);
+  }, [reduced, threshold, away, tx, gone, decided, side, onDecide]);
 
   // Buttons and screen-reader actions: show the stamp for the choice, then leave as a swipe does.
   const fling = useCallback(

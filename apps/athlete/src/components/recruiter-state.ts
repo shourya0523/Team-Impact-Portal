@@ -119,16 +119,23 @@ const resolveTarget = async (): Promise<RecruiterList> => {
   return saved ?? api.createList({ name: DEFAULT_LIST_NAME, color: LIST_COLORS[0].value });
 };
 
-export type SaveResult = { list: string; already: boolean };
+export type SaveResult = {
+  list: string;
+  listId: string;
+  already: boolean;
+  /** Athletes on the list after this save (as far as this device knows). */
+  count: number;
+};
 
 /** A right swipe or Save: put the athlete on the target list. Already there is not an error. */
 export const saveToTarget = async (athleteId: string): Promise<SaveResult> => {
   const list = await resolveTarget();
   try {
     await api.addToList(list.id, athleteId);
-    return { list: list.name, already: false };
+    return { list: list.name, listId: list.id, already: false, count: list.athleteCount + 1 };
   } catch (e) {
-    if (e instanceof ApiRequestError && e.status === 409) return { list: list.name, already: true };
+    if (e instanceof ApiRequestError && e.status === 409)
+      return { list: list.name, listId: list.id, already: true, count: list.athleteCount };
     throw e;
   }
 };
