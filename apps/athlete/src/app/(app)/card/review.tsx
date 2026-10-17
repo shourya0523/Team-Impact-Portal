@@ -76,8 +76,9 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
       <Card style={styles.note}>
         <Icon name="lock" size={18} color={colors.brand} />
         <Text variant="small" color="brand" style={styles.grow}>
-          Check each field. Only what you accept goes into your card, and it stays private until you
-          publish.
+          {extraction.source === 'prebuilt'
+            ? 'Team IMPACT read these from your LinkedIn profile. Check each field: only what you accept goes into your card, and it stays private until you publish.'
+            : 'Check each field. Only what you accept goes into your card, and it stays private until you publish.'}
         </Text>
       </Card>
       <View style={styles.badges}>
@@ -137,8 +138,9 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
 /** "/card/review": confirm what the reader found in the uploaded resume. */
 export default function CardReview() {
   const { state } = useApi(() => api.myCard());
+  const prebuilt = state.status === 'ready' && state.data.pendingResume?.source === 'prebuilt';
   return (
-    <Screen eyebrow="Baseball Card" title="Check your resume" back>
+    <Screen eyebrow="Baseball Card" title={prebuilt ? 'Check your card' : 'Check your resume'} back>
       <Async state={state}>
         {({ pendingResume }) =>
           pendingResume ? (

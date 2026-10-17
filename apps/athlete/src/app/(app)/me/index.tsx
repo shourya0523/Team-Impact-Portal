@@ -64,6 +64,7 @@ export default function Me() {
   };
   const privacy: Row = { label: 'Privacy and search', href: '/me/privacy' };
   const alumni: Row = { label: 'Alumni who help', href: '/me/alumni' };
+  const alumniDetails: Row = { label: 'College, work and helping', href: '/onboarding/details' };
 
   const rows: Row[] =
     role === 'athlete'
@@ -112,13 +113,14 @@ export default function Me() {
               ]
             : role === 'alumni_athlete'
               ? [
+                  alumniDetails,
                   alumni,
                   myCommunities,
                   { label: 'Claim a pre-built card', href: '/card/claim' },
                   privacy,
                 ]
               : role === 'alumni_mentor'
-                ? [alumni, myCommunities, privacy]
+                ? [alumniDetails, alumni, myCommunities, privacy]
                 : role === 'recruiter'
                   ? [{ label: 'Saved lists', href: '/lists' }]
                   : [myCommunities];

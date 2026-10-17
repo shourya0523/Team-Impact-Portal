@@ -83,6 +83,10 @@ export const USERS = {
   rosa: user(116, 'Rosa', 'Diaz', 'parent', 'rosa.diaz@example.org'),
   /** A teen who just signed up. */
   eli: user(117, 'Eli', 'Ward', 'teen', 'eli.ward@example.org'),
+  // More alumni, so browsing them has something to filter (see ALUMNI).
+  jamal: user(118, 'Jamal', 'Wright', 'alumni_athlete', 'jamal.wright@example.org'),
+  marisol: user(119, 'Marisol', 'Ruiz', 'alumni_mentor', 'marisol.ruiz@example.org'),
+  marcus: user(120, 'Marcus', 'Hill', 'alumni_athlete', 'marcus.hill@example.org'),
 } satisfies Record<string, MockUser>;
 
 /** Who mock sign-in uses for each role. */
@@ -684,6 +688,158 @@ export const TICKETS: ModerationTicket[] = [
     status: 'resolved',
     resolution: 'dismiss',
     createdAt: at(8),
+  },
+];
+
+/**
+ * Alumni details (PRD §8). Athletes see an alumnus, with these contacts, only while mentoring or
+ * hiring is on; Marcus has both off, so no athlete ever sees him. College is free text.
+ */
+export interface MockAlumni {
+  userId: string;
+  college: string;
+  employer: string | null;
+  mentoring: boolean;
+  hiring: boolean;
+  contact: ContactDetails;
+}
+
+const alumnus = (
+  u: MockUser,
+  college: string,
+  employer: string | null,
+  flags: { mentoring: boolean; hiring: boolean },
+  phone: string | null = null,
+): MockAlumni => ({
+  userId: u.id,
+  college,
+  employer,
+  ...flags,
+  contact: {
+    email: u.email,
+    phone,
+    linkedinUrl: `https://www.linkedin.com/in/${u.firstName.toLowerCase()}-${u.lastName.toLowerCase()}`,
+  },
+});
+
+export const ALUMNI: MockAlumni[] = [
+  alumnus(
+    USERS.priya,
+    'Tufts University',
+    'Harbor Point Asset Management',
+    { mentoring: true, hiring: true },
+    '+1 617 555 0142',
+  ),
+  alumnus(USERS.chris, 'Northeastern University', 'Lumen Logistics', {
+    mentoring: true,
+    hiring: false,
+  }),
+  alumnus(USERS.jamal, 'Boston College', 'Harbor Software', { mentoring: true, hiring: false }),
+  alumnus(USERS.marisol, 'Tufts University', 'Beacon Consulting', {
+    mentoring: false,
+    hiring: true,
+  }),
+  // Neither flag: invisible to athletes.
+  alumnus(USERS.marcus, 'Northeastern University', 'Quincy Public Schools', {
+    mentoring: false,
+    hiring: false,
+  }),
+];
+
+/**
+ * A Baseball Card Team Impact built from an alumnus's LinkedIn profile, waiting behind a personal
+ * invite link (PRD L5). It belongs to no account and is kept apart from `CARDS`, so nothing that
+ * reads cards (search, profiles, lists, exports) can reach it. Claiming copies its fields into the
+ * claimant's card review; it is never published as it stands.
+ */
+export interface MockPrebuiltCard {
+  token: string;
+  face: Omit<CardFace, 'id' | 'athleteId' | 'lastName' | 'team'> & { lastName: string };
+  expiresAt: string;
+  claimedById: string | null;
+  claimedAt: string | null;
+}
+
+/** Links the clients and tests point at. */
+export const CLAIM_TOKENS = {
+  priya: 'claim-priya-linkedin-card-2026',
+  jamal: 'claim-jamal-linkedin-card-2026',
+  expired: 'claim-expired-linkedin-card-2025',
+} as const;
+
+const prebuiltFace = (fields: Partial<MockPrebuiltCard['face']>): MockPrebuiltCard['face'] => ({
+  season: 2026,
+  photoUrl: null,
+  firstName: '',
+  lastName: '',
+  jerseyNumber: null,
+  position: null,
+  classYear: 2022,
+  major: 'Economics',
+  hometown: null,
+  city: null,
+  region: null,
+  experience: [],
+  skills: [],
+  lookingFor: null,
+  ...fields,
+});
+
+export const PREBUILT_CARDS: MockPrebuiltCard[] = [
+  {
+    token: CLAIM_TOKENS.priya,
+    face: prebuiltFace({
+      firstName: 'Priya',
+      lastName: 'Shah',
+      position: 'Swimmer',
+      classYear: 2022,
+      major: 'Economics',
+      city: 'Boston',
+      region: 'northeast',
+      experience: [
+        {
+          role: 'Vice President',
+          organization: 'Harbor Point Asset Management',
+          period: '2025 – Now',
+        },
+        { role: 'Associate', organization: 'Harbor Point Asset Management', period: '2023 – 2025' },
+      ],
+      skills: ['Equity research', 'Mentoring', 'Financial modeling'],
+      lookingFor: 'Mentoring athletes heading into finance',
+    }),
+    expiresAt: '2027-01-31T12:00:00.000Z',
+    claimedById: null,
+    claimedAt: null,
+  },
+  {
+    token: CLAIM_TOKENS.jamal,
+    face: prebuiltFace({
+      firstName: 'Jamal',
+      lastName: 'Wright',
+      position: 'Attack',
+      classYear: 2019,
+      major: 'Computer Science',
+      city: 'Cambridge',
+      region: 'northeast',
+      experience: [
+        { role: 'Product manager', organization: 'Harbor Software', period: '2022 – Now' },
+      ],
+    }),
+    expiresAt: '2027-01-31T12:00:00.000Z',
+    claimedById: null,
+    claimedAt: null,
+  },
+  {
+    token: CLAIM_TOKENS.expired,
+    face: prebuiltFace({
+      firstName: 'Marcus',
+      lastName: 'Hill',
+      classYear: 2015,
+      major: 'Kinesiology',
+    }),
+    expiresAt: at(1),
+    claimedById: null,
+    claimedAt: null,
   },
 ];
 

@@ -447,6 +447,7 @@ export const extractResume = (
   return {
     id: world.newId(),
     status: 'unconfirmed',
+    source: 'resume',
     fileName: clean(fileName),
     failed: keys.length === 0,
     fields: fields as ResumeExtraction['fields'],

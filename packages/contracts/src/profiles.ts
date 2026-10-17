@@ -156,6 +156,8 @@ export type ResumeUploadRequest = z.infer<typeof ResumeUploadRequest>;
  */
 export const ResumeExtraction = ResumeDraft.extend({
   status: z.literal('unconfirmed'),
+  /** `prebuilt`: a claimed card Team Impact built from LinkedIn (`./card-claims.ts`). */
+  source: z.enum(['resume', 'prebuilt']),
   fileName: z.string(),
   /** Extraction found nothing usable: the athlete types the fields instead. */
   failed: z.boolean(),

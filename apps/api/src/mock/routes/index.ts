@@ -1,5 +1,7 @@
 import type { ZodApp } from '../../zod';
 import type { MockWorld } from '../world';
+import { registerAlumniRoutes } from './alumni';
+import { registerCardClaimRoutes } from './card-claims';
 import { registerCommunityCreateRoutes } from './community-create';
 import { registerCardRoutes } from './cards';
 import { registerCommunityRoutes } from './communities';
@@ -46,6 +48,8 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerCardRoutes,
     registerCommunityMemberRoutes,
     registerStaffToolsRoutes,
+    registerAlumniRoutes,
+    registerCardClaimRoutes,
   ]) {
     register(app, world, g);
   }

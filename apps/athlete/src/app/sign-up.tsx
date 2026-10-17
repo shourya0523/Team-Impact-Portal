@@ -95,7 +95,9 @@ export default function SignUp() {
           ? { pathname: '/scan', params: { code: qr } }
           : me.role === 'athlete' || me.role === 'parent' || me.role === 'teen'
             ? '/onboarding/find-team'
-            : firstTab(me.role);
+            : me.role === 'alumni_athlete' || me.role === 'alumni_mentor'
+              ? '/onboarding/details'
+              : firstTab(me.role);
         router.replace(next);
       },
       (e: unknown) => {

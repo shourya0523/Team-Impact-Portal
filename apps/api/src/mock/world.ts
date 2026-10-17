@@ -79,6 +79,10 @@ export class MockWorld {
   readonly blocks: MockBlock[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
+  /** Alumni details and mentoring/hiring flags (`./routes/alumni.ts`). */
+  readonly alumni = structuredClone(fx.ALUMNI);
+  /** Pre-built cards behind personal invite links, invisible until claimed (`./routes/card-claims.ts`). */
+  readonly prebuiltCards = structuredClone(fx.PREBUILT_CARDS);
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}
