@@ -76,6 +76,15 @@ export const textPairs: readonly ColorPair[] = [
   // Jersey buttons: the number slot on a navy button (src/ui/Button.tsx).
   text('card yellow on brand', colors.card.art.yellow, colors.brand),
   text('brand on brand tint', colors.brand, colors.brandTint),
+  // HoldButton `sign` (src/ui/HoldButton.tsx): the label once the fill has darkened under it.
+  text('surface on navy deep (hold to sign, held)', colors.surface, colors.card.art.navyDeep),
+  // The SIGNED stamp over a HoldButton: display md (34pt, 800) is large text, so 3:1.
+  {
+    name: 'action on ground (SIGNED stamp on a button, large display)',
+    foreground: colors.action,
+    background: colors.ground,
+    min: contrastThreshold.largeTextOrUi,
+  },
   text('action pressed on action tint (rallied)', colors.actionPressed, colors.actionTint),
   text('ink on accent (interest)', colors.ink, colors.accent.bg),
   text('accent text on surface', colors.accent.text, colors.surface),

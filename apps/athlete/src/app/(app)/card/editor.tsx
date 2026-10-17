@@ -14,7 +14,7 @@ import { api, ApiRequestError } from '@/api';
 import { FIELD_LABEL } from '@/components/cardData';
 import { Async, Chip, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
-import { Button, Card, Input, Text } from '@/ui';
+import { Button, Card, haptics, HoldButton, Input, Text } from '@/ui';
 
 type TextField = 'position' | 'jerseyNumber' | 'major' | 'hometown' | 'city' | 'lookingFor';
 
@@ -136,7 +136,16 @@ function Editor({ initial }: { initial: UpdateCardRequest }) {
     return api
       .saveCardDraft(toRequest(form, region, experience))
       .then(() => (thenPublish ? api.publishCard() : undefined))
-      .then(() => router.replace('/card'), fail);
+      .then(
+        () => {
+          if (thenPublish) haptics.success();
+          router.replace('/card');
+        },
+        (e: Error) => {
+          if (thenPublish) haptics.error();
+          fail(e);
+        },
+      );
   };
 
   const set = (key: string) => (value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -256,15 +265,19 @@ function Editor({ initial }: { initial: UpdateCardRequest }) {
         ))}
       </View>
       {error && <ErrorText>{error}</ErrorText>}
-      <View style={styles.actions}>
+      <View style={styles.publish}>
+        <HoldButton
+          label="Hold to publish card"
+          look="sign"
+          busy={busy}
+          onComplete={() => save(true)}
+        />
         <Button
           label="Save draft"
           variant="secondary"
-          stretch
           disabled={busy}
           onPress={() => save(false)}
         />
-        <Button label="Publish" stretch disabled={busy} onPress={() => save(true)} />
       </View>
     </Gutter>
   );
@@ -283,4 +296,5 @@ export default function CardEditor() {
 const styles = StyleSheet.create({
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
   actions: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.sm },
+  publish: { gap: spacing.sm, marginTop: spacing.sm },
 });

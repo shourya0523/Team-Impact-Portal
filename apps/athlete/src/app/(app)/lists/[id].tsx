@@ -15,7 +15,7 @@ import {
 import { Async, ErrorText, Gutter, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
-import { Button, Card, Icon, Input, Sheet, Text } from '@/ui';
+import { Button, Card, haptics, HoldButton, Icon, Input, Sheet, Text } from '@/ui';
 
 /**
  * "/lists/[id]" (R6): one list's athletes with the company's latest note on each. Anyone the list
@@ -31,7 +31,6 @@ export default function RecruiterListScreen() {
   const [noteFor, setNoteFor] = useState<RecruiterListEntry | null>(null);
   const [note, setNote] = useState('');
   const [noteError, setNoteError] = useState<string | undefined>();
-  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
@@ -57,12 +56,19 @@ export default function RecruiterListScreen() {
       (e: Error) => setNoteError(e.message),
     );
   };
+  // Rethrows so the HoldButton resets when the delete fails.
   const del = () =>
-    api.deleteList(id).then(() => {
-      setDeleting(false);
-      if (target?.id === id) setSaveTarget(null);
-      router.back();
-    }, fail);
+    api.deleteList(id).then(
+      () => {
+        if (target?.id === id) setSaveTarget(null);
+        router.back();
+      },
+      (e: Error) => {
+        haptics.error();
+        fail(e);
+        throw e;
+      },
+    );
 
   const title = state.status === 'ready' ? state.data.name : 'List';
   return (
@@ -168,7 +174,13 @@ export default function RecruiterListScreen() {
                 }}
               />
               {mine && (
-                <Button label="Delete list" variant="secondary" onPress={() => setDeleting(true)} />
+                <View style={styles.danger}>
+                  <Text variant="small" color="secondary">
+                    Deleting it removes the list for everyone it’s shared with. Notes on its
+                    athletes are kept.
+                  </Text>
+                  <HoldButton label="Hold to delete list" look="danger" onComplete={del} />
+                </View>
               )}
 
               <Sheet
@@ -190,24 +202,6 @@ export default function RecruiterListScreen() {
                 </Text>
                 <Button label="Save note" onPress={saveNote} />
               </Sheet>
-              <Sheet
-                visible={deleting}
-                title={`Delete ${l.name}?`}
-                onClose={() => setDeleting(false)}
-              >
-                <Text color="secondary">
-                  The list goes for everyone it’s shared with. Notes on its athletes are kept.
-                </Text>
-                <View style={styles.actions}>
-                  <Button
-                    label="Cancel"
-                    variant="secondary"
-                    stretch
-                    onPress={() => setDeleting(false)}
-                  />
-                  <Button label="Delete" stretch onPress={() => void del()} />
-                </View>
-              </Sheet>
             </Gutter>
           );
         }}
@@ -228,4 +222,5 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.line,
   },
   actions: { flexDirection: 'row', gap: spacing.sm },
+  danger: { gap: spacing.sm, marginTop: spacing.sm },
 });

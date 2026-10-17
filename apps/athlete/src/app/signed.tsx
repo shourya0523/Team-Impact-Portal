@@ -1,68 +1,14 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
-import Animated, {
-  useAnimatedStyle,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, duration, radius, spacing } from '@team-impact/ui-tokens';
+import { colors, duration, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { shortDate } from '@/components/format';
 import { Progress } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { firstTab } from '@/navigation/tabs';
-import {
-  Button,
-  FadeSlideIn,
-  TeamAvatar,
-  Text,
-  springConfig,
-  timing,
-  useReducedMotion,
-} from '@/ui';
-
-const STAMP_BORDER = 6;
-/** The stamp drops in large and tilted, then settles at a slight angle. */
-const STAMP_FROM = { scale: 2.2, rotate: -14 };
-const STAMP_REST = -8;
-
-/**
- * The SIGNED stamp: lands with the earned-moment spring. Under reduced motion there is no stamp
- * movement at all, only a fade.
- */
-function Stamp({ date }: { date: string }) {
-  const reduced = useReducedMotion();
-  const land = useSharedValue(0);
-  const fade = useSharedValue(0);
-  useEffect(() => {
-    fade.value = withTiming(1, reduced ? timing.screen : timing.small);
-    land.value = reduced ? 1 : withSpring(1, springConfig);
-  }, [reduced, fade, land]);
-  const style = useAnimatedStyle(() => {
-    const scale = STAMP_FROM.scale + (1 - STAMP_FROM.scale) * land.value;
-    const rotate = STAMP_FROM.rotate + (STAMP_REST - STAMP_FROM.rotate) * land.value;
-    return {
-      opacity: fade.value,
-      transform: reduced
-        ? [{ rotate: `${STAMP_REST}deg` }]
-        : [{ scale }, { rotate: `${rotate}deg` }],
-    };
-  });
-  return (
-    <Animated.View style={[styles.stamp, style]} accessible accessibilityLabel={`Signed, ${date}`}>
-      <Text variant="display" size="xxl" color="onBrand" accessibilityRole="none">
-        Signed
-      </Text>
-      <Text variant="eyebrow" color="onBrand">
-        {date}
-      </Text>
-    </Animated.View>
-  );
-}
+import { Button, FadeSlideIn, Stamp, TeamAvatar, Text } from '@/ui';
 
 /**
  * "/signed": you're on the team. QR joins land here at once; join requests land here when the
@@ -157,14 +103,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing['2xl'],
-  },
-  stamp: {
-    borderWidth: STAMP_BORDER,
-    borderColor: colors.onBrand.text,
-    borderRadius: radius.card,
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
   },
   welcome: { alignItems: 'center', gap: spacing.sm },
   center: { textAlign: 'center' },

@@ -8,7 +8,7 @@ import { toCardData } from '@/components/cardData';
 import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { shortDate } from '@/components/format';
 import { useApi } from '@/hooks/useApi';
-import { Badge, Button, Card, Icon, Text, type IconName } from '@/ui';
+import { Badge, Button, Card, haptics, HoldButton, Icon, Text, type IconName } from '@/ui';
 
 /** Widest the card gets on tablets and web. */
 const MAX_CARD_WIDTH = 360;
@@ -55,7 +55,19 @@ export default function CardHome() {
     },
     fail: (e: Error) => setError(e.message),
   };
-  const publish = () => api.publishCard().then(done.ok, done.fail);
+  // Rethrows so the HoldButton resets (drops its stamp) when publishing fails.
+  const publish = () =>
+    api.publishCard().then(
+      () => {
+        haptics.success();
+        done.ok();
+      },
+      (e: Error) => {
+        haptics.error();
+        done.fail(e);
+        throw e;
+      },
+    );
   const unpublish = () => api.unpublishCard().then(done.ok, done.fail);
 
   return (
@@ -130,16 +142,13 @@ export default function CardHome() {
                   Only you see them. Publishing updates the card your team
                   {card?.visibility.openToRecruiting ? ' and recruiters' : ''} see.
                 </Text>
-                <View style={styles.actions}>
-                  <Button
-                    label="Keep editing"
-                    variant="secondary"
-                    size="sm"
-                    stretch
-                    onPress={() => router.push('/card/editor')}
-                  />
-                  <Button label="Publish" size="sm" stretch onPress={publish} />
-                </View>
+                <HoldButton label="Hold to publish card" look="sign" onComplete={publish} />
+                <Button
+                  label="Keep editing"
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => router.push('/card/editor')}
+                />
               </Card>
             )}
             {card && !draft && (
@@ -152,12 +161,11 @@ export default function CardHome() {
                     ? 'Unpublishing hides it from everyone else right away, recruiters included, and turns recruiting off. You keep the card and its seasons.'
                     : 'Publish it to show it to your team. Turn recruiting on afterwards if you want recruiters to find you.'}
                 </Text>
-                <Button
-                  label={card.visibility.published ? 'Unpublish' : 'Publish'}
-                  variant={card.visibility.published ? 'secondary' : 'primary'}
-                  size="sm"
-                  onPress={card.visibility.published ? unpublish : publish}
-                />
+                {card.visibility.published ? (
+                  <Button label="Unpublish" variant="secondary" size="sm" onPress={unpublish} />
+                ) : (
+                  <HoldButton label="Hold to publish card" look="sign" onComplete={publish} />
+                )}
               </Card>
             )}
             {error && <ErrorText>{error}</ErrorText>}
@@ -211,5 +219,4 @@ const styles = StyleSheet.create({
   badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
   cardWrap: { alignItems: 'center', paddingVertical: spacing.sm },
   center: { textAlign: 'center' },
-  actions: { flexDirection: 'row', gap: spacing.sm },
 });

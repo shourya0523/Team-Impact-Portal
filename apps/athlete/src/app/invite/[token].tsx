@@ -9,7 +9,7 @@ import { CheckRow, errorMessage } from '@/components/signup';
 import { Async, ErrorText, Gutter, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
-import { Button, Card, Input, TeamAvatar, Text } from '@/ui';
+import { Button, Card, haptics, HoldButton, Input, TeamAvatar, Text } from '@/ui';
 
 /**
  * "/invite/[token]": a coach opens the link Team IMPACT (or a fellow coach) emailed them. A new
@@ -50,11 +50,13 @@ function Accept({ token, invite }: { token: string; invite: CoachInvitePreview }
       )
       .then(
         (coach) => {
+          haptics.success();
           setMe(coach);
           setRole(coach.role);
           router.replace('/team');
         },
         (e: unknown) => {
+          haptics.error();
           setError(errorMessage(e));
           setBusy(false);
         },
@@ -134,15 +136,15 @@ function Accept({ token, invite }: { token: string; invite: CoachInvitePreview }
       )}
 
       {(newAccount || signedInAsInvitee) && (
-        <Button
-          label={busy ? 'Joining…' : 'Accept and join the team'}
-          size="lg"
+        <HoldButton
+          label="Hold to join the team"
+          look="sign"
+          busy={busy && 'Joining…'}
           disabled={
-            busy ||
-            (newAccount &&
-              (!firstName.trim() || !lastName.trim() || password.length < 12 || !acceptTerms))
+            newAccount &&
+            (!firstName.trim() || !lastName.trim() || password.length < 12 || !acceptTerms)
           }
-          onPress={accept}
+          onComplete={accept}
         />
       )}
       {error && <ErrorText>{error}</ErrorText>}
