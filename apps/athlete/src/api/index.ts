@@ -4,6 +4,7 @@ import { communityMembers } from './community-members';
 import { join } from './join';
 import { safety } from './safety';
 import { profiles } from './profiles';
+import { recruiter } from './recruiter';
 import { session } from './session';
 import { team } from './team';
 import { signup } from './signup';
@@ -21,4 +22,5 @@ export const api = {
   ...activity,
   ...profiles,
   ...communityMembers,
+  ...recruiter,
 };
