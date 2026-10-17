@@ -1,7 +1,20 @@
 import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { Icon, type IconName } from './Icon';
+import { timing } from './motion';
 import { Text, type TextColor } from './Text';
+import { useReducedMotion } from './useReducedMotion';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** How far a button sinks while held. Small enough to read as give, not as a jump. */
+const PRESSED_SCALE = 0.97;
 
 export type ButtonVariant =
   /** Filled action red: the main action on a screen. */
@@ -50,7 +63,11 @@ const iconColor: Partial<Record<TextColor, string>> = {
   onBrand: colors.onBrand.text,
 };
 
-/** States: default, pressed, disabled. Focus shows a brand ring (3:1 on ground and surface). */
+/**
+ * States: default, pressed, disabled. Focus shows a brand ring (3:1 on ground and surface).
+ * Pressing sinks the button slightly while its fill eases to the pressed colour (duration.tap);
+ * under reduced motion only the colour changes.
+ */
 export function Button({
   label,
   variant = 'primary',
@@ -58,25 +75,41 @@ export function Button({
   icon,
   stretch,
   disabled,
+  onPressIn,
+  onPressOut,
   ...rest
 }: ButtonProps) {
   const l = look[variant];
+  const reduced = useReducedMotion();
+  const press = useSharedValue(0);
+  const animated = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(press.value, [0, 1], [l.bg, l.pressed]),
+    transform: [{ scale: reduced ? 1 : 1 - (1 - PRESSED_SCALE) * press.value }],
+  }));
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       {...rest}
-      style={({ pressed }) => [
+      onPressIn={(e) => {
+        press.value = withTiming(1, timing.tap);
+        onPressIn?.(e);
+      }}
+      onPressOut={(e) => {
+        press.value = withTiming(0, timing.tap);
+        onPressOut?.(e);
+      }}
+      style={[
         styles.base,
         {
           minHeight: layout.buttonHeight[size],
           paddingHorizontal: size === 'sm' ? spacing.md : spacing.lg,
-          backgroundColor: pressed ? l.pressed : l.bg,
         },
         l.border ? { borderWidth: 1, borderColor: l.border } : null,
         stretch && styles.stretch,
         disabled && styles.disabled,
+        animated,
       ]}
     >
       {icon ? (
@@ -96,7 +129,7 @@ export function Button({
           {label}
         </Text>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
