@@ -4,6 +4,7 @@ export { Button, type ButtonProps, type ButtonVariant } from './Button';
 export { Card, type CardProps } from './Card';
 export { withAlpha } from './color';
 export { FadeSlideIn } from './FadeSlideIn';
+export { haptics } from './haptics';
 export { Icon, type IconName } from './Icon';
 export { Input, type InputProps } from './Input';
 export { Logo, type LogoProps } from './Logo';

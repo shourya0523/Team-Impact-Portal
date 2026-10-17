@@ -6,15 +6,21 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
+import { withAlpha } from './color';
 import { Icon, type IconName } from './Icon';
+import { haptics } from './haptics';
 import { timing } from './motion';
 import { Text, type TextColor } from './Text';
 import { useReducedMotion } from './useReducedMotion';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-/** How far a button sinks while held. Small enough to read as give, not as a jump. */
+/** How far an outline button sinks while held. Small enough to read as give, not as a jump. */
 const PRESSED_SCALE = 0.97;
+/** Depth of the solid lip under filled buttons; pressing pushes the face down into it. */
+const LIP = spacing.xs;
+/** Tape stripes on a jersey button's right edge. */
+const TAPE = { count: 4, width: spacing.sm, height: spacing.xs - 1 };
 
 export type ButtonVariant =
   /** Filled action red: the main action on a screen. */
@@ -39,14 +45,30 @@ export type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
   icon?: IconName;
   /** Grow to fill the row (for side-by-side buttons). */
   stretch?: boolean;
+  /**
+   * Game-day look for a screen's main commitment (Approve, Join, Publish): a condensed uppercase
+   * label, a number slot (this string, e.g. "07", or the `icon`) and tape stripes. Filled
+   * variants only; md and lg sizes.
+   */
+  jersey?: string | true;
 };
 
-type Look = { bg: string; pressed: string; fg: TextColor; border?: string };
+type Look = { bg: string; pressed: string; fg: TextColor; border?: string; lip?: string };
 
 const look: Record<ButtonVariant, Look> = {
-  primary: { bg: colors.action, pressed: colors.actionPressed, fg: 'onBrand' },
+  primary: {
+    bg: colors.action,
+    pressed: colors.actionPressed,
+    fg: 'onBrand',
+    lip: colors.actionPressed,
+  },
   secondary: { bg: colors.surface, pressed: colors.ground, fg: 'ink', border: colors.ink },
-  brand: { bg: colors.brand, pressed: colors.brandPressed, fg: 'onBrand' },
+  brand: {
+    bg: colors.brand,
+    pressed: colors.brandPressed,
+    fg: 'onBrand',
+    lip: colors.card.art.navyDeep,
+  },
   ink: { bg: colors.ink, pressed: colors.text.secondary, fg: 'onBrand' },
   onBrand: { bg: colors.surface, pressed: colors.brandTint, fg: 'brand' },
   ghostOnBrand: {
@@ -65,8 +87,12 @@ const iconColor: Partial<Record<TextColor, string>> = {
 
 /**
  * States: default, pressed, disabled. Focus shows a brand ring (3:1 on ground and surface).
- * Pressing sinks the button slightly while its fill eases to the pressed colour (duration.tap);
- * under reduced motion only the colour changes.
+ * Every press plays a light tap haptic.
+ *
+ * - Filled red and navy buttons sit on a solid lip and press down into it, like a stadium
+ *   button. Under reduced motion they don't move; the face darkens instead.
+ * - Other variants sink slightly while their fill eases to the pressed colour (duration.tap);
+ *   under reduced motion only the colour changes.
  */
 export function Button({
   label,
@@ -74,6 +100,7 @@ export function Button({
   size = 'md',
   icon,
   stretch,
+  jersey,
   disabled,
   onPressIn,
   onPressOut,
@@ -82,53 +109,129 @@ export function Button({
   const l = look[variant];
   const reduced = useReducedMotion();
   const press = useSharedValue(0);
-  const animated = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(press.value, [0, 1], [l.bg, l.pressed]),
-    transform: [{ scale: reduced ? 1 : 1 - (1 - PRESSED_SCALE) * press.value }],
-  }));
+  const lip = l.lip;
+  const isJersey = !!jersey && !!lip && size !== 'sm';
+
+  const face = useAnimatedStyle(() =>
+    lip
+      ? {
+          backgroundColor: reduced
+            ? interpolateColor(press.value, [0, 1], [l.bg, l.pressed])
+            : l.bg,
+          transform: [{ translateY: reduced ? 0 : LIP * press.value }],
+        }
+      : {
+          backgroundColor: interpolateColor(press.value, [0, 1], [l.bg, l.pressed]),
+          transform: [{ scale: reduced ? 1 : 1 - (1 - PRESSED_SCALE) * press.value }],
+        },
+  );
+
+  const height = layout.buttonHeight[size];
+  const fg = iconColor[l.fg];
+  const content = isJersey ? (
+    <View style={styles.jerseyRow}>
+      <View style={styles.slot}>
+        {typeof jersey === 'string' ? (
+          <Text
+            variant="display"
+            size="xs"
+            style={[styles.number, { color: variant === 'brand' ? colors.card.art.yellow : fg }]}
+          >
+            {jersey}
+          </Text>
+        ) : (
+          <Icon
+            name={icon ?? 'check'}
+            size={20}
+            color={variant === 'brand' ? colors.card.art.yellow : fg}
+            strokeWidth={3}
+          />
+        )}
+      </View>
+      <Text variant="display" size="xs" color={l.fg} style={styles.grow} numberOfLines={1}>
+        {label}
+      </Text>
+      <View style={styles.tape} accessibilityElementsHidden importantForAccessibility="no">
+        {Array.from({ length: TAPE.count }, (_, i) => (
+          <View key={i} style={styles.tapeBar} />
+        ))}
+      </View>
+    </View>
+  ) : icon ? (
+    <View style={styles.row}>
+      <Icon name={icon} size={size === 'sm' ? 16 : 18} color={fg} strokeWidth={2.4} />
+      <Text variant={size === 'sm' ? 'small' : 'body'} weight="semibold" color={l.fg}>
+        {label}
+      </Text>
+    </View>
+  ) : (
+    <Text variant={size === 'sm' ? 'small' : 'body'} weight="semibold" color={l.fg}>
+      {label}
+    </Text>
+  );
+
+  const handlers = {
+    onPressIn: (e: Parameters<NonNullable<PressableProps['onPressIn']>>[0]) => {
+      press.value = withTiming(1, timing.tap);
+      haptics.tap();
+      onPressIn?.(e);
+    },
+    onPressOut: (e: Parameters<NonNullable<PressableProps['onPressOut']>>[0]) => {
+      press.value = withTiming(0, timing.tap);
+      onPressOut?.(e);
+    },
+  };
+  const padding = { paddingHorizontal: size === 'sm' ? spacing.md : spacing.lg };
+
+  if (lip) {
+    // The Pressable is the lip: one touch target covering face and lip, so nothing shifts.
+    return (
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !!disabled }}
+        accessibilityLabel={label}
+        disabled={disabled}
+        {...rest}
+        {...handlers}
+        style={[
+          styles.lip,
+          { backgroundColor: lip, minHeight: height + LIP },
+          stretch && styles.stretch,
+          disabled && styles.disabled,
+        ]}
+      >
+        <Animated.View
+          style={[
+            styles.base,
+            { minHeight: height },
+            isJersey ? styles.jerseyPadding : padding,
+            face,
+          ]}
+        >
+          {content}
+        </Animated.View>
+      </Pressable>
+    );
+  }
+
   return (
     <AnimatedPressable
       accessibilityRole="button"
       accessibilityState={{ disabled: !!disabled }}
       disabled={disabled}
       {...rest}
-      onPressIn={(e) => {
-        press.value = withTiming(1, timing.tap);
-        onPressIn?.(e);
-      }}
-      onPressOut={(e) => {
-        press.value = withTiming(0, timing.tap);
-        onPressOut?.(e);
-      }}
+      {...handlers}
       style={[
         styles.base,
-        {
-          minHeight: layout.buttonHeight[size],
-          paddingHorizontal: size === 'sm' ? spacing.md : spacing.lg,
-        },
+        { minHeight: height },
+        padding,
         l.border ? { borderWidth: 1, borderColor: l.border } : null,
         stretch && styles.stretch,
         disabled && styles.disabled,
-        animated,
+        face,
       ]}
     >
-      {icon ? (
-        <View style={styles.row}>
-          <Icon
-            name={icon}
-            size={size === 'sm' ? 16 : 18}
-            color={iconColor[l.fg]}
-            strokeWidth={2.4}
-          />
-          <Text variant={size === 'sm' ? 'small' : 'body'} weight="semibold" color={l.fg}>
-            {label}
-          </Text>
-        </View>
-      ) : (
-        <Text variant={size === 'sm' ? 'small' : 'body'} weight="semibold" color={l.fg}>
-          {label}
-        </Text>
-      )}
+      {content}
     </AnimatedPressable>
   );
 }
@@ -140,7 +243,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  lip: { borderRadius: radius.md, minWidth: layout.minTouchTarget, justifyContent: 'flex-start' },
   row: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  jerseyRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, alignSelf: 'stretch' },
+  jerseyPadding: { paddingLeft: spacing.md, paddingRight: spacing.sm },
+  slot: {
+    alignItems: 'center',
+    paddingRight: spacing.sm,
+    borderRightWidth: 2,
+    borderRightColor: withAlpha(colors.onBrand.text, 0.35),
+  },
+  number: { fontStyle: 'italic' },
+  grow: { flex: 1 },
+  tape: { gap: TAPE.height, opacity: 0.55 },
+  tapeBar: {
+    width: TAPE.width,
+    height: TAPE.height,
+    borderRadius: TAPE.height / 2,
+    backgroundColor: colors.onBrand.text,
+  },
   stretch: { alignSelf: 'stretch', flexGrow: 1, flexBasis: 0 },
   // Disabled controls are exempt from WCAG contrast; dimming keeps them recognisably inactive.
   disabled: { opacity: 0.4 },

@@ -51,15 +51,13 @@ function Approvals({ teamId, onChange }: { teamId: string; onChange: () => void 
                   <Button
                     label="Decline"
                     variant="secondary"
-                    size="sm"
-                    stretch
                     accessibilityLabel={`Decline ${fullName(r.requester)}`}
                     onPress={() => decide(r.id, 'decline')}
                   />
                   <Button
                     label="Approve"
                     variant="brand"
-                    size="sm"
+                    jersey
                     stretch
                     accessibilityLabel={`Approve ${fullName(r.requester)}`}
                     onPress={() => decide(r.id, 'approve')}

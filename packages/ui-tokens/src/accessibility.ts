@@ -73,6 +73,8 @@ export const textPairs: readonly ColorPair[] = [
   text('surface on default team colour', readableOn(colors.team), colors.team),
   text('onBrand secondary on brand', colors.onBrand.secondary, colors.brand),
   text('onBrand muted on brand', colors.onBrand.muted, colors.brand),
+  // Jersey buttons: the number slot on a navy button (src/ui/Button.tsx).
+  text('card yellow on brand', colors.card.art.yellow, colors.brand),
   text('brand on brand tint', colors.brand, colors.brandTint),
   text('action pressed on action tint (rallied)', colors.actionPressed, colors.actionTint),
   text('ink on accent (interest)', colors.ink, colors.accent.bg),

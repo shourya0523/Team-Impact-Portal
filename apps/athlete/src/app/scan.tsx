@@ -123,6 +123,8 @@ export default function ScanQR() {
             <Button
               label={busy ? 'Joining…' : `Join ${teamLabel(preview)}`}
               size="lg"
+              icon="qr"
+              jersey
               disabled={busy}
               onPress={join}
             />

@@ -191,6 +191,8 @@ export default function Request() {
         <Button
           label={sending ? 'Sending…' : 'Send request'}
           size="lg"
+          icon="mail"
+          jersey
           onPress={send}
           disabled={!body || sending}
         />
