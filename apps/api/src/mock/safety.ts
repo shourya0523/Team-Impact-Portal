@@ -193,6 +193,8 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.rsvps, (r) => !eventIds.has(r.eventId));
   removeWhere(world.notifications, (n) => gone(n.userId) || n.actorId === u.id);
   world.notificationPrefs.delete(u.id);
+  // What they did and what was shown about them, as the events_log foreign keys cascade.
+  removeWhere(world.eventsLog, (e) => gone(e.userId ?? '') || gone(e.subjectId ?? ''));
   // Their phones stop getting pushes now. The real API must do this when `deleted_at` is set: the
   // `device_tokens` cascade only runs at the hard delete, up to 30 days later (TI-79).
   removeWhere(world.devices, (d) => gone(d.userId));

@@ -20,9 +20,10 @@ const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
 let testDb: Awaited<ReturnType<typeof createTestDb>>;
+// Booting PGlite and running the migrations can take a while on a busy CI runner.
 beforeAll(async () => {
   testDb = await createTestDb();
-});
+}, 30_000);
 afterAll(() => testDb.close());
 beforeEach(() => testDb.db.execute(sql`truncate users cascade`));
 afterEach(() => {
