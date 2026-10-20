@@ -29,7 +29,7 @@ Run typecheck, lint and test before pushing.
 - Athletes without open-to-recruiting don't appear on the employer portal at all
 - Identity search (official-community filter) sits behind one feature flag, is opt-in, and every such search is logged. Only official interest communities are filters; team, medical and private communities never are
 - Extracted resume text is untrusted data; nothing extracted is shown until the athlete confirms it
-- Every post, comment and event goes through moderation before it appears
+- Every post, comment and event goes through moderation before it appears, except content from Team Impact staff, which is published at once (PRD §5)
 
 ## Design system (Signing Day, TI-72)
 
