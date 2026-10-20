@@ -6,6 +6,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
+import { OUTLINE } from './Card';
 import { withAlpha } from './color';
 import { Icon, type IconName } from './Icon';
 import { haptics } from './haptics';
@@ -56,19 +57,16 @@ export type ButtonProps = Omit<PressableProps, 'children' | 'style'> & {
 type Look = { bg: string; pressed: string; fg: TextColor; border?: string; lip?: string };
 
 const look: Record<ButtonVariant, Look> = {
-  primary: {
-    bg: colors.action,
-    pressed: colors.actionPressed,
-    fg: 'onBrand',
-    lip: colors.actionPressed,
+  // Floodlight: filled and outlined buttons all sit on the same hard ink lip.
+  primary: { bg: colors.action, pressed: colors.actionPressed, fg: 'onBrand', lip: colors.outline },
+  secondary: {
+    bg: colors.surface,
+    pressed: colors.lineSoft,
+    fg: 'ink',
+    border: colors.outline,
+    lip: colors.outline,
   },
-  secondary: { bg: colors.surface, pressed: colors.ground, fg: 'ink', border: colors.ink },
-  brand: {
-    bg: colors.brand,
-    pressed: colors.brandPressed,
-    fg: 'onBrand',
-    lip: colors.card.art.navyDeep,
-  },
+  brand: { bg: colors.brand, pressed: colors.brandPressed, fg: 'onBrand', lip: colors.outline },
   ink: { bg: colors.ink, pressed: colors.text.secondary, fg: 'onBrand' },
   onBrand: { bg: colors.surface, pressed: colors.brandTint, fg: 'brand' },
   ghostOnBrand: {
@@ -110,7 +108,8 @@ export function Button({
   const reduced = useReducedMotion();
   const press = useSharedValue(0);
   const lip = l.lip;
-  const isJersey = !!jersey && !!lip && size !== 'sm';
+  // Jersey mode is for filled buttons only (its tape and slot are drawn in white).
+  const isJersey = !!jersey && !!lip && !l.border && size !== 'sm';
 
   const face = useAnimatedStyle(() =>
     lip
@@ -205,6 +204,7 @@ export function Button({
             styles.base,
             { minHeight: height },
             isJersey ? styles.jerseyPadding : padding,
+            l.border ? { borderWidth: OUTLINE, borderColor: l.border } : null,
             face,
           ]}
         >

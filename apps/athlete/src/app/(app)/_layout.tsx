@@ -28,11 +28,12 @@ export default function AppTabs() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: colors.brand,
-        tabBarInactiveTintColor: colors.text.muted,
+        // Floodlight: an ink tab bar, white for the current tab.
+        tabBarActiveTintColor: colors.onBrand.text,
+        tabBarInactiveTintColor: colors.onBrand.muted,
         tabBarStyle: {
-          backgroundColor: colors.surface,
-          borderTopColor: colors.lineSoft,
+          backgroundColor: colors.outline,
+          borderTopColor: colors.outline,
           height: 84,
           paddingTop: spacing.sm,
         },
@@ -54,7 +55,7 @@ export default function AppTabs() {
                   name={tab.icon}
                   size={24}
                   color={String(color)}
-                  fill={focused ? colors.brandTint : 'none'}
+                  fill={focused ? colors.brandRaised : 'none'}
                 />
               ),
             }}

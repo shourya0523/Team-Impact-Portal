@@ -1,7 +1,9 @@
 import { router, Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Svg, { G, Path } from 'react-native-svg';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import type { Loadable } from '@/hooks/useApi';
 import { haptics, Icon, Text, type IconName } from '@/ui';
@@ -35,30 +37,67 @@ export function Screen({
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false, title }} />
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + spacing.md,
-          paddingBottom: SCROLL_END,
-          gap: spacing.md,
-        }}
-      >
-        <View style={styles.header}>
-          {back && <IconButton icon="back" label="Back" onPress={() => router.back()} />}
-          <View style={styles.headerText}>
-            {eyebrow && (
-              <Text variant="eyebrow" color="action">
-                {eyebrow}
+      {/* Light status-bar text over the dark header band. */}
+      <StatusBar style="light" />
+      <ScrollView contentContainerStyle={{ paddingBottom: SCROLL_END, gap: spacing.md }}>
+        <View style={styles.band}>
+          <Contours />
+          <View style={[styles.header, { paddingTop: insets.top + spacing.lg }]}>
+            {back && <IconButton icon="back" label="Back" onPress={() => router.back()} />}
+            <View style={styles.headerText}>
+              {eyebrow && (
+                <Text variant="eyebrow" style={styles.eyebrowOnBand}>
+                  {eyebrow}
+                </Text>
+              )}
+              <Text variant="display" size="lg" color="onBrand" numberOfLines={2}>
+                {title}
               </Text>
-            )}
-            <Text variant="display" size="lg" color="brand" numberOfLines={2}>
-              {title}
-            </Text>
+            </View>
+            {right}
           </View>
-          {right}
+          <View style={styles.stripe} accessibilityElementsHidden importantForAccessibility="no">
+            <View style={[styles.stripeHalf, { backgroundColor: colors.brand }]} />
+            <View style={[styles.stripeHalf, { backgroundColor: colors.action }]} />
+          </View>
         </View>
         {children}
       </ScrollView>
       {floating}
+    </View>
+  );
+}
+
+/** Stroke weight of the header's contour lines. */
+const CONTOUR_STROKE = 1.1;
+
+/**
+ * Topographic contour lines, the Baseball Card's own motif (ui-primitives patterns.ts), drawn in
+ * the top-right of the header band. Decorative only.
+ */
+function Contours() {
+  return (
+    // The View hides it from assistive tech; react-native-svg would pass those props to the DOM.
+    <View
+      style={styles.contours}
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Svg width={300} height={170} viewBox="0 0 300 170">
+        <G
+          fill="none"
+          stroke={colors.card.art.blueBright}
+          strokeOpacity={0.3}
+          strokeWidth={CONTOUR_STROKE}
+        >
+          <Path d="M250 20c40 10 55 60 25 90s-95 30-120 0 5-100 95-90z" />
+          <Path d="M248 36c30 8 40 46 18 68s-72 22-90 0 4-76 72-68z" />
+          <Path d="M246 52c20 6 26 30 12 45s-48 14-60 0 3-50 48-45z" />
+          <Path d="M244 68c10 3 13 15 6 22s-24 7-30 0 2-25 24-22z" />
+          <Path d="M252 4c55 12 78 84 36 124S152 170 120 128 140-12 252 4z" />
+          <Path d="M256-14c70 16 104 110 52 160S128 196 88 142 120-34 256-14z" />
+        </G>
+      </Svg>
     </View>
   );
 }
@@ -249,12 +288,19 @@ export function Async<T>({
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ground },
+  // Floodlight header: an ink band with contour lines, ending in a navy and red stripe.
+  band: { backgroundColor: colors.outline, overflow: 'hidden' },
+  contours: { position: 'absolute', top: 0, right: 0 },
   header: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
   },
+  eyebrowOnBand: { color: colors.highlight },
+  stripe: { flexDirection: 'row', height: spacing.xs + 1 },
+  stripeHalf: { flex: 1 },
   headerText: { flex: 1, gap: spacing.xs },
   gutter: { paddingHorizontal: spacing.md },
   iconButton: {

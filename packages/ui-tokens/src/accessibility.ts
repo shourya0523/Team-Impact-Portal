@@ -66,6 +66,11 @@ export const textPairs: readonly ColorPair[] = [
   text('surface on action (primary button)', colors.surface, colors.action),
   text('surface on action pressed', colors.surface, colors.actionPressed),
   text('ink on line (neutral badge)', colors.ink, colors.line),
+  // Floodlight header band and tab bar (apps/athlete src/components/ui.tsx, (app)/_layout.tsx).
+  text('surface on outline (header title)', colors.surface, colors.outline),
+  text('highlight on outline (header eyebrow)', colors.highlight, colors.outline),
+  text('onBrand muted on outline (idle tab)', colors.onBrand.muted, colors.outline),
+  text('ink on highlight', colors.ink, colors.highlight),
   text('warning text on warning bg', colors.warning.text, colors.warning.bg),
   text('card text on card surface', colors.surface, colors.card.surface),
   text('card textMuted on card surface', colors.card.textMuted, colors.card.surface),
@@ -131,6 +136,12 @@ export const textPairs: readonly ColorPair[] = [
 
 /** Borders and focus rings that identify a control need 3:1 (WCAG 1.4.11). */
 export const uiPairs: readonly ColorPair[] = [
+  {
+    name: 'card and button outline on ground',
+    foreground: colors.outline,
+    background: colors.ground,
+    min: contrastThreshold.largeTextOrUi,
+  },
   {
     name: 'input border (muted) on surface',
     foreground: colors.text.muted,

@@ -10,6 +10,9 @@ export type CardProps = ViewProps & {
   label?: string;
 };
 
+/** Outline weight for cards and outlined buttons. */
+export const OUTLINE = 1.5;
+
 export function Card({ variant = 'plain', style, onPress, label, ...rest }: CardProps) {
   const base = [styles.base, variant === 'dark' ? styles.dark : styles.plain, style];
   if (!onPress) return <View {...rest} style={base} />;
@@ -26,11 +29,12 @@ export function Card({ variant = 'plain', style, onPress, label, ...rest }: Card
 
 const styles = StyleSheet.create({
   base: { padding: spacing.md, gap: spacing.sm },
+  // Floodlight: an ink outline, so cards stand off the white ground without a shadow.
   plain: {
     backgroundColor: colors.surface,
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    borderColor: colors.line,
+    borderRadius: radius.md,
+    borderWidth: OUTLINE,
+    borderColor: colors.outline,
   },
   dark: { backgroundColor: colors.card.surface, borderRadius: radius.card },
   pressed: { opacity: 0.8 },

@@ -14,16 +14,24 @@ const ACTION = '#E3233F';
 const ACTION_PRESSED = '#B01A2D';
 
 export const colors = {
-  ground: '#F6F4EF',
+  /**
+   * Floodlight (Oct 2026): a white ground, not cream. teamimpact.org uses no warm neutrals, so the
+   * greys below are cool too. Cards separate from the ground with an ink outline (`outline`).
+   */
+  ground: '#FFFFFF',
   surface: '#FFFFFF',
   ink: '#111418',
   text: {
     secondary: '#4A4F57',
     muted: '#5C616A',
   },
-  line: '#DDD8CD',
+  line: '#D5DAE1',
   /** Hairlines inside cards and the segmented-control track. Decorative only. */
-  lineSoft: '#ECE8DF',
+  lineSoft: '#E9ECF1',
+  /** Card and button outlines, the hard button lip, and the screen header band. */
+  outline: '#111418',
+  /** teamimpact.org's button yellow: eyebrows on the header band, highlights. Ink text on it. */
+  highlight: '#FFDC3A',
   /** Navy: brand, links, focus rings, selection. */
   brand: NAVY,
   brandPressed: NAVY_PRESSED,
