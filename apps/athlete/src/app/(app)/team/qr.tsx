@@ -1,11 +1,12 @@
 import { createURL } from 'expo-linking';
 import { useRef, useState } from 'react';
-import { Platform, Share, StyleSheet, View } from 'react-native';
+import { Share, StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import type { QrCodeLifetime, TeamQrCode } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { dateTime, shortDate } from '@/components/format';
+import { savePng } from '@/components/savePng';
 import { formatShortCode, fullName, NoTeam, PersonRow, useTeamId } from '@/components/team';
 import { Async, ErrorText, Gutter, Screen, SectionLabel, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
@@ -27,18 +28,6 @@ const isLive = (c: TeamQrCode, now = Date.now()) =>
 
 /** react-native-svg's `toDataURL` gives a base64 PNG on native and web alike. */
 type SvgRef = { toDataURL: (callback: (base64: string) => void) => void };
-
-const savePng = (base64: string, fileName: string) => {
-  const uri = `data:image/png;base64,${base64}`;
-  if (Platform.OS === 'web') {
-    const link = document.createElement('a');
-    link.href = uri;
-    link.download = fileName;
-    link.click();
-    return;
-  }
-  return Share.share({ url: uri, title: fileName, message: fileName });
-};
 
 /** Who joined through one code. The coach can remove anyone from the roster. */
 function Joins({ codeId }: { codeId: string }) {
@@ -71,7 +60,7 @@ function LiveCode({ code, onRevoke }: { code: TeamQrCode; onRevoke: () => void }
 
   const exportPng = () =>
     svg.current?.toDataURL((base64) => {
-      Promise.resolve(savePng(base64, fileName)).catch((e: Error) => setError(e.message));
+      savePng(base64, fileName).catch((e: Error) => setError(e.message));
     });
   const revoke = () => api.revokeQrCode(code.id).then(onRevoke, (e: Error) => setError(e.message));
 
