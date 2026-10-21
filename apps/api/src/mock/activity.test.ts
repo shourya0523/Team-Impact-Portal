@@ -19,6 +19,7 @@ const FIRST_GEN = id(304); // official interest; Jordan made it, Priya opted in 
 const FINANCE = id(305); // open interest, Priya made it
 const CAPTAINS = id(307); // private interest, the coach made it
 const COACH_POST = id(401); // approved, in the team community
+const SAM_POST = id(403); // approved, in First Gen
 const FAMILY_NIGHT = id(502); // approved, Team Impact's
 
 let close: (() => Promise<void>) | undefined;
@@ -163,6 +164,32 @@ describe('posts: held for moderation (P5)', () => {
       imageUrl: 'javascript:alert(1)',
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe('feeds: what recruiters read', () => {
+  it('shows official communities’ posts in both feeds, and no other interest community’s', async () => {
+    const { as } = await world();
+    const priya = await as('alumni_athlete');
+    const created = await priya.post(`/communities/${FINANCE}/posts`, { text: 'Mock interviews?' });
+    expect(created.status).toBe(201);
+    await approve(await as('staff'), created.body.id);
+    // Members see it, so its absence below is the recruiter rule, not moderation.
+    expect(ids((await priya.get('/feed')).body.items)).toContain(created.body.id);
+
+    const recruiter = await as('recruiter');
+    const feed = (await recruiter.get('/feed')).body.items as {
+      id: string;
+      community: { id: string };
+    }[];
+    expect(ids(feed)).toContain(SAM_POST);
+    expect(ids(feed)).not.toContain(created.body.id);
+    for (const p of feed) expect([TEAM_IMPACT, FIRST_GEN]).toContain(p.community.id);
+
+    expect(ids((await recruiter.get(`/communities/${FIRST_GEN}/posts`)).body.items)).toContain(
+      SAM_POST,
+    );
+    expect((await recruiter.get(`/communities/${FINANCE}/posts`)).status).toBe(404);
   });
 });
 
