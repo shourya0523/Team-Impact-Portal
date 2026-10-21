@@ -12,4 +12,7 @@ export const registerDevRoutes = (app: ZodApp, world: MockWorld) => {
   app.get('/dev/outbox', { schema: { querystring: OutboxQuery } }, async (request) =>
     world.outbox.filter((e) => !request.query.to || e.to === request.query.to).toReversed(),
   );
+
+  /** The audit trail (`world.eventLog`), newest first: what `events_log` will hold. */
+  app.get('/dev/events', async () => world.eventLog.toReversed());
 };

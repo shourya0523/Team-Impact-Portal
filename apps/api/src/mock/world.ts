@@ -32,6 +32,7 @@ import {
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
 import type { MockEmail } from './outbox';
+import type { MockLogEntry } from './event-log';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -79,6 +80,8 @@ export class MockWorld {
   readonly blocks: MockBlock[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
+  /** Audit trail (`./event-log.ts`), like the `events_log` table: invites, coaches added, ... */
+  readonly eventLog: MockLogEntry[] = [];
   private nextId = 5000;
 
   constructor(readonly flags: FeatureFlags) {}

@@ -45,6 +45,7 @@ describe('team management contracts', () => {
       user: { ...coach, role: 'parent' },
       joinedVia: 'join_request',
       joinedAt: NOW,
+      addedBy: null,
       children: [{ id: ID, firstName: 'Mateo', age: 9 }],
       contact: { email: 'lisa@example.org', linkedinUrl: 'https://linkedin.com/in/lisa' },
     });

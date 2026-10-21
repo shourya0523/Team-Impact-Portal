@@ -207,6 +207,10 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.qrCodes, (q) => gone(q.createdById));
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
+  // Coaches they added stay on the team; who added them is no longer recorded (data model: set null).
+  for (const m of world.teamMembers) if (m.addedById && gone(m.addedById)) m.addedById = null;
+  // Their audit rows go with them (data model: events_log.user_id on delete cascade).
+  removeWhere(world.eventLog, (e) => e.userId !== null && gone(e.userId));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
   removeWhere(world.lists, (l) => gone(l.ownerId));

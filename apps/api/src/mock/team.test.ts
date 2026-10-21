@@ -11,7 +11,9 @@ import {
   hashInviteToken,
   INVITE_TOKENS,
   liveQrCode,
+  memberView,
   redeemQrCode,
+  revokeCoachInvite,
   revokeQrCode,
   usableInvite,
 } from './team';
@@ -46,6 +48,10 @@ const signIn = async (role: Role) => {
 };
 
 const userIds = (members: { user: { id: string } }[]) => members.map((m) => m.user.id);
+
+/** The names of the audit rows about one invite, in order. */
+const eventsFor = (w: MockWorld, inviteId: string) =>
+  w.eventLog.filter((e) => e.properties.inviteId === inviteId).map((e) => e.event);
 
 describe('team: join approvals', () => {
   it('shows the coach their team’s pending requests', async () => {
@@ -385,6 +391,78 @@ describe('team: codes and invites made by a coach work in the sign-up routes', (
     expect(made.invite.tokenHash).toBe(hashInviteToken(made.token));
     // The stored hash is not itself a key: looking it up as a token finds nothing.
     expect(usableInvite(w, made.invite.tokenHash)).toMatchObject({ status: 404 });
+  });
+
+  it('records who added each coach, and nobody for QR and request joins', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.user(USERS.coach.id)!;
+    const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+    const assistant = { ...coach, id: id(5998), email: 'assistant@tufts.edu' };
+    w.users.push(assistant);
+    acceptCoachInvite(w, made.invite, assistant);
+
+    const added = w.teamMembers.find((m) => m.teamId === TEAM && m.userId === assistant.id)!;
+    expect(memberView(w, added)?.addedBy?.id).toBe(coach.id);
+    expect(added.joinedAt).toBe(made.invite.acceptedAt);
+    const jordan = w.teamMembers.find((m) => m.userId === USERS.jordan.id)!;
+    expect(memberView(w, jordan)?.addedBy).toBeNull();
+  });
+
+  it('the roster shows who added each coach', async () => {
+    const { call } = await signIn('coach');
+    const roster = (await call('GET', `/teams/${TEAM}/members`)).body;
+    expect(roster.coaches[0].addedBy).toMatchObject({ id: USERS.staff.id });
+    expect(roster.athletes.every((a: { addedBy: unknown }) => a.addedBy === null)).toBe(true);
+  });
+
+  it('logs inviting, accepting and who added the coach, without the token', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.user(USERS.coach.id)!;
+    const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+    const assistant = { ...coach, id: id(5997), email: 'assistant@tufts.edu' };
+    w.users.push(assistant);
+    acceptCoachInvite(w, made.invite, assistant);
+
+    expect(eventsFor(w, made.invite.id)).toEqual([
+      'coach.invited',
+      'coach.invite_accepted',
+      'coach.added',
+    ]);
+    const added = w.eventLog.find((e) => e.event === 'coach.added')!;
+    expect(added).toMatchObject({ userId: coach.id, properties: { coachId: assistant.id } });
+    const log = JSON.stringify(w.eventLog);
+    expect(log).not.toContain(made.token);
+    expect(log).not.toContain(made.invite.tokenHash);
+  });
+
+  it('logs a revoke once, and won’t revoke an accepted invite', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.user(USERS.coach.id)!;
+    const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+    expect(revokeCoachInvite(w, made.invite, coach)).toBeNull();
+    expect(revokeCoachInvite(w, made.invite, coach)).toBeNull();
+    expect(eventsFor(w, made.invite.id)).toEqual(['coach.invited', 'coach.invite_revoked']);
+
+    const accepted = w.coachInvites.find((i) => i.teamId === OTHER_TEAM)!;
+    accepted.acceptedAt = new Date().toISOString();
+    expect(revokeCoachInvite(w, accepted, coach)).toMatchObject({ status: 409 });
+    expect(accepted.revokedAt).toBeNull();
+  });
+
+  it('logs an expired invite the first time its link is used, once, by nobody', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const expired = w.coachInvites.find((i) => i.id === id(1403))!; // the expired soccer assistant
+    expect(usableInvite(w, INVITE_TOKENS.expired)).toMatchObject({ status: 410 });
+    expect(usableInvite(w, INVITE_TOKENS.expired)).toMatchObject({ status: 410 });
+    expect(w.eventLog.filter((e) => e.event === 'coach.invite_expired')).toEqual([
+      expect.objectContaining({
+        userId: null,
+        properties: { inviteId: expired.id, teamId: expired.teamId },
+      }),
+    ]);
   });
 
   it('accepting the first coach’s invite makes the team live', () => {

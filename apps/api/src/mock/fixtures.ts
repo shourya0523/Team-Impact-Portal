@@ -185,19 +185,30 @@ export const TEAM_MEMBERS: {
   userId: string;
   joinedVia: 'coach_invite' | 'join_request' | 'qr_code';
   joinedAt: string;
+  /** Who added them: set when staff or a coach invited a coach (data model: memberships.added_by). */
+  addedById: string | null;
 }[] = [
-  { teamId: soccer.id, userId: USERS.coach.id, joinedVia: 'coach_invite', joinedAt: at(1) },
+  // Staff invited the soccer team's first coach.
+  {
+    teamId: soccer.id,
+    userId: USERS.coach.id,
+    joinedVia: 'coach_invite',
+    joinedAt: at(1),
+    addedById: USERS.staff.id,
+  },
   ...[USERS.jordan, USERS.sam, USERS.riley, USERS.ava].map((u) => ({
     teamId: soccer.id,
     userId: u.id,
     joinedVia: 'qr_code' as const,
     joinedAt: at(2),
+    addedById: null,
   })),
   ...[USERS.lisa, USERS.mark, USERS.noah].map((u) => ({
     teamId: soccer.id,
     userId: u.id,
     joinedVia: 'join_request' as const,
     joinedAt: at(3),
+    addedById: null,
   })),
 ];
 

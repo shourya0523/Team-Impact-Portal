@@ -18,9 +18,9 @@ import {
   TeamCoaches,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { summaryOf, type MockPost } from '../fixtures';
+import type { MockPost } from '../fixtures';
 import { toPost } from '../safety';
-import { coachInviteView, createCoachInvite } from '../team';
+import { coachInviteView, createCoachInvite, memberView, revokeCoachInvite } from '../team';
 import type { MockUser, MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
@@ -229,11 +229,7 @@ export const registerStaffAdminRoutes = (
       staffOnly(request);
       const team = findTeam(request.params.id);
       return {
-        coaches: coachesOf(team.id).map((m) => ({
-          user: summaryOf(world.user(m.userId)!),
-          joinedVia: m.joinedVia,
-          joinedAt: m.joinedAt,
-        })),
+        coaches: coachesOf(team.id).flatMap((m) => memberView(world, m) ?? []),
         invites: world.coachInvites
           .filter((i) => i.teamId === team.id)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -257,11 +253,11 @@ export const registerStaffAdminRoutes = (
     '/staff/coach-invites/:id/revoke',
     { schema: { params: IdParams, response: { 200: CoachInvite } } },
     async (request) => {
-      staffOnly(request);
+      const staff = staffOnly(request);
       const i = world.coachInvites.find((x) => x.id === request.params.id);
       if (!i) throw httpError(404, 'No such invite');
-      if (i.acceptedAt) throw httpError(400, 'Already accepted');
-      i.revokedAt ??= new Date().toISOString();
+      const problem = revokeCoachInvite(world, i, staff);
+      if (problem) throw httpError(problem.status, problem.message);
       return coachInviteView(world, i);
     },
   );

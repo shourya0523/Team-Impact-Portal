@@ -92,6 +92,11 @@ export const TeamMember = z.object({
   user: UserSummary,
   joinedVia: z.enum(['coach_invite', 'join_request', 'qr_code']),
   joinedAt: Timestamp,
+  /**
+   * Who put them on the team: the staff member or coach whose invite they accepted (C4). Null for
+   * QR joins and approved requests, and once the person who added them has deleted their account.
+   */
+  addedBy: UserSummary.nullable(),
 });
 export type TeamMember = z.infer<typeof TeamMember>;
 

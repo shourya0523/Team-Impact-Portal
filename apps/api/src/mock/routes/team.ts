@@ -187,8 +187,9 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request) => {
       const invite = world.coachInvites.find((i) => i.id === request.params.id);
       if (!invite) throw httpError(404, 'No such invite');
-      managedTeam(request, invite.teamId);
-      invite.revokedAt ??= new Date().toISOString();
+      const u = managedTeam(request, invite.teamId);
+      const problem = area.revokeCoachInvite(world, invite, u);
+      if (problem) throw httpError(problem.status, problem.message);
       return area.coachInviteView(world, invite);
     },
   );

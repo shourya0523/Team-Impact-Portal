@@ -14,6 +14,7 @@ import {
   type UpdateTeamRequest,
 } from '@team-impact/contracts';
 import { notify } from './activity';
+import { logEvent } from './event-log';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
 import { sendEmail } from './outbox';
 import type { MockWorld } from './world';
@@ -248,13 +249,8 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
-      if (!u) return [];
-      const member: TeamMember = {
-        user: summaryOf(u),
-        joinedVia: m.joinedVia,
-        joinedAt: m.joinedAt,
-      };
-      return [{ u, member }];
+      const member = memberView(world, m);
+      return u && member ? [{ u, member }] : [];
     })
     .sort((a, b) => a.u.firstName.localeCompare(b.u.firstName));
   const byRole = (role: MockUser['role']) =>
@@ -320,10 +316,27 @@ export const addTeamMember = (
   userId: string,
   joinedVia: TeamMember['joinedVia'],
   joinedAt = new Date().toISOString(),
+  addedById: string | null = null,
 ) => {
   if (world.teamMembers.some((m) => m.teamId === teamId && m.userId === userId)) return false;
-  world.teamMembers.push({ teamId, userId, joinedVia, joinedAt });
+  world.teamMembers.push({ teamId, userId, joinedVia, joinedAt, addedById });
   return true;
+};
+
+/** A membership as the clients see it, with who added them (C4). Null if the user is gone. */
+export const memberView = (
+  world: MockWorld,
+  m: MockWorld['teamMembers'][number],
+): TeamMember | null => {
+  const u = world.user(m.userId);
+  if (!u) return null;
+  const adder = m.addedById ? world.user(m.addedById) : undefined;
+  return {
+    user: summaryOf(u),
+    joinedVia: m.joinedVia,
+    joinedAt: m.joinedAt,
+    addedBy: adder ? summaryOf(adder) : null,
+  };
 };
 
 /** Live teams are in the join search and take requests, QR joins and members. */
@@ -559,6 +572,7 @@ export const createCoachInvite = (
     createdAt: new Date(now).toISOString(),
   };
   world.coachInvites.push(invite);
+  logEvent(world, u.id, 'coach.invited', { inviteId: invite.id, teamId, email }, invite.createdAt);
   const team = world.teams.find((t) => t.id === teamId);
   sendEmail(world, {
     to: email,
@@ -567,6 +581,29 @@ export const createCoachInvite = (
     link: inviteLink(token),
   });
   return { invite, token };
+};
+
+/**
+ * Withdraws a pending invite; its link stops working at once. Revoking again changes nothing and
+ * logs nothing. An accepted invite can't be revoked: remove the coach instead.
+ */
+export const revokeCoachInvite = (
+  world: MockWorld,
+  invite: MockCoachInvite,
+  by: MockUser,
+): Problem | null => {
+  if (invite.acceptedAt)
+    return { status: 409, message: 'Already accepted. Remove the coach instead.' };
+  if (invite.revokedAt) return null;
+  invite.revokedAt = new Date().toISOString();
+  logEvent(
+    world,
+    by.id,
+    'coach.invite_revoked',
+    { inviteId: invite.id, teamId: invite.teamId },
+    invite.revokedAt,
+  );
+  return null;
 };
 
 /** For `/invites/:token`: an invite that can still be accepted, or why not. */
@@ -581,6 +618,19 @@ export const usableInvite = (
   if (invite.revokedAt) return { status: 410, message: 'This invite was withdrawn' };
   if (invite.acceptedAt) return { status: 410, message: 'This invite has already been used' };
   if (Date.parse(invite.expiresAt) <= now) {
+    // Nothing runs at the moment an invite expires, so the first attempt to use it is when we notice.
+    const logged = world.eventLog.some(
+      (e) => e.event === 'coach.invite_expired' && e.properties.inviteId === invite.id,
+    );
+    if (!logged) {
+      logEvent(
+        world,
+        null,
+        'coach.invite_expired',
+        { inviteId: invite.id, teamId: invite.teamId },
+        new Date(now).toISOString(),
+      );
+    }
     return { status: 410, message: 'This invite has expired. Ask Team Impact to resend it' };
   }
   return invite;
@@ -597,8 +647,19 @@ export const findCoachInvite = (world: MockWorld, token: string, now = Date.now(
  * search and takes requests and codes from then on.
  */
 export const acceptCoachInvite = (world: MockWorld, invite: MockCoachInvite, coach: MockUser) => {
-  invite.acceptedAt = new Date().toISOString();
-  addTeamMember(world, invite.teamId, coach.id, 'coach_invite');
+  const now = new Date().toISOString();
+  invite.acceptedAt = now;
+  // Whoever sent the invite (staff or a coach) is who added them (C4).
+  addTeamMember(world, invite.teamId, coach.id, 'coach_invite', now, invite.invitedById);
+  const at = { inviteId: invite.id, teamId: invite.teamId };
+  logEvent(world, coach.id, 'coach.invite_accepted', at, now);
+  logEvent(
+    world,
+    invite.invitedById,
+    'coach.added',
+    { ...at, coachId: coach.id, via: 'invite' },
+    now,
+  );
   const t = world.teams.find((x) => x.id === invite.teamId);
   if (t?.status === 'invited') t.status = 'live';
 };
