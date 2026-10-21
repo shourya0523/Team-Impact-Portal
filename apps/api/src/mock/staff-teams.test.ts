@@ -12,7 +12,7 @@ import { useZodContracts } from '../zod';
 import { id, USERS } from './fixtures';
 import { registerMockRoutes } from './routes';
 import { suspend } from './staff-tools';
-import { INVITE_TOKENS, QR_TOKENS } from './team';
+import { hashInviteToken, INVITE_TOKENS, QR_TOKENS } from './team';
 import { MockWorld } from './world';
 
 const TUFTS = id(701);
@@ -67,8 +67,13 @@ const setup = async () => {
     expect((await c.post('/auth/dev-sign-in', { role, newcomer })).status).toBe(200);
     return c;
   };
-  /** An invite's link: only ever emailed, never returned by the API. */
-  const tokenOf = (inviteId: string) => world.coachInvites.find((i) => i.id === inviteId)!.token;
+  /** An invite's token: only ever emailed, so it's read back from the outbox by its hash. */
+  const tokenOf = (inviteId: string) => {
+    const { tokenHash } = world.coachInvites.find((i) => i.id === inviteId)!;
+    return world.outbox
+      .map((e) => e.link?.split('/').pop() ?? '')
+      .find((t) => hashInviteToken(t) === tokenHash)!;
+  };
   /** Opens an invite link signed out and creates the coach's account; they stay signed in. */
   const acceptAsNewCoach = async (token: string, firstName = 'Alex', lastName = 'Moore') => {
     const c = client();

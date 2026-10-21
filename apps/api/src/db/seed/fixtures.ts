@@ -4,7 +4,6 @@
 //
 // Fields the schema has no column for yet are noted where they're dropped; the real route layer
 // adds them as it needs them.
-import { createHash } from 'node:crypto';
 import type { ModerationStatus } from '@team-impact/contracts';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { COMMENTS } from '../../mock/activity';
@@ -18,7 +17,6 @@ type Row<T extends PgTable> = T['$inferInsert'];
 export const DEV_PASSWORD_HASH =
   '$argon2id$v=19$m=65536,t=3,p=4$kwOXDCSVp3jrLCRhtryvcw$3F8TXsfX3cZ6DhEoMEoYr1C1B20F0TTfGItSyp1tal4';
 
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 const date = (iso: string) => new Date(iso);
 
 type DbEnum<E extends { enumValues: readonly string[] }> = E['enumValues'][number];
@@ -191,7 +189,7 @@ export const fixtureRows = (now = Date.now()) => {
     id: i.id,
     teamId: i.teamId,
     email: i.email,
-    tokenHash: sha256(i.token),
+    tokenHash: i.tokenHash,
     invitedBy: i.invitedById,
     expiresAt: date(i.expiresAt),
     acceptedAt: i.acceptedAt ? date(i.acceptedAt) : null,

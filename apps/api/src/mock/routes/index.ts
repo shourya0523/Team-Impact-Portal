@@ -5,6 +5,7 @@ import { registerCardRoutes } from './cards';
 import { registerCommunityRoutes } from './communities';
 import { registerCommunityMemberRoutes } from './community-members';
 import { guards } from './context';
+import { registerDevRoutes } from './dev';
 import { registerEventRoutes } from './events';
 import { registerJoinRoutes } from './join';
 import { registerListRoutes } from './lists';
@@ -51,4 +52,6 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
   ]) {
     register(app, world, g);
   }
+  // `/dev/outbox` hands out invite links without sign-in: never on a deployed server.
+  if (process.env.NODE_ENV !== 'production') registerDevRoutes(app, world);
 };

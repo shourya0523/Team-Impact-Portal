@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   QR_SHORT_CODE_ALPHABET,
   QrShortCode,
@@ -18,6 +18,7 @@ import {
 import { isReadableTeamColor } from '@team-impact/ui-tokens';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
+import { sendEmail } from './outbox';
 import { actorOf } from './policy';
 import type { MockWorld } from './world';
 
@@ -41,12 +42,15 @@ export interface MockQrCode {
   joins: { userId: string; joinedAt: string }[];
 }
 
-/** The token is emailed and never returned; `/invites/:token` looks it up with `findCoachInvite`. */
+/**
+ * Only a hash of the token is kept (`hashInviteToken`); the raw token goes out once, in the invite
+ * email (`./outbox.ts`). `/invites/:token` hashes the link's token to find the invite.
+ */
 export interface MockCoachInvite {
   id: string;
   teamId: string;
   email: string;
-  token: string;
+  tokenHash: string;
   invitedById: string;
   expiresAt: string;
   acceptedAt: string | null;
@@ -83,6 +87,12 @@ const SOCCER = id(201);
 const LACROSSE = id(202);
 
 const newToken = () => randomBytes(24).toString('base64url');
+
+/** Invites store only this hash; the raw token exists only in the emailed link (data model: token_hash). */
+export const hashInviteToken = (token: string) => createHash('sha256').update(token).digest('hex');
+
+/** What the invite email links to: the athlete app's `/invite/[token]` screen. */
+export const inviteLink = (token: string) => `teamimpact://invite/${token}`;
 
 const newShortCode = (taken: Set<string>) => {
   for (;;) {
@@ -162,7 +172,7 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
     id: id(1401),
     teamId: LACROSSE,
     email: 'pat.nguyen@tufts.edu',
-    token: INVITE_TOKENS.lacrosse,
+    tokenHash: hashInviteToken(INVITE_TOKENS.lacrosse),
     invitedById: USERS.staff.id,
     expiresAt: new Date(now + 5 * DAY).toISOString(),
     acceptedAt: null,
@@ -173,7 +183,7 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
     id: id(1402),
     teamId: SOCCER,
     email: 'alex.moore@tufts.edu',
-    token: INVITE_TOKENS.revoked,
+    tokenHash: hashInviteToken(INVITE_TOKENS.revoked),
     invitedById: USERS.coach.id,
     expiresAt: new Date(now + 5 * DAY).toISOString(),
     acceptedAt: null,
@@ -184,7 +194,7 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
     id: id(1403),
     teamId: SOCCER,
     email: 'jamie.cole@tufts.edu',
-    token: INVITE_TOKENS.expired,
+    tokenHash: hashInviteToken(INVITE_TOKENS.expired),
     invitedById: USERS.coach.id,
     expiresAt: new Date(now - DAY).toISOString(),
     acceptedAt: null,
@@ -610,7 +620,7 @@ export const createCoachInvite = (
   teamId: string,
   email: string,
   now = Date.now(),
-): { error: string; status: number } | { invite: MockCoachInvite } => {
+): { error: string; status: number } | { invite: MockCoachInvite; token: string } => {
   const t = world.teams.find((x) => x.id === teamId);
   if (!t) return { error: 'No such team', status: 404 };
   if (t.status === 'archived') return { error: 'Restore the team first', status: 400 };
@@ -622,11 +632,12 @@ export const createCoachInvite = (
   if (pendingCoachInvites(world, teamId).some((i) => i.email === email)) {
     return { error: 'An invite to this email is already waiting', status: 409 };
   }
+  const token = newToken();
   const invite: MockCoachInvite = {
     id: world.newId(),
     teamId,
     email,
-    token: newToken(),
+    tokenHash: hashInviteToken(token),
     invitedById: u.id,
     expiresAt: new Date(now + INVITE_DAYS * 24 * HOUR).toISOString(),
     acceptedAt: null,
@@ -634,7 +645,13 @@ export const createCoachInvite = (
     createdAt: new Date(now).toISOString(),
   };
   world.coachInvites.push(invite);
-  return { invite };
+  sendEmail(world, {
+    to: email,
+    subject: `You're invited to coach ${t.name} on Team IMPACT`,
+    body: `${u.firstName} ${u.lastName} invited you. The link works once, for 7 days, and only for ${email}.`,
+    link: inviteLink(token),
+  });
+  return { invite, token };
 };
 
 /** For `/invites/:token`: an invite that can still be accepted, or why not. */
@@ -643,7 +660,8 @@ export const usableInvite = (
   token: string,
   now = Date.now(),
 ): MockCoachInvite | Problem => {
-  const invite = world.coachInvites.find((i) => i.token === token);
+  const hash = hashInviteToken(token);
+  const invite = world.coachInvites.find((i) => i.tokenHash === hash);
   if (!invite) return { status: 404, message: 'No such invite' };
   if (invite.revokedAt) return { status: 410, message: 'This invite was withdrawn' };
   if (invite.acceptedAt) return { status: 410, message: 'This invite has already been used' };
@@ -675,7 +693,7 @@ export const resendCoachInvite = (
   world: MockWorld,
   u: MockUser,
   old: MockCoachInvite,
-): { error: string; status: number } | { invite: MockCoachInvite } => {
+): { error: string; status: number } | { invite: MockCoachInvite; token: string } => {
   if (old.acceptedAt) return { error: 'Already accepted', status: 400 };
   if (old.revokedAt) {
     return { error: 'This invite was withdrawn. Send a new one instead', status: 409 };
