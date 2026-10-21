@@ -31,6 +31,7 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+import type { MockEmail } from './outbox';
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -67,6 +68,8 @@ export class MockWorld {
   /** Team QR codes and coach invites (`./team.ts`). */
   readonly qrCodes: MockQrCode[] = initialQrCodes();
   readonly coachInvites: MockCoachInvite[] = initialCoachInvites();
+  /** Email the mock "sent" (`./outbox.ts`); real email sending replaces it. */
+  readonly outbox: MockEmail[] = [];
   // Staff-managed records (safety area), copied so staff tools can write to them.
   readonly colleges = structuredClone(fx.COLLEGES);
   readonly companies = structuredClone(fx.COMPANIES);

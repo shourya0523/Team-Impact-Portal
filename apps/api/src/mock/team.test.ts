@@ -8,6 +8,8 @@ import {
   createQrCode,
   decideJoinRequest,
   findCoachInvite,
+  hashInviteToken,
+  INVITE_TOKENS,
   liveQrCode,
   redeemQrCode,
   revokeQrCode,
@@ -361,13 +363,28 @@ describe('team: codes and invites made by a coach work in the sign-up routes', (
     const coach = w.user(USERS.coach.id)!;
     const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
     if ('error' in made) throw new Error(made.error);
-    const found = usableInvite(w, made.invite.token);
+    // The link carries the raw token; the lookup hashes it to find the stored invite.
+    const found = usableInvite(w, made.token);
     expect(found).toBe(made.invite);
     const assistant = { ...coach, id: id(5999), email: 'assistant@tufts.edu' };
     w.users.push(assistant);
     acceptCoachInvite(w, made.invite, assistant);
     expect(w.teamIdsOf(assistant.id)).toContain(TEAM);
-    expect(usableInvite(w, made.invite.token)).toMatchObject({ status: 410 });
+    expect(usableInvite(w, made.token)).toMatchObject({ status: 410 });
+  });
+
+  it('stores only a hash of each invite token', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const made = createCoachInvite(w, w.user(USERS.coach.id)!, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+
+    // Every stored field at once, so a raw token under any name would show up here.
+    const stored = JSON.stringify(w.coachInvites);
+    expect(stored).not.toContain(made.token);
+    for (const token of Object.values(INVITE_TOKENS)) expect(stored).not.toContain(token);
+    expect(made.invite.tokenHash).toBe(hashInviteToken(made.token));
+    // The stored hash is not itself a key: looking it up as a token finds nothing.
+    expect(usableInvite(w, made.invite.tokenHash)).toMatchObject({ status: 404 });
   });
 
   it('accepting the first coach’s invite makes the team live', () => {
@@ -412,7 +429,7 @@ describe('team: coach invites and edits', () => {
       id: id(1301),
       teamId: TEAM,
       email: 'a@tufts.edu',
-      token: 'invite-token-0000000001',
+      tokenHash: hashInviteToken('invite-token-0000000001'),
       invitedById: USERS.coach.id,
       expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
       acceptedAt: null,
@@ -440,5 +457,18 @@ describe('team: coach invites and edits', () => {
   it('only coaches and staff edit the team', async () => {
     const { call } = await signIn('parent');
     expect((await call('PATCH', `/teams/${TEAM}`, { name: 'Ours' })).status).toBe(403);
+  });
+  it('emails the invite link, and that link is the one that opens it', async () => {
+    const { call } = await signIn('coach');
+    const made = await call('POST', `/teams/${TEAM}/coach-invites`, {
+      email: 'new.assistant@tufts.edu',
+    });
+    expect(made.status).toBe(201);
+    expect(made.text).not.toContain('invite/'); // the response never carries the token
+
+    const [email] = (await call('GET', '/dev/outbox?to=new.assistant@tufts.edu')).body;
+    expect(email).toMatchObject({ to: 'new.assistant@tufts.edu' });
+    const token = email.link.split('/invite/')[1];
+    expect((await call('GET', `/invites/${token}`)).status).toBe(200);
   });
 });
