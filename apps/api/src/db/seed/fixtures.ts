@@ -139,6 +139,7 @@ export const fixtureRows = (now = Date.now()) => {
       joinedAt: date(m.joinedAt),
       source: MEMBERSHIP_SOURCE[m.joinedVia],
       joinCodeId: m.joinedVia === 'qr_code' ? liveCode.id : null,
+      addedBy: m.addedById,
     })),
     ...fx.COMMUNITIES.flatMap((c) =>
       c.members.map((m) => ({

@@ -12,6 +12,7 @@ import {
   hashInviteToken,
   INVITE_TOKENS,
   liveQrCode,
+  memberView,
   redeemQrCode,
   revokeQrCode,
   usableInvite,
@@ -426,6 +427,29 @@ describe('team: codes and invites made by a coach work in the sign-up routes', (
     expect(made.invite.tokenHash).toBe(hashInviteToken(made.token));
     // The stored hash is not itself a key: looking it up as a token finds nothing.
     expect(usableInvite(w, made.invite.tokenHash)).toMatchObject({ status: 404 });
+  });
+
+  it('records who added each coach, and nobody for QR and request joins', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.user(USERS.coach.id)!;
+    const made = createCoachInvite(w, coach, TEAM, 'assistant@tufts.edu');
+    if ('error' in made) throw new Error(made.error);
+    const assistant = { ...coach, id: id(5998), email: 'assistant@tufts.edu' };
+    w.users.push(assistant);
+    acceptCoachInvite(w, made.invite, assistant);
+
+    const added = w.teamMembers.find((m) => m.teamId === TEAM && m.userId === assistant.id)!;
+    expect(memberView(w, added)?.addedBy?.id).toBe(coach.id);
+    expect(added.joinedAt).toBe(made.invite.acceptedAt);
+    const jordan = w.teamMembers.find((m) => m.userId === USERS.jordan.id)!;
+    expect(memberView(w, jordan)?.addedBy).toBeNull();
+  });
+
+  it('the roster shows who added each coach', async () => {
+    const { call } = await signIn('coach');
+    const roster = (await call('GET', `/teams/${TEAM}/members`)).body;
+    expect(roster.coaches[0].addedBy).toMatchObject({ id: USERS.staff.id });
+    expect(roster.athletes.every((a: { addedBy: unknown }) => a.addedBy === null)).toBe(true);
   });
 
   it('accepting the first coach’s invite makes the team live', () => {

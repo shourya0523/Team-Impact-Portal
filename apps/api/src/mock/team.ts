@@ -337,13 +337,8 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
-      if (!u) return [];
-      const member: TeamMember = {
-        user: summaryOf(u),
-        joinedVia: m.joinedVia,
-        joinedAt: m.joinedAt,
-      };
-      return [{ u, member }];
+      const member = memberView(world, m);
+      return u && member ? [{ u, member }] : [];
     })
     .sort((a, b) => a.u.firstName.localeCompare(b.u.firstName));
   const byRole = (role: MockUser['role']) =>
@@ -403,10 +398,27 @@ export const addTeamMember = (
   userId: string,
   joinedVia: TeamMember['joinedVia'],
   joinedAt = new Date().toISOString(),
+  addedById: string | null = null,
 ) => {
   if (world.teamMembers.some((m) => m.teamId === teamId && m.userId === userId)) return false;
-  world.teamMembers.push({ teamId, userId, joinedVia, joinedAt });
+  world.teamMembers.push({ teamId, userId, joinedVia, joinedAt, addedById });
   return true;
+};
+
+/** A membership as the clients see it, with who added them (C4). Null if the user is gone. */
+export const memberView = (
+  world: MockWorld,
+  m: MockWorld['teamMembers'][number],
+): TeamMember | null => {
+  const u = world.user(m.userId);
+  if (!u) return null;
+  const adder = m.addedById ? world.user(m.addedById) : undefined;
+  return {
+    user: summaryOf(u),
+    joinedVia: m.joinedVia,
+    joinedAt: m.joinedAt,
+    addedBy: adder ? summaryOf(adder) : null,
+  };
 };
 
 /** Live teams are in the join search and take requests, QR joins and members. */
@@ -722,8 +734,10 @@ export const findCoachInvite = (world: MockWorld, token: string, now = Date.now(
  * search and takes requests and codes from then on.
  */
 export const acceptCoachInvite = (world: MockWorld, invite: MockCoachInvite, coach: MockUser) => {
-  invite.acceptedAt = new Date().toISOString();
-  addTeamMember(world, invite.teamId, coach.id, 'coach_invite');
+  const now = new Date().toISOString();
+  invite.acceptedAt = now;
+  // Whoever sent the invite (staff or a coach) is who added them (C4).
+  addTeamMember(world, invite.teamId, coach.id, 'coach_invite', now, invite.invitedById);
   const t = world.teams.find((x) => x.id === invite.teamId);
   if (t?.status === 'invited') t.status = 'live';
 };
