@@ -62,7 +62,22 @@ export const CreateCardRequest = CardFields.partial({
 });
 export type CreateCardRequest = z.infer<typeof CreateCardRequest>;
 
-export const UpdateCardRequest = CardFields.partial();
+/** Longest card photo accepted as text: a square JPEG of a few hundred pixels fits easily. */
+export const MAX_CARD_PHOTO_CHARS = 400_000;
+
+/**
+ * A card photo as the athlete sends it: a small JPEG or PNG data URL, resized on the device. Real
+ * file storage (Spaces) replaces this with an uploaded URL later; until then it lives on the card.
+ */
+export const CardPhotoUpload = z
+  .string()
+  .max(MAX_CARD_PHOTO_CHARS, 'Pick a smaller photo.')
+  .regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/]+=*$/, 'Use a JPEG or PNG photo.');
+
+/** Any card field, plus the photo; `photoUrl: null` removes the photo. */
+export const UpdateCardRequest = CardFields.partial().extend({
+  photoUrl: CardPhotoUpload.nullable().optional(),
+});
 export type UpdateCardRequest = z.infer<typeof UpdateCardRequest>;
 
 export const CardVisibility = z.object({

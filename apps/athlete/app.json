@@ -23,7 +23,18 @@
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
-    "plugins": ["expo-router", "expo-font"],
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Team IMPACT uses the camera to scan your coach’s team QR code.",
+          "recordAudioAndroid": false
+        }
+      ],
+      ["expo-image-picker", { "microphonePermission": false }]
+    ],
     "experiments": {
       "typedRoutes": true
     }

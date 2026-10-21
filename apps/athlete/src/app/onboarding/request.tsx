@@ -4,13 +4,18 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CreateJoinRequest, NewChild, ParentRelationship } from '@team-impact/contracts';
 import { api } from '@/api';
+import { ApiRequestError } from '@/api/client';
 import { AddChildren } from '@/components/AddChildren';
 import { ROLE_LABEL } from '@/components/format';
-import { colors, radius, spacing } from '@team-impact/ui-tokens';
+import { errorMessage } from '@/components/signup';
+import { colors, onTeamColor, radius, resolveTeamColor, spacing } from '@team-impact/ui-tokens';
 import { ErrorText, IconButton, Progress } from '@/components/ui';
 import { useRole } from '@/navigation/role';
 import { monogram } from '@/theme';
-import { Avatar, Button, Card, Icon, Text } from '@/ui';
+import { Avatar, Button, Card, Icon, Text, withAlpha } from '@/ui';
+
+/** The big decorative monogram behind the banner text. */
+const MONOGRAM_ALPHA = 0.14;
 
 const BADGE = 52;
 
@@ -37,17 +42,23 @@ function Choice({ label, on, onPress }: { label: string; on: boolean; onPress: (
  * guardian, teens just ask. Nothing about the team shows until a coach approves.
  */
 export default function Request() {
-  const { teamId, teamName, division } = useLocalSearchParams<{
+  const { teamId, teamName, division, teamColor } = useLocalSearchParams<{
     teamId: string;
     teamName: string;
     division?: string;
+    teamColor?: string;
   }>();
   const { role, me } = useRole();
   const insets = useSafeAreaInsets();
   const [classYear, setClassYear] = useState<number | null>(null);
   const [relationship, setRelationship] = useState<ParentRelationship | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** A 409: they already asked (or are already on the team), so the pending screen sorts it out. */
+  const [alreadyAsked, setAlreadyAsked] = useState(false);
   const [sending, setSending] = useState(false);
+  // The banner wears the team's colour; the text on it is white or ink, whichever reads.
+  const banner = resolveTeamColor(teamColor);
+  const onBanner = onTeamColor(banner);
 
   const [children, setChildren] = useState<NewChild[]>([]);
 
@@ -63,10 +74,12 @@ export default function Request() {
   const send = () => {
     if (!body) return;
     setSending(true);
+    setError(null);
     api.requestToJoin(body).then(
       () => router.replace({ pathname: '/onboarding/pending', params: { teamName, teamId } }),
-      (e: Error) => {
-        setError(e.message);
+      (e: unknown) => {
+        setError(errorMessage(e));
+        setAlreadyAsked(e instanceof ApiRequestError && e.status === 409);
         setSending(false);
       },
     );
@@ -90,8 +103,12 @@ export default function Request() {
           <Progress step={2} total={3} />
         </View>
 
-        <View style={styles.teamCard}>
-          <Text variant="decor" size="md" style={styles.teamMonogram}>
+        <View style={[styles.teamCard, { backgroundColor: banner }]}>
+          <Text
+            variant="decor"
+            size="md"
+            style={[styles.teamMonogram, { color: withAlpha(onBanner, MONOGRAM_ALPHA) }]}
+          >
             {monogram(teamName ?? '', true)}
           </Text>
           <View style={styles.teamBadge}>
@@ -100,14 +117,14 @@ export default function Request() {
             </Text>
           </View>
           <View>
-            <Text variant="eyebrow" color="onBrandSecondary">
-              Asking to join
+            <Text variant="eyebrow" style={{ color: onBanner }}>
+              {role === 'parent' ? 'Asking to join with your child' : 'Asking to join'}
             </Text>
-            <Text weight="semibold" color="onBrand">
+            <Text weight="semibold" style={{ color: onBanner }}>
               {teamName}
             </Text>
             {division && (
-              <Text variant="caption" color="onBrandSecondary">
+              <Text variant="caption" style={{ color: onBanner }}>
                 Division {division}
               </Text>
             )}
@@ -180,13 +197,35 @@ export default function Request() {
                   .join(', ')}, with age only. Never a birth date.`}
               </Text>
             )}
-            <Text variant="small" color="secondary">
-              That’s all. Your resume isn’t needed to join.
-            </Text>
+            {role === 'athlete' && (
+              <Text variant="small" color="secondary">
+                That’s all the coach needs. No resume yet; you’ll build your Baseball Card after
+                you’re signed.
+              </Text>
+            )}
           </Card>
         )}
 
+        {role === 'parent' && (
+          <View style={styles.lock}>
+            <Icon name="lock" size={18} color={colors.text.secondary} />
+            <Text variant="small" color="secondary" style={styles.grow}>
+              Your child’s profile is only ever seen by the team and family. Nothing about the team
+              shows until the coach approves you.
+            </Text>
+          </View>
+        )}
+
         {error && <ErrorText>{error}</ErrorText>}
+        {alreadyAsked && (
+          <Button
+            label="See your request"
+            variant="secondary"
+            onPress={() =>
+              router.replace({ pathname: '/onboarding/pending', params: { teamName, teamId } })
+            }
+          />
+        )}
         <View style={styles.grow} />
         <Button
           label={sending ? 'Sending…' : 'Send request'}
@@ -205,6 +244,7 @@ const styles = StyleSheet.create({
   topBar: { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
   section: { gap: spacing.md },
   person: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  lock: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm },
   grow: { flex: 1 },
   teamCard: {
     backgroundColor: colors.brand,

@@ -203,7 +203,45 @@ describe('cards: unpublish', () => {
   });
 });
 
+describe('cards: photo', () => {
+  const PHOTO = 'data:image/jpeg;base64,/9j/4AAQSkZJRg==';
+
+  it('stays in the draft until publish, then shows on the card; null removes it', async () => {
+    const { as } = await world();
+    const jordan = await as('athlete');
+    expect((await jordan.put('/cards/me', { photoUrl: PHOTO })).status).toBe(200);
+    expect((await jordan.get('/cards/me')).body.card.photoUrl).toBeNull();
+
+    await jordan.post('/cards/me/publish');
+    expect((await jordan.get('/cards/me')).body.card.photoUrl).toBe(PHOTO);
+
+    await jordan.put('/cards/me', { photoUrl: null });
+    await jordan.post('/cards/me/publish');
+    expect((await jordan.get('/cards/me')).body.card.photoUrl).toBeNull();
+  });
+
+  it('takes only a JPEG or PNG image', async () => {
+    const { as } = await world();
+    const jordan = await as('athlete');
+    for (const photoUrl of [
+      'javascript:alert(1)',
+      'https://example.com/me.jpg',
+      'data:text/html;base64,PGI+',
+    ]) {
+      expect((await jordan.put('/cards/me', { photoUrl })).status).toBe(400);
+    }
+  });
+});
+
 describe('cards: per season', () => {
+  it('names the current season before the first card exists', async () => {
+    const { as } = await world();
+    const leo = await as('athlete', true);
+    const res = await leo.get('/cards/me');
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ card: null, currentSeason: CURRENT_SEASON });
+  });
+
   it('publishing a card from an earlier season saves this season’s card and keeps the old one', () => {
     const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
     const jordan = w.user(USERS.jordan.id)!;
