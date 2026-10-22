@@ -246,6 +246,33 @@ describe('mock API: communities', () => {
     expect(JSON.stringify(feed)).not.toContain('$5,000');
   });
 
+  it('orders every home feed: team, then other communities, then Team Impact, newest first', async () => {
+    // Fixture posts by number (fixtures.ts). 401 and 406 share a timestamp, so they keep
+    // fixture order until the cursor adds an id tie-break.
+    const expected: Record<string, number[]> = {
+      athlete: [401, 406, 408, 403, 404, 405, 402], // medical sits with the other communities
+      parent: [401, 406, 404, 402],
+      teen: [401, 406, 403, 405, 402],
+      coach: [401, 406, 408, 403, 405, 402],
+      recruiter: [403, 405, 402], // official First Gen, then Team Impact
+      alumni_athlete: [403, 405, 402],
+      alumni_mentor: [407, 402], // their own post waiting for review leads Team Impact's
+      staff: [402],
+    };
+    for (const [role, posts] of Object.entries(expected)) {
+      const { get } = await signIn(role as Role);
+      expect(ids((await get('/feed')).body.items), role).toEqual(posts.map(id));
+      await close?.();
+    }
+  });
+
+  it('orders a community feed newest first', async () => {
+    const { get } = await signIn('athlete');
+    expect(ids((await get(`/communities/${FIRST_GEN}/posts`)).body.items)).toEqual(
+      [403, 405].map(id),
+    );
+  });
+
   it('shows a medical community’s posts in its own feed, to members only', async () => {
     const member = await signIn('parent');
     const own = await member.get(`/communities/${MEDICAL}/posts`);
