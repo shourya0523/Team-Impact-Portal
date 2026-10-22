@@ -237,7 +237,13 @@ export class MockWorld {
 
   /**
    * Approved comment counts and `u`'s rallies for a set of posts, one pass over each list rather
-   * than one per post. The real API gets the same from one grouped query.
+   * than one per post.
+   *
+   * Kept simple on purpose: the mock stores comments and rallies as flat arrays with no index by
+   * post, so this reads every comment and rally in the world, not just those on `posts`. Fine at
+   * fixture size; an index would have to be kept in step with every write. The real API should
+   * only touch these posts' rows: one grouped count per post (`comments_post_created_idx`) and
+   * the viewer's rallies on them.
    */
   private engagement = (
     posts: MockPost[],
@@ -245,23 +251,23 @@ export class MockWorld {
     u: MockUser,
   ) => {
     const inPost = new Map(posts.map((p) => [p.id, communityOf(p)]));
-    const comments = new Map<string, number>();
+    const commentCounts = new Map<string, number>();
     for (const k of this.comments) {
       const c = inPost.get(k.postId);
       if (!c || k.moderation !== 'approved' || this.teenOutsideTeam(k.authorId, c)) continue;
-      comments.set(k.postId, (comments.get(k.postId) ?? 0) + 1);
+      commentCounts.set(k.postId, (commentCounts.get(k.postId) ?? 0) + 1);
     }
     const rallied = new Set(
       this.rallies.filter((r) => r.userId === u.id && inPost.has(r.postId)).map((r) => r.postId),
     );
-    return { comments, rallied };
+    return { commentCounts, rallied };
   };
 
   /** A stored post in the shape the API returns. */
   private toPost = (
     p: MockPost,
     c: MockCommunity,
-    { comments, rallied }: ReturnType<MockWorld['engagement']>,
+    { commentCounts, rallied }: ReturnType<MockWorld['engagement']>,
   ): Post => {
     const { authorId, communityId, opportunity, ...rest } = p;
     void authorId;
@@ -271,7 +277,7 @@ export class MockWorld {
       author: fx.summaryOf(this.user(p.authorId)!),
       community: { id: c.id, name: c.name, kind: c.kind },
       imageUrl: p.imageUrl ?? null,
-      commentCount: comments.get(p.id) ?? 0,
+      commentCount: commentCounts.get(p.id) ?? 0,
       likedByMe: rallied.has(p.id),
     };
     return p.kind === 'opportunity'
