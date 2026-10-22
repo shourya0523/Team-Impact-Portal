@@ -19,7 +19,8 @@ import {
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import { rank } from './feed';
+import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
 import { isSuspended, newStaffToolsState } from './staff-tools';
@@ -202,9 +203,6 @@ export class MockWorld {
       c.kind === 'interest' ? c.members.filter((m) => m.recruiterSearchOptIn).length : null,
   });
 
-  /** Ranking for the pilot: team first, then other communities, then Team Impact; newest first. */
-  private static WEIGHT = { team: 0, interest: 1, medical: 1, team_impact: 2 } as const;
-
   /**
    * Communities whose posts and events reach `u`'s home feed and events list: every one they read,
    * medical and private ones included (PRD v2.3). Private ones only ever reach members.
@@ -225,43 +223,79 @@ export class MockWorld {
   teenOutsideTeam = (authorId: string, c: MockCommunity) =>
     this.user(authorId)?.role === 'teen' && c.kind !== 'team';
 
-  /** Approved posts, plus the viewer's own while they wait for review ("Waiting for review"). */
-  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
-    this.posts
-      .filter((p) => readable.has(p.communityId))
-      .filter(
-        (p) => p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id),
-      )
-      .filter((p) => !this.teenOutsideTeam(p.authorId, readable.get(p.communityId)!))
-      .filter((p) => !hiddenFor(this, u, p))
-      .sort(
-        (a, b) =>
-          MockWorld.WEIGHT[readable.get(a.communityId)!.kind] -
-            MockWorld.WEIGHT[readable.get(b.communityId)!.kind] ||
-          b.createdAt.localeCompare(a.createdAt),
-      )
-      .map((p) => {
-        const c = readable.get(p.communityId)!;
-        const { authorId, communityId, opportunity, ...rest } = p;
-        void authorId;
-        void communityId;
-        const shared = {
-          ...rest,
-          author: fx.summaryOf(this.user(p.authorId)!),
-          community: { id: c.id, name: c.name, kind: c.kind },
-          imageUrl: p.imageUrl ?? null,
-          commentCount: this.comments.filter(
-            (k) =>
-              k.postId === p.id &&
-              k.moderation === 'approved' &&
-              !this.teenOutsideTeam(k.authorId, c),
-          ).length,
-          likedByMe: this.rallies.some((r) => r.postId === p.id && r.userId === u.id),
-        };
-        return p.kind === 'opportunity'
-          ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
-          : { ...shared, kind: p.kind };
-      });
+  /**
+   * Whether `u` sees post `p` in `c`, a community they read: approved, or their own while it waits
+   * for review ("Waiting for review"); never a teen's outside their team; never one a block or
+   * their own report hides.
+   */
+  private canSeePost = (p: MockPost, c: MockCommunity, u: MockUser) =>
+    (p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id)) &&
+    !this.teenOutsideTeam(p.authorId, c) &&
+    !hiddenFor(this, u, p);
+
+  /**
+   * Approved comment counts and `u`'s rallies for a set of posts, one pass over each list rather
+   * than one per post. The real API gets the same from one grouped query.
+   */
+  private engagement = (
+    posts: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ) => {
+    const inPost = new Map(posts.map((p) => [p.id, communityOf(p)]));
+    const comments = new Map<string, number>();
+    for (const k of this.comments) {
+      const c = inPost.get(k.postId);
+      if (!c || k.moderation !== 'approved' || this.teenOutsideTeam(k.authorId, c)) continue;
+      comments.set(k.postId, (comments.get(k.postId) ?? 0) + 1);
+    }
+    const rallied = new Set(
+      this.rallies.filter((r) => r.userId === u.id && inPost.has(r.postId)).map((r) => r.postId),
+    );
+    return { comments, rallied };
+  };
+
+  /** A stored post in the shape the API returns. */
+  private toPost = (
+    p: MockPost,
+    c: MockCommunity,
+    { comments, rallied }: ReturnType<MockWorld['engagement']>,
+  ): Post => {
+    const { authorId, communityId, opportunity, ...rest } = p;
+    void authorId;
+    void communityId;
+    const shared = {
+      ...rest,
+      author: fx.summaryOf(this.user(p.authorId)!),
+      community: { id: c.id, name: c.name, kind: c.kind },
+      imageUrl: p.imageUrl ?? null,
+      commentCount: comments.get(p.id) ?? 0,
+      likedByMe: rallied.has(p.id),
+    };
+    return p.kind === 'opportunity'
+      ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
+      : { ...shared, kind: p.kind };
+  };
+
+  /** The posts `u` sees in `readable` (communities they read), in feed order (`./feed.ts`). */
+  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] => {
+    const communityOf = (p: MockPost) => readable.get(p.communityId)!;
+    const visible = this.posts.filter(
+      (p) => readable.has(p.communityId) && this.canSeePost(p, communityOf(p), u),
+    );
+    const counts = this.engagement(visible, communityOf, u);
+    return rank(visible, communityOf).map((p) => this.toPost(p, communityOf(p), counts));
+  };
+
+  /** One post as `u` reads it in `c`, or undefined if they can't. Callers check `u` reads `c`. */
+  postView = (p: MockPost, c: MockCommunity, u: MockUser): Post | undefined =>
+    p.communityId === c.id && this.canSeePost(p, c, u)
+      ? this.toPost(
+          p,
+          c,
+          this.engagement([p], () => c, u),
+        )
+      : undefined;
 
   /**
    * Join an interest or medical community. Team communities follow the team and everyone is

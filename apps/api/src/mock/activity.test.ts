@@ -259,6 +259,11 @@ describe('comments', () => {
       created.body.id,
     );
     expect((await coach.get('/notifications')).body.items).toHaveLength(0);
+    // Not counted while held, not even for its author.
+    expect((await coach.get(`/posts/${COACH_POST}`)).body.commentCount).toBe(before);
+    expect(
+      (await parent.get('/feed')).body.items.find((p: { id: string }) => p.id === COACH_POST),
+    ).toMatchObject({ commentCount: before });
 
     await approve(await as('staff'), created.body.id);
     expect(ids((await coach.get(`/posts/${COACH_POST}/comments`)).body)).toContain(created.body.id);
