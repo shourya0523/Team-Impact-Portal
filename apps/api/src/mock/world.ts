@@ -218,6 +218,13 @@ export class MockWorld {
   communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
     this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
 
+  /**
+   * A teen's name only ever shows in their team community (CLAUDE.md hard rules). Posting and
+   * commenting already enforce this; reads check again so nothing that slipped in can leak.
+   */
+  teenOutsideTeam = (authorId: string, c: MockCommunity) =>
+    this.user(authorId)?.role === 'teen' && c.kind !== 'team';
+
   /** Approved posts, plus the viewer's own while they wait for review ("Waiting for review"). */
   postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
     this.posts
@@ -225,6 +232,7 @@ export class MockWorld {
       .filter(
         (p) => p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id),
       )
+      .filter((p) => !this.teenOutsideTeam(p.authorId, readable.get(p.communityId)!))
       .filter((p) => !hiddenFor(this, u, p))
       .sort(
         (a, b) =>
@@ -243,7 +251,10 @@ export class MockWorld {
           community: { id: c.id, name: c.name, kind: c.kind },
           imageUrl: p.imageUrl ?? null,
           commentCount: this.comments.filter(
-            (k) => k.postId === p.id && k.moderation === 'approved',
+            (k) =>
+              k.postId === p.id &&
+              k.moderation === 'approved' &&
+              !this.teenOutsideTeam(k.authorId, c),
           ).length,
           likedByMe: this.rallies.some((r) => r.postId === p.id && r.userId === u.id),
         };

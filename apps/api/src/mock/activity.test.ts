@@ -3,6 +3,7 @@ import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/c
 import { buildApp } from '../app';
 import {
   canReceive,
+  commentsFor,
   DEFAULT_PREFS,
   DISCREET_PUSH_TEXT,
   notify,
@@ -190,6 +191,54 @@ describe('feeds: what recruiters read', () => {
       SAM_POST,
     );
     expect((await recruiter.get(`/communities/${FINANCE}/posts`)).status).toBe(404);
+  });
+});
+
+describe('teens: only ever seen in their team community', () => {
+  const TEEN_POST = id(490);
+  const TEEN_COMMENT = id(1390);
+  const TEEN_TEAM_COMMENT = id(1391);
+
+  /**
+   * Noah (a teen, and a First Gen member) has a post and a comment in First Gen, which the API
+   * would never accept, plus a comment in his team. Built on the world directly for that reason.
+   */
+  const slippedIn = () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    w.posts.push({ ...samPost, id: TEEN_POST, authorId: USERS.noah.id });
+    const comment = (commentId: string, postId: string) => ({
+      id: commentId,
+      postId,
+      authorId: USERS.noah.id,
+      text: 'Me too!',
+      moderation: 'approved' as const,
+      createdAt: new Date().toISOString(),
+    });
+    w.comments.push(comment(TEEN_COMMENT, SAM_POST), comment(TEEN_TEAM_COMMENT, COACH_POST));
+    return w;
+  };
+
+  it('keeps a teen’s post outside their team out of every feed, for every reader', () => {
+    const w = slippedIn();
+    const firstGen = w.communities.find((c) => c.id === FIRST_GEN)!;
+    for (const u of [USERS.jordan, USERS.staff, USERS.noah]) {
+      expect(ids(w.feed(u)), u.firstName).not.toContain(TEEN_POST);
+      expect(ids(w.communityFeed(firstGen, u)), u.firstName).not.toContain(TEEN_POST);
+    }
+    // His team post still reaches the team.
+    expect(ids(w.feed(USERS.jordan))).toContain(id(406));
+  });
+
+  it('keeps a teen’s comment outside their team hidden and uncounted', () => {
+    const w = slippedIn();
+    for (const u of [USERS.jordan, USERS.staff, USERS.noah]) {
+      expect(ids(commentsFor(w, SAM_POST, u)), u.firstName).not.toContain(TEEN_COMMENT);
+    }
+    // Only Priya's comment counts.
+    expect(w.feed(USERS.jordan).find((p) => p.id === SAM_POST)!.commentCount).toBe(1);
+    // His comment in the team community still shows.
+    expect(ids(commentsFor(w, COACH_POST, USERS.jordan))).toContain(TEEN_TEAM_COMMENT);
   });
 });
 
