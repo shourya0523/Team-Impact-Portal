@@ -217,11 +217,13 @@ export class MockWorld {
     this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
 
   /**
-   * A teen's name only ever shows in their team community (CLAUDE.md hard rules). Posting and
+   * A teen's name only ever shows in the community of a team they're on (CLAUDE.md hard rules):
+   * not another team's, and not their old team's once a coach removes them. Posting and
    * commenting already enforce this; reads check again so nothing that slipped in can leak.
    */
   teenOutsideTeam = (authorId: string, c: MockCommunity) =>
-    this.user(authorId)?.role === 'teen' && c.kind !== 'team';
+    this.user(authorId)?.role === 'teen' &&
+    (c.kind !== 'team' || !this.teamIdsOf(authorId).includes(c.teamId));
 
   /**
    * Whether `u` sees post `p` in `c`, a community they read: approved, or their own while it waits

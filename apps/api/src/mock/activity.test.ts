@@ -11,6 +11,7 @@ import {
 } from './activity';
 import { id, USERS } from './fixtures';
 import { suspend, warn } from './staff-tools';
+import { removeMember } from './team';
 import { MockWorld } from './world';
 
 const TEAM = id(301);
@@ -58,6 +59,32 @@ const world = async (flags?: FeatureFlags) => {
 type Client = Awaited<ReturnType<Awaited<ReturnType<typeof world>>['as']>>;
 
 const ids = (items: { id: string }[]) => items.map((i) => i.id);
+
+const SOCCER = id(201);
+
+/** Basketball (live, with no community in the fixtures) gets one, with the coach and Lisa on it. */
+const addBasketball = (w: MockWorld) => {
+  const basketball = {
+    id: id(309),
+    kind: 'team' as const,
+    teamId: id(210),
+    name: "Tufts Women's Basketball",
+    about: 'The team, its families and coaches.',
+    moderation: 'approved' as const,
+    createdAt: '2026-10-01T12:00:00.000Z',
+    members: [],
+  };
+  w.communities.push(basketball);
+  for (const u of [USERS.coach, USERS.lisa]) {
+    w.teamMembers.push({
+      teamId: basketball.teamId,
+      userId: u.id,
+      joinedVia: 'join_request',
+      joinedAt: '2026-10-02T12:00:00.000Z',
+    });
+  }
+  return basketball;
+};
 
 /** Staff keep (approve) whatever ticket holds `targetId`. */
 const approve = async (staff: Client, targetId: string) => {
@@ -239,6 +266,49 @@ describe('teens: only ever seen in their team community', () => {
     expect(w.feed(USERS.jordan).find((p) => p.id === SAM_POST)!.commentCount).toBe(1);
     // His comment in the team community still shows.
     expect(ids(commentsFor(w, COACH_POST, USERS.jordan))).toContain(TEEN_TEAM_COMMENT);
+  });
+
+  it('keeps a teen’s post out of another team’s community', () => {
+    const w = slippedIn();
+    const basketball = addBasketball(w);
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    w.posts.push({ ...samPost, id: id(493), authorId: USERS.noah.id, communityId: basketball.id });
+    // The coach is on both teams, so reads the basketball community.
+    expect(ids(w.communityFeed(basketball, USERS.coach))).not.toContain(id(493));
+    expect(ids(w.feed(USERS.coach))).not.toContain(id(493));
+    expect(ids(w.communityFeed(basketball, USERS.staff))).not.toContain(id(493));
+  });
+
+  it('hides a teen’s team posts and comments once a coach removes them', () => {
+    const w = slippedIn();
+    expect('error' in removeMember(w, SOCCER, USERS.noah.id)).toBe(false);
+    expect(ids(w.feed(USERS.jordan))).not.toContain(id(406));
+    expect(ids(commentsFor(w, COACH_POST, USERS.jordan))).not.toContain(TEEN_TEAM_COMMENT);
+  });
+});
+
+describe('feeds: people on two teams', () => {
+  it('puts both teams first, mixed newest first, and keeps each team page to its own', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const basketball = addBasketball(w);
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    const at = (createdAt: string, n: number) => ({
+      ...samPost,
+      id: id(n),
+      authorId: USERS.coach.id,
+      communityId: basketball.id,
+      createdAt,
+    });
+    // Newer than soccer's two Oct 12 posts, and older than both.
+    w.posts.push(at('2026-10-12T15:00:00.000Z', 491), at('2026-10-10T12:00:00.000Z', 492));
+
+    // Lisa, a parent on both teams: both teams, then medical, then Team Impact.
+    expect(ids(w.feed(USERS.lisa))).toEqual([491, 401, 406, 492, 404, 402].map(id));
+    expect(ids(w.communityFeed(basketball, USERS.lisa))).toEqual([491, 492].map(id));
+    const soccer = w.communities.find((c) => c.id === TEAM)!;
+    expect(ids(w.communityFeed(soccer, USERS.lisa))).toEqual([401, 406].map(id));
+    // Jordan is only on soccer.
+    expect(ids(w.feed(USERS.jordan))).not.toContain(id(491));
   });
 });
 
