@@ -7,21 +7,15 @@ import type { MockCommunity, MockPost } from './fixtures';
  * touching who sees what. Visibility is decided before anything reaches here.
  */
 
-/** Team first, then the viewer's other communities (medical and private included), then Team Impact. */
-export const TIER: Record<MockCommunity['kind'], number> = {
-  team: 0,
-  interest: 1,
-  medical: 1,
-  team_impact: 2,
-};
-
 /**
- * Scores order posts within a tier (higher first). Tiers never mix, whatever the score.
- * `asOf` is when the run of pages was first asked for, so time-based scores match on every page.
+ * Scores order the feed (higher first). There are no hard tiers: "your team first" comes from the
+ * team's community weight, so a fresh post elsewhere can overtake a stale team post (PRD §5 puts
+ * community weight inside the ranking formula). `asOf` is when the run of pages was first asked
+ * for, so time-based scores match on every page.
  */
 export type Scorer = (p: MockPost, c: MockCommunity, asOf: string) => number;
 
-/** Newest first: the score is the post's own time. The default until ranking is tuned. */
+/** Plain newest first, every community alike: the score is the post's own time. A baseline. */
 export const byRecency: Scorer = (p) => Date.parse(p.createdAt);
 
 /** The pilot heuristic's knobs (PRD §5: recency decay × community weight × engagement). */
@@ -32,7 +26,7 @@ export interface HeuristicParams {
   commentWeight: number;
   /** Keeps a very popular post from dwarfing the rest: `log` is ln(1 + x), `sqrt` is √x. */
   damping: 'log' | 'sqrt';
-  /** Per kind of community, 1 when left out. Only reorders posts within a tier. */
+  /** Per kind of community, 1 when left out. This is what puts the reader's team first. */
   communityWeight?: Partial<Record<MockCommunity['kind'], number>>;
   /** Extra weight for private communities, 1 when left out. */
   privateWeight?: number;
@@ -58,9 +52,21 @@ export const heuristic =
     return recency * weight * (1 + damped);
   };
 
+/**
+ * The pilot's ranking until it's tuned on seeded data (`pnpm --filter @team-impact/api feed:tune`):
+ * team 4, other communities 1.5, Team Impact 1, so a quiet team post stays above an equally quiet
+ * post elsewhere for halfLife × log₂(4 / 1.5) ≈ 34 hours. Provisional; the chosen values go in
+ * Notion "Stack decisions".
+ */
+export const PILOT_RANKING: HeuristicParams = {
+  halfLifeHours: 24,
+  commentWeight: 2,
+  damping: 'log',
+  communityWeight: { team: 4, interest: 1.5, medical: 1.5, team_impact: 1 },
+};
+
 /** Where a post sits in feed order. Ids are unique, so no two posts share a key. */
 const SortKey = z.object({
-  tier: z.number().int(),
   score: z.number(),
   id: z.string().min(1),
 });
@@ -71,16 +77,15 @@ type CommunityOf = (p: MockPost) => MockCommunity;
 /** Plain string order: fixed-width ids sort correctly without a locale. */
 const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Negative when `a` comes first: lower tier, then higher score, then (a tie) the higher id. */
-const compare = (a: SortKey, b: SortKey) =>
-  a.tier - b.tier || b.score - a.score || byString(b.id, a.id);
+/** Negative when `a` comes first: the higher score, then (a tie) the higher id. */
+const compare = (a: SortKey, b: SortKey) => b.score - a.score || byString(b.id, a.id);
 
 /** Each post with its key, in feed order. Scores are worked out once per post. */
 const keyed = (posts: MockPost[], communityOf: CommunityOf, scorer: Scorer, asOf: string) =>
   posts
     .map((p) => {
       const c = communityOf(p);
-      return { p, key: { tier: TIER[c.kind], score: scorer(p, c, asOf), id: p.id } };
+      return { p, key: { score: scorer(p, c, asOf), id: p.id } };
     })
     .sort((a, b) => compare(a.key, b.key));
 
@@ -140,7 +145,7 @@ export interface FeedPage {
  * a repeat or a gap. Returns null for a cursor that's invalid or from another feed (400).
  *
  * The mock has every post in memory, so it scores and sorts them all; the real query filters on
- * the key instead (`WHERE (tier, score, id) > …`) and fetches `limit + 1`.
+ * the key instead (`WHERE (score, id) < …`) and fetches `limit + 1`.
  */
 export const pageOf = (
   posts: MockPost[],

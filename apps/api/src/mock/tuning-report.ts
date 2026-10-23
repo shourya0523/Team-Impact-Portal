@@ -1,5 +1,5 @@
 import type { Post } from '@team-impact/contracts';
-import { heuristic, type HeuristicParams, TIER } from './feed';
+import { heuristic, type HeuristicParams, PILOT_RANKING } from './feed';
 import { COMMUNITIES, id, type MockPost, type MockUser, USERS } from './fixtures';
 import { TUNING, TUNING_NOW, tuningWorld } from './tuning';
 import type { MockWorld } from './world';
@@ -16,29 +16,31 @@ export interface Variant {
   ranking: HeuristicParams | null;
 }
 
+const blended = (
+  halfLifeHours: number,
+  team: number,
+  damping: 'log' | 'sqrt' = 'log',
+): HeuristicParams => ({
+  halfLifeHours,
+  commentWeight: 2,
+  damping,
+  communityWeight: { team, interest: 1.5, medical: 1.5, team_impact: 1 },
+});
+
+/** A label that names a formula's settings. */
+export const labelOf = (r: HeuristicParams) =>
+  `${r.halfLifeHours}h, ${r.damping}, comment ×${r.commentWeight}, team ×${
+    r.communityWeight?.team ?? 1
+  }`;
+
 /** The formulas compared when no settings are given on the command line. */
 export const VARIANTS: Variant[] = [
-  { label: 'newest first (today)', ranking: null },
-  {
-    label: '12h, log, comment ×2',
-    ranking: { halfLifeHours: 12, commentWeight: 2, damping: 'log' },
-  },
-  {
-    label: '24h, log, comment ×2',
-    ranking: { halfLifeHours: 24, commentWeight: 2, damping: 'log' },
-  },
-  {
-    label: '48h, log, comment ×2',
-    ranking: { halfLifeHours: 48, commentWeight: 2, damping: 'log' },
-  },
-  {
-    label: '24h, sqrt, comment ×2',
-    ranking: { halfLifeHours: 24, commentWeight: 2, damping: 'sqrt' },
-  },
-  {
-    label: '48h, sqrt, comment ×2',
-    ranking: { halfLifeHours: 48, commentWeight: 2, damping: 'sqrt' },
-  },
+  { label: 'newest first, every community alike', ranking: null },
+  { label: `${labelOf(PILOT_RANKING)} (default)`, ranking: PILOT_RANKING },
+  ...[blended(24, 2), blended(24, 3), blended(24, 6), blended(48, 4), blended(12, 4)].map(
+    (ranking) => ({ label: labelOf(ranking), ranking }),
+  ),
+  ...[blended(24, 4, 'sqrt')].map((ranking) => ({ label: labelOf(ranking), ranking })),
 ];
 
 export const PERSONAS: { label: string; user: MockUser }[] = [
@@ -117,9 +119,13 @@ const scoreOf = (w: MockWorld, ranking: HeuristicParams | null, p: Post) => {
   return heuristic(ranking, () => p.commentCount)(stored, c, TUNING_NOW).toFixed(3);
 };
 
-/** Tiers only ever go up the feed: team, then other communities, then Team Impact. */
-const tiersHold = (feed: Post[]) =>
-  feed.every((p, i) => i === 0 || TIER[feed[i - 1]!.community.kind] <= TIER[p.community.kind]);
+/**
+ * How long a quiet team post stays above an equally quiet post in an interest community: the
+ * team's extra weight buys `halfLife × log₂(team weight / interest weight)` hours of recency.
+ */
+export const teamLeadHours = (params: HeuristicParams) =>
+  params.halfLifeHours *
+  Math.log2((params.communityWeight?.team ?? 1) / (params.communityWeight?.interest ?? 1));
 
 /**
  * An hour of typical new posts: as many as the tuning world gets in an average hour of its last
@@ -151,7 +157,7 @@ interface Measures {
   viral: number | null;
   quiet: number | null;
   churn: number;
-  tiers: boolean;
+  teamShare: number;
 }
 
 const measure = (variant: Variant, user: MockUser) => {
@@ -174,7 +180,7 @@ const measure = (variant: Variant, user: MockUser) => {
       feed.slice(0, 10).map((p) => p.id),
       topTenLater.map((p) => p.id),
     ),
-    tiers: tiersHold(feed),
+    teamShare: feed.slice(0, 10).filter((p) => p.community.kind === 'team').length / 10,
   };
   return { w, feed, top, measures, perHour };
 };
@@ -183,11 +189,11 @@ const cell = (n: number | null) => (n === null ? 'not in feed' : `#${n}`);
 const percent = (share: number) => `${Math.round(share * 100)}%`;
 
 const topTable = (w: MockWorld, ranking: HeuristicParams | null, top: Post[]) => [
-  '| # | Tier | Community | Age | Rallies | Comments | Score | Post |',
+  '| # | Kind | Community | Age | Rallies | Comments | Score | Post |',
   '|---|---|---|---|---|---|---|---|',
   ...top.map(
     (p, i) =>
-      `| ${i + 1} | ${TIER[p.community.kind]} | ${p.community.name} | ${formatAge(
+      `| ${i + 1} | ${p.community.kind} | ${p.community.name} | ${formatAge(
         ageOf(p.createdAt),
       )} | ${p.likeCount} | ${p.commentCount} | ${scoreOf(w, ranking, p)} | ${
         STARS[p.id] ? `${STARS[p.id]}: ` : ''
@@ -200,23 +206,24 @@ export const tuningReport = (variants: Variant[] = VARIANTS) => {
   const lines: string[] = [
     '# Feed ranking: tuning report',
     '',
-    `Tuning world (\`src/mock/tuning.ts\`), scored as of ${TUNING_NOW}. Tiers come first in every`,
-    'formula (team 0, other communities 1, Team Impact 2); the score only orders posts within a tier.',
+    `Tuning world (\`src/mock/tuning.ts\`), scored as of ${TUNING_NOW}. No hard tiers: each`,
+    'community kind has a weight, and "team first" comes from the team weight. "Team post leads"',
+    'is how long a quiet team post stays above an equally quiet interest post.',
     '',
     '## Summary (Jordan)',
     '',
-    '| Formula | Median age, top 20 | Communities in top 10 | VIRAL | VIRAL beats a new quiet post for | QUIET | Top 10 kept after an hour | Tiers hold |',
-    '|---|---|---|---|---|---|---|---|',
+    '| Formula | Median age, top 20 | Communities in top 10 | Team share of top 10 | Team post leads | VIRAL | VIRAL beats a new quiet post for | QUIET | Top 10 kept after an hour |',
+    '|---|---|---|---|---|---|---|---|---|',
   ];
   const details: string[] = [];
 
   for (const variant of variants) {
     const jordan = measure(variant, USERS.jordan).measures;
-    const viralHours = variant.ranking
-      ? `${Math.round(hoursAboveQuiet(variant.ranking, 80, 25))}h`
-      : '0h';
+    const hours = (n: number) => `${Math.round(n)}h`;
+    const viralHours = variant.ranking ? hours(hoursAboveQuiet(variant.ranking, 80, 25)) : '0h';
+    const teamLead = variant.ranking ? hours(teamLeadHours(variant.ranking)) : '0h';
     lines.push(
-      `| ${variant.label} | ${formatAge(jordan.freshness)} | ${jordan.variety} | ${cell(jordan.viral)} | ${viralHours} | ${cell(jordan.quiet)} | ${percent(jordan.churn)} | ${jordan.tiers ? 'yes' : '**NO**'} |`,
+      `| ${variant.label} | ${formatAge(jordan.freshness)} | ${jordan.variety} | ${percent(jordan.teamShare)} | ${teamLead} | ${cell(jordan.viral)} | ${viralHours} | ${cell(jordan.quiet)} | ${percent(jordan.churn)} |`,
     );
 
     details.push(`## ${variant.label}`, '');
@@ -229,7 +236,7 @@ export const tuningReport = (variants: Variant[] = VARIANTS) => {
         `${feed.length} posts in the feed. Median age of the top ${TOP}: ${formatAge(measures.freshness)}. ` +
           `Communities in the top 10: ${measures.variety}. VIRAL: ${cell(measures.viral)}. ` +
           `QUIET: ${cell(measures.quiet)}. Top 10 kept after an hour (${perHour} new posts): ` +
-          `${percent(measures.churn)}. Tiers hold: ${measures.tiers ? 'yes' : '**NO**'}.`,
+          `${percent(measures.churn)}. Team share of the top 10: ${percent(measures.teamShare)}.`,
         '',
         ...topTable(w, variant.ranking, top),
         '',

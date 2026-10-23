@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { PILOT_RANKING } from './feed';
 import { tuningWorld } from './tuning';
 import {
   hoursAboveQuiet,
   median,
   overlap,
+  teamLeadHours,
   PERSONAS,
   tuningReport,
   VARIANTS,
@@ -32,6 +34,12 @@ describe('tuning report: helpers', () => {
     expect(hoursAboveQuiet(sqrt, 5, 2)).toBeCloseTo(48, 6);
     expect(hoursAboveQuiet(log, 0, 0)).toBe(0);
   });
+
+  it('works out how long the team weight keeps a quiet team post ahead', () => {
+    const params = { ...PILOT_RANKING, communityWeight: { team: 4, interest: 1 } };
+    expect(teamLeadHours({ ...params, halfLifeHours: 24 })).toBeCloseTo(48, 6);
+    expect(teamLeadHours({ ...params, communityWeight: {} })).toBe(0);
+  });
 });
 
 describe('tuning report', () => {
@@ -49,12 +57,13 @@ describe('tuning report', () => {
     }
   });
 
-  it('confirms tiers hold for every persona and formula', () => {
-    expect(report).not.toContain('**NO**');
-    expect(report.split('Tiers hold: yes')).toHaveLength(variants.length * PERSONAS.length + 1);
+  it('reports the team share of every persona’s top 10', () => {
+    expect(report.split('Team share of the top 10:')).toHaveLength(
+      variants.length * PERSONAS.length + 1,
+    );
   });
 
-  it('leaves every other world on newest first', () => {
-    expect(tuningWorld().ranking).toBeNull();
+  it('leaves every other world on the default ranking', () => {
+    expect(tuningWorld().ranking).toEqual(PILOT_RANKING);
   });
 });

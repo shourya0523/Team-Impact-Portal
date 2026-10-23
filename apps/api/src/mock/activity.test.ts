@@ -368,7 +368,7 @@ describe('feeds: pages', () => {
 
       // A position-based cursor would now return 401 again (everything moved down one).
       const q = new URLSearchParams({ limit: '2', cursor: first.nextCursor });
-      expect(ids((await jordan.get(`/feed?${q}`)).body.items)).toEqual([408, 403].map(id));
+      expect(ids((await jordan.get(`/feed?${q}`)).body.items)).toEqual([402, 408].map(id));
       // Starting over shows it first: the second page left it out on purpose.
       expect(ids((await jordan.get('/feed?limit=2')).body.items)[0]).toBe(created.body.id);
     } finally {
@@ -378,7 +378,7 @@ describe('feeds: pages', () => {
 });
 
 describe('feeds: people on two teams', () => {
-  it('puts both teams first, mixed newest first, and keeps each team page to its own', () => {
+  it('weights both teams alike, and keeps each team page to its own', () => {
     const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
     const basketball = addBasketball(w);
     const samPost = w.posts.find((p) => p.id === SAM_POST)!;
@@ -392,8 +392,10 @@ describe('feeds: people on two teams', () => {
     // Newer than soccer's two Oct 12 posts, and older than both.
     w.posts.push(at('2026-10-12T15:00:00.000Z', 491), at('2026-10-10T12:00:00.000Z', 492));
 
-    // Lisa, a parent on both teams: both teams, then medical, then Team Impact.
-    expect(ids(w.feed(USERS.lisa))).toEqual([491, 406, 401, 492, 404, 402].map(id));
+    // Lisa, a parent on both teams. 491 is 3 hours newer than soccer's 401 and 406, but they have
+    // a comment each and it has none, so they stay ahead; Team Impact's 402 (48 rallies) comes
+    // before basketball's older 492, then medical.
+    expect(ids(w.feed(USERS.lisa))).toEqual([406, 401, 491, 402, 492, 404].map(id));
     expect(ids(w.communityFeed(basketball, USERS.lisa))).toEqual([491, 492].map(id));
     const soccer = w.communities.find((c) => c.id === TEAM)!;
     expect(ids(w.communityFeed(soccer, USERS.lisa))).toEqual([406, 401].map(id));

@@ -19,7 +19,15 @@ import {
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import { byRecency, heuristic, type HeuristicParams, pageOf, rank, type Scorer } from './feed';
+import {
+  byRecency,
+  heuristic,
+  type HeuristicParams,
+  PILOT_RANKING,
+  pageOf,
+  rank,
+  type Scorer,
+} from './feed';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
@@ -289,10 +297,10 @@ export class MockWorld {
   };
 
   /**
-   * How feeds order posts within a tier: null is newest first (`byRecency`); otherwise the pilot
-   * heuristic with these knobs (`./feed.ts`). The tuning script sets it to compare formulas.
+   * How feeds rank posts: the pilot heuristic (`PILOT_RANKING` in `./feed.ts`) unless changed. The
+   * tuning script swaps in other settings to compare them; null is plain newest first.
    */
-  ranking: HeuristicParams | null = null;
+  ranking: HeuristicParams | null = structuredClone(PILOT_RANKING);
 
   /** The stored posts `u` sees in `readable` (communities they read), and how to score them. */
   private visibleIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
@@ -304,8 +312,8 @@ export class MockWorld {
   };
 
   /**
-   * Newest first needs no counts. The heuristic scores engagement, so it counts comments for
-   * every visible post, not just the page.
+   * The heuristic scores engagement, so it counts comments for every visible post, not just the
+   * page (the page's own counts for the response come from `shape`). Newest first needs none.
    */
   private scorerFor = (
     visible: MockPost[],

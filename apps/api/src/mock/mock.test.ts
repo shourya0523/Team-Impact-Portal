@@ -238,25 +238,26 @@ describe('mock API: communities', () => {
     expect(sam.memberCount).toBe(3);
   });
 
-  it('ranks the team first and shows only approved posts', async () => {
+  it('puts the team first and shows only approved posts', async () => {
     const { get } = await signIn('athlete');
     const feed = (await get('/feed')).body.items as { community: { kind: string } }[];
     expect(feed[0]?.community.kind).toBe('team');
-    expect(feed.at(-1)?.community.kind).toBe('team_impact');
     expect(JSON.stringify(feed)).not.toContain('$5,000');
   });
 
-  it('orders every home feed: team, then other communities, then Team Impact, newest first', async () => {
-    // Fixture posts by number (fixtures.ts). 401 and 406 share a timestamp, so the higher id
-    // goes first (./feed.ts).
+  it('orders every home feed by the pilot ranking (team weighted highest)', async () => {
+    // Fixture posts by number (fixtures.ts), ranked by PILOT_RANKING (./feed.ts). The team posts
+    // (401, 406: newest, team weight 4) lead; 401 and 406 tie, so the higher id goes first.
+    // Team Impact's 402 is a day older and weighted 1, but its 48 rallies lift it above the
+    // other communities' 3-rally posts (weight 1.5), which then follow newest first.
     const expected: Record<string, number[]> = {
-      athlete: [406, 401, 408, 403, 404, 405, 402], // medical sits with the other communities
-      parent: [406, 401, 404, 402],
-      teen: [406, 401, 403, 405, 402],
-      coach: [406, 401, 408, 403, 405, 402],
-      recruiter: [403, 405, 402], // official First Gen, then Team Impact
-      alumni_athlete: [403, 405, 402],
-      alumni_mentor: [407, 402], // their own post waiting for review leads Team Impact's
+      athlete: [406, 401, 402, 408, 403, 404, 405], // medical ranks like any other community
+      parent: [406, 401, 402, 404],
+      teen: [406, 401, 402, 403, 405],
+      coach: [406, 401, 402, 408, 403, 405],
+      recruiter: [402, 403, 405], // Team Impact and official First Gen only
+      alumni_athlete: [402, 403, 405],
+      alumni_mentor: [402, 407], // their own held post shows, but has no rallies yet
       staff: [402],
     };
     for (const [role, posts] of Object.entries(expected)) {
@@ -266,7 +267,7 @@ describe('mock API: communities', () => {
     }
   });
 
-  it('orders a community feed newest first', async () => {
+  it('orders a community feed by the same ranking', async () => {
     const { get } = await signIn('athlete');
     expect(ids((await get(`/communities/${FIRST_GEN}/posts`)).body.items)).toEqual(
       [403, 405].map(id),

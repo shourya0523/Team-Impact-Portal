@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { heuristic, type HeuristicParams, pageOf, rank } from './feed';
+import { heuristic, type HeuristicParams, PILOT_RANKING, pageOf, rank } from './feed';
 import { COMMUNITIES, id, type MockCommunity, type MockPost } from './fixtures';
 
 const TEAM = COMMUNITIES.find((c) => c.kind === 'team')!;
@@ -26,7 +26,7 @@ const post = (n: number, communityId: string, createdAt: string): MockPost => ({
 const day = (d: number, hour = 12) =>
   `2026-10-${String(d).padStart(2, '0')}T${String(hour).padStart(2, '0')}:00:00.000Z`;
 
-/** Seven posts across the three tiers, with two that share a timestamp. */
+/** Seven posts across three kinds of community, with two that share a timestamp. */
 const POSTS = [
   post(1, TEAM_IMPACT.id, day(15)),
   post(2, INTEREST.id, day(12)),
@@ -36,7 +36,8 @@ const POSTS = [
   post(6, INTEREST.id, day(13)),
   post(7, TEAM_IMPACT.id, day(11)),
 ];
-const RANKED = [5, 4, 3, 6, 2, 1, 7].map(id);
+/** Newest first (the default scorer here); 4 and 5 tie, so the higher id goes first. */
+const RANKED = [1, 5, 4, 6, 2, 7, 3].map(id);
 
 const ids = (posts: MockPost[]) => posts.map((p) => p.id);
 
@@ -55,7 +56,7 @@ const walk = (posts: MockPost[], limit: number, feed = 'home') => {
 };
 
 describe('feed: rank', () => {
-  it('orders by tier, then newest first, then the higher id for posts made at the same moment', () => {
+  it('orders by score (here newest first), then the higher id for posts made at the same moment', () => {
     expect(ids(rank(POSTS, communityOf))).toEqual(RANKED);
   });
 
@@ -86,7 +87,7 @@ describe('feed: pages', () => {
       limit: 3,
       now: NOW,
     })!;
-    // A new team post would go straight to the top, shifting every position by one.
+    // A newer post would go straight to the top, shifting every position by one.
     const later = [...POSTS, post(8, TEAM.id, day(16))];
     const second = pageOf(rank(later, communityOf), communityOf, {
       feed: 'home',
@@ -152,7 +153,7 @@ describe('feed: cursors that aren’t ours', () => {
   it('refuses an edited cursor or one from another version', () => {
     expect(request(encode({ ...decoded, v: 2 }))).toBeNull();
     expect(request(encode({ ...decoded, asOf: 'yesterday' }))).toBeNull();
-    expect(request(encode({ ...decoded, after: { ...decoded.after, tier: 'x' } }))).toBeNull();
+    expect(request(encode({ ...decoded, after: { ...decoded.after, id: 42 } }))).toBeNull();
     expect(request(encode({ ...decoded, after: { ...decoded.after, score: 'x' } }))).toBeNull();
   });
 
@@ -221,12 +222,35 @@ describe('feed: heuristic score', () => {
   it('treats a post made after `asOf` as brand new, not from the future', () => {
     expect(score(at(-5, 3))).toBe(score(at(0, 3)));
   });
+});
 
-  it('never lets a score cross tiers', () => {
-    const scorer = heuristic(PARAMS, noComments);
-    const viral = { ...post(1, TEAM_IMPACT.id, NOW), likeCount: 10_000 };
-    const stale = post(2, TEAM.id, hoursBefore(24 * 21));
-    expect(ids(rank([viral, stale], communityOf, scorer, NOW))).toEqual([id(2), id(1)]);
+describe('feed: the pilot ranking (team weighted, no hard tiers)', () => {
+  const scorer = heuristic(PILOT_RANKING, () => 0);
+  const hoursBefore = (hours: number) =>
+    new Date(Date.parse(NOW) - hours * 3_600_000).toISOString();
+  const order = (...posts: MockPost[]) => ids(rank(posts, communityOf, scorer, NOW));
+  // How long the team's weight keeps a quiet team post above an equally quiet interest post.
+  const { team = 1, interest = 1, team_impact = 1 } = PILOT_RANKING.communityWeight ?? {};
+  const lead = PILOT_RANKING.halfLifeHours * Math.log2(team / interest);
+
+  it('weights the team above other communities, and Team Impact below them', () => {
+    expect(team).toBeGreaterThan(interest);
+    expect(interest).toBeGreaterThan(team_impact);
+    expect(order(post(1, INTEREST.id, NOW), post(2, TEAM.id, NOW))).toEqual([id(2), id(1)]);
+    expect(order(post(1, INTEREST.id, NOW), post(2, TEAM_IMPACT.id, NOW))).toEqual([id(1), id(2)]);
+  });
+
+  it('keeps a quiet team post ahead of a new quiet post elsewhere only for its lead', () => {
+    const fresh = post(1, INTEREST.id, NOW);
+    expect(order(fresh, post(2, TEAM.id, hoursBefore(lead - 1)))).toEqual([id(2), id(1)]);
+    expect(order(fresh, post(2, TEAM.id, hoursBefore(lead + 1)))).toEqual([id(1), id(2)]);
+  });
+
+  it('lets enough engagement lift another community’s post above a quiet team post', () => {
+    const quietTeam = post(1, TEAM.id, NOW);
+    const busy = (likeCount: number) => ({ ...post(2, INTEREST.id, NOW), likeCount });
+    expect(order(quietTeam, busy(1))).toEqual([id(1), id(2)]);
+    expect(order(quietTeam, busy(10))).toEqual([id(2), id(1)]);
   });
 });
 
