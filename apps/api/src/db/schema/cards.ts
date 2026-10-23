@@ -11,8 +11,8 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { at, createdAt, id } from './columns';
-import { cardStatus, ingestedStatus, mediaKind, parseStatus } from './enums';
-import { users } from './identity';
+import { cardStatus, ingestedStatus, mediaPurpose, mediaStatus, parseStatus } from './enums';
+import { children, users } from './identity';
 import { colleges } from './teams';
 
 /**
@@ -53,6 +53,10 @@ export const cards = pgTable(
   ],
 );
 
+/**
+ * Every stored file, uploaded through one signed-URL path (TI-111). The bucket is private: files are
+ * read only through GET /media/:id, which checks who may see them.
+ */
 export const media = pgTable(
   'media',
   {
@@ -60,15 +64,26 @@ export const media = pgTable(
     ownerUserId: uuid('owner_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    kind: mediaKind('kind').notNull(),
+    purpose: mediaPurpose('purpose').notNull(),
+    status: mediaStatus('status').notNull().default('pending'),
+    // Set for child photos; the access layer shows them only to the child's team and family.
+    childId: uuid('child_id').references(() => children.id, { onDelete: 'cascade' }),
     storageKey: text('storage_key').notNull().unique(),
+    mimeType: text('mime_type').notNull(),
+    sizeBytes: integer('size_bytes').notNull(),
+    // When the uploader affirmed they have the right to share it. Required on every photo.
+    rightsAffirmedAt: at('rights_affirmed_at'),
+    takenDownAt: at('taken_down_at'),
     width: integer('width'),
     height: integer('height'),
     parseStatus: parseStatus('parse_status'),
     parsedPayload: jsonb('parsed_payload'),
     createdAt: createdAt(),
   },
-  (t) => [index('media_owner_user_id_idx').on(t.ownerUserId)],
+  (t) => [
+    index('media_owner_user_id_idx').on(t.ownerUserId),
+    index('media_child_id_idx').on(t.childId),
+  ],
 );
 
 /** Alumni rosters pulled from outside sources, claimable with a single-use token. */
