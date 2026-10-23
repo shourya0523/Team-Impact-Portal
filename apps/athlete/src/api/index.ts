@@ -7,8 +7,10 @@ import { profiles } from './profiles';
 import { session } from './session';
 import { team } from './team';
 import { signup } from './signup';
+import { uploads } from './uploads';
 
 export { ApiRequestError, request } from './client';
+export { uploadPhoto, UploadProblem } from './uploads';
 
 /** One object for every call; each product area keeps its calls in its own file. */
 export const api = {
@@ -21,4 +23,5 @@ export const api = {
   ...activity,
   ...profiles,
   ...communityMembers,
+  ...uploads,
 };

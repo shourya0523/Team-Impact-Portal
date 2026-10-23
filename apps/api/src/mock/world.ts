@@ -35,6 +35,7 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+import type { MockUpload } from './uploads';
 
 /** One row of consent history (see `MockWorld.consentRecords`). */
 export interface MockConsentRecord {
@@ -89,6 +90,8 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /** Uploaded files and their state, kept in memory (`./uploads.ts`). */
+  readonly uploads: MockUpload[] = [];
   /**
    * Append-only consent history, like `consent_records`: every privacy choice gets a timestamped
    * row and none is ever edited. Write through `recordConsent`.
