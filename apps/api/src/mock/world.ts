@@ -6,6 +6,7 @@ import {
   type CardFace,
   type CardWithContact,
   type Community,
+  consentFlags,
   type ContactSharing,
   type FeatureFlags,
   type IdentitySearchLogEntry,
@@ -34,6 +35,14 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+
+/** One row of consent history (see `MockWorld.consentRecords`). */
+export interface MockConsentRecord {
+  userId: string;
+  flag: string;
+  value: boolean;
+  recordedAt: string;
+}
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -80,6 +89,11 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /**
+   * Append-only consent history, like `consent_records`: every privacy choice gets a timestamped
+   * row and none is ever edited. Write through `recordConsent`.
+   */
+  readonly consentRecords: MockConsentRecord[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
   private nextId = 5000;
@@ -87,6 +101,11 @@ export class MockWorld {
   constructor(readonly flags: FeatureFlags) {}
 
   newId = () => fx.id(this.nextId++);
+
+  /** Appends one consent record. Call it only when a value actually changes. */
+  recordConsent = (userId: string, flag: string, value: boolean) => {
+    this.consentRecords.push({ userId, flag, value, recordedAt: new Date().toISOString() });
+  };
 
   user = (userId: string) => this.users.find((u) => u.id === userId);
 
@@ -300,6 +319,9 @@ export class MockWorld {
     if (!member) return 'Join the community first';
     const card = this.cards.find((k) => k.face.athleteId === u.id);
     if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    if ((member.recruiterSearchOptIn ?? false) !== findable) {
+      this.recordConsent(u.id, consentFlags.findableIn(c.id), findable);
+    }
     member.recruiterSearchOptIn = findable;
     return null;
   };

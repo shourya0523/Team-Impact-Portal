@@ -211,6 +211,7 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
+  removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
   removeWhere(world.lists, (l) => gone(l.ownerId));
   for (const l of world.lists) {
