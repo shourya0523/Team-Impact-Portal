@@ -3,7 +3,8 @@ import { pgEnum } from 'drizzle-orm/pg-core';
 // Identity
 export const userType = pgEnum('user_type', [
   'athlete',
-  'alumni',
+  'alumni_athlete',
+  'alumni_mentor',
   'recruiter',
   'staff',
   'coach',
@@ -16,11 +17,16 @@ export const contactScope = pgEnum('contact_scope', ['family', 'recruiter']);
 export const contactChannel = pgEnum('contact_channel', ['phone', 'email', 'linkedin']);
 export const devicePlatform = pgEnum('device_platform', ['ios', 'android', 'web']);
 
-// Teams and groups
+// Teams and communities
 export const teamGender = pgEnum('team_gender', ['men', 'women', 'coed']);
-export const teamStatus = pgEnum('team_status', ['live', 'archived']);
-export const groupKind = pgEnum('group_kind', ['team', 'college', 'affinity', 'org', 'platform']);
-export const groupVisibility = pgEnum('group_visibility', ['open', 'members']);
+// `invited`: made by staff, waiting on its first coach to accept (TI-148).
+export const teamStatus = pgEnum('team_status', ['invited', 'live', 'archived']);
+export const communityKind = pgEnum('community_kind', [
+  'team',
+  'team_impact',
+  'medical',
+  'interest',
+]);
 export const membershipRole = pgEnum('membership_role', ['member', 'coach', 'admin']);
 export const membershipSource = pgEnum('membership_source', [
   'signup',
@@ -31,6 +37,7 @@ export const membershipSource = pgEnum('membership_source', [
   'roster_import',
 ]);
 export const joinRequestStatus = pgEnum('join_request_status', ['pending', 'approved', 'declined']);
+export const qrCodeLifetime = pgEnum('qr_code_lifetime', ['tonight', 'day', 'week']);
 
 // Card and media
 export const cardStatus = pgEnum('card_status', ['draft', 'published', 'unclaimed', 'archived']);
@@ -53,9 +60,16 @@ export const moderationStatus = pgEnum('moderation_status', [
   'removed',
 ]);
 export const postType = pgEnum('post_type', ['text', 'photo', 'announcement']);
-export const postVisibility = pgEnum('post_visibility', ['group', 'network']);
 export const reactionKind = pgEnum('reaction_kind', ['like', 'cheer', 'fire']);
 export const rsvpState = pgEnum('rsvp_state', ['going', 'maybe', 'not_going']);
+export const notificationKind = pgEnum('notification_kind', [
+  'join_approved',
+  'reply',
+  'event',
+  'announcement',
+  'warning',
+]);
+export const notificationTarget = pgEnum('notification_target', ['post', 'event', 'community']);
 
 // Employer side
 export const orgTier = pgEnum('org_tier', ['standard', 'premium']);
@@ -69,7 +83,7 @@ export const targetType = pgEnum('target_type', [
   'post',
   'comment',
   'event',
-  'group',
+  'community',
 ]);
 export const reportState = pgEnum('report_state', ['open', 'actioned', 'dismissed']);
 export const reportSeverity = pgEnum('report_severity', ['low', 'medium', 'high']);

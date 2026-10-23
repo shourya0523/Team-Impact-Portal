@@ -1,16 +1,25 @@
 import { sql } from 'drizzle-orm';
-import { boolean, index, pgTable, text, unique, uuid } from 'drizzle-orm/pg-core';
+import {
+  boolean,
+  check,
+  index,
+  pgTable,
+  text,
+  unique,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
 import { at, createdAt, id } from './columns';
 import {
-  groupKind,
-  groupVisibility,
+  communityKind,
   joinRequestStatus,
   membershipRole,
   membershipSource,
+  moderationStatus,
+  qrCodeLifetime,
   teamGender,
   teamStatus,
 } from './enums';
-import { orgs } from './employer';
 import { users } from './identity';
 
 /** Managed list (PRD v2.1, TI-148): staff rename and merge colleges; teams never use free text. */
@@ -32,6 +41,7 @@ export const teams = pgTable(
     gender: teamGender('gender').notNull(),
     division: text('division'),
     displayName: text('display_name').notNull(),
+    about: text('about'),
     // Optional; clients fall back to brand navy (ui-tokens resolveTeamColor).
     color: text('color'),
     logoStorageKey: text('logo_storage_key'),
@@ -64,29 +74,43 @@ export const coachInvites = pgTable(
 );
 
 /**
- * Anything people post into. Team groups are backed by one team; `platform` is the single org-wide
- * announcements group. Only staff set `official`, and only on affinity groups.
+ * Where every post and event lives (PRD v2.3 §5). A `team` community comes with its team;
+ * `team_impact` is staff-run and open to all; `interest` and `medical` are user-made and can be made
+ * `private` at creation, after which joining is a request the creator decides. Only staff set
+ * `official`, only on open interest communities. Medical membership is never shown or searchable.
  */
-export const groups = pgTable(
-  'groups',
+export const communities = pgTable(
+  'communities',
   {
     id: id(),
-    kind: groupKind('kind').notNull(),
+    kind: communityKind('kind').notNull(),
     name: text('name').notNull(),
-    visibility: groupVisibility('visibility').notNull().default('members'),
+    about: text('about').notNull().default(''),
     teamId: uuid('team_id')
       .unique()
       .references(() => teams.id, { onDelete: 'cascade' }),
-    collegeId: uuid('college_id').references(() => colleges.id, { onDelete: 'cascade' }),
-    orgId: uuid('org_id').references(() => orgs.id, { onDelete: 'cascade' }),
+    private: boolean('private').notNull().default(false),
     official: boolean('official').notNull().default(false),
+    // Names and descriptions pass moderation like posts; only approved ones are listed.
+    status: moderationStatus('status').notNull().default('pending'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     createdAt: createdAt(),
   },
   (t) => [
-    index('groups_college_id_idx').on(t.collegeId),
-    index('groups_org_id_idx').on(t.orgId),
-    index('groups_created_by_idx').on(t.createdBy),
+    index('communities_created_by_idx').on(t.createdBy),
+    // Names are unique per kind, ignoring case, among the kinds people create.
+    uniqueIndex('communities_kind_name_key')
+      .on(t.kind, sql`lower(${t.name})`)
+      .where(sql`${t.kind} in ('interest', 'medical')`),
+    check('communities_team_id_check', sql`(${t.kind} = 'team') = (${t.teamId} is not null)`),
+    check(
+      'communities_private_check',
+      sql`not ${t.private} or ${t.kind} in ('interest', 'medical')`,
+    ),
+    check(
+      'communities_official_check',
+      sql`not ${t.official} or (${t.kind} = 'interest' and not ${t.private})`,
+    ),
   ],
 );
 
@@ -98,31 +122,34 @@ export const memberships = pgTable(
     userId: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    groupId: uuid('group_id')
+    communityId: uuid('community_id')
       .notNull()
-      .references(() => groups.id, { onDelete: 'cascade' }),
+      .references(() => communities.id, { onDelete: 'cascade' }),
     role: membershipRole('role').notNull().default('member'),
     // e.g. '2025-26'. Lets roster dedupe (TI-36) resolve one athlete across years.
     season: text('season'),
     joinedAt: at('joined_at').notNull().defaultNow(),
     source: membershipSource('source').notNull(),
-    // Per-member opt-in to the flagged official-affinity recruiter filter.
-    searchable: boolean('searchable').notNull().default(false),
+    // "Recruiters can find me through this community": official interest communities only.
+    recruiterSearchOptIn: boolean('recruiter_search_opt_in').notNull().default(false),
     joinCodeId: uuid('join_code_id').references(() => joinCodes.id, { onDelete: 'set null' }),
     // Set when a coach adds another coach directly.
     addedBy: uuid('added_by').references(() => users.id, { onDelete: 'set null' }),
   },
   (t) => [
-    unique('memberships_user_group_season_key')
-      .on(t.userId, t.groupId, t.season)
+    unique('memberships_user_community_season_key')
+      .on(t.userId, t.communityId, t.season)
       .nullsNotDistinct(),
-    index('memberships_group_id_idx').on(t.groupId),
+    index('memberships_community_id_idx').on(t.communityId),
     index('memberships_join_code_id_idx').on(t.joinCodeId),
     index('memberships_added_by_idx').on(t.addedBy),
   ],
 );
 
-/** Team QR codes: one week by default, coaches can shorten or revoke. */
+/**
+ * Team QR codes: one week by default, coaches can shorten or revoke. `code` is the token in the QR;
+ * `short_code` is what a coach reads out. Both join, so only the team's coaches see them.
+ */
 export const joinCodes = pgTable(
   'join_codes',
   {
@@ -131,6 +158,9 @@ export const joinCodes = pgTable(
       .notNull()
       .references(() => teams.id, { onDelete: 'cascade' }),
     code: text('code').notNull().unique(),
+    shortCode: text('short_code').notNull().unique(),
+    label: text('label'),
+    lifetime: qrCodeLifetime('lifetime').notNull().default('week'),
     createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
     expiresAt: at('expires_at')
       .notNull()
@@ -163,5 +193,30 @@ export const joinRequests = pgTable(
     index('join_requests_user_id_idx').on(t.userId),
     index('join_requests_team_status_idx').on(t.teamId, t.status),
     index('join_requests_decided_by_idx').on(t.decidedBy),
+  ],
+);
+
+/** Requests to join a private interest or medical community. Only its creator decides them. */
+export const communityJoinRequests = pgTable(
+  'community_join_requests',
+  {
+    id: id(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    communityId: uuid('community_id')
+      .notNull()
+      .references(() => communities.id, { onDelete: 'cascade' }),
+    status: joinRequestStatus('status').notNull().default('pending'),
+    requestedAt: at('requested_at').notNull().defaultNow(),
+    decidedBy: uuid('decided_by').references(() => users.id, { onDelete: 'set null' }),
+    decidedAt: at('decided_at'),
+  },
+  (t) => [
+    uniqueIndex('community_join_requests_pending_key')
+      .on(t.communityId, t.userId)
+      .where(sql`${t.status} = 'pending'`),
+    index('community_join_requests_user_id_idx').on(t.userId),
+    index('community_join_requests_decided_by_idx').on(t.decidedBy),
   ],
 );
