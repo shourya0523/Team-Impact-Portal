@@ -247,13 +247,13 @@ describe('mock API: communities', () => {
   });
 
   it('orders every home feed: team, then other communities, then Team Impact, newest first', async () => {
-    // Fixture posts by number (fixtures.ts). 401 and 406 share a timestamp, so they keep
-    // fixture order until the cursor adds an id tie-break.
+    // Fixture posts by number (fixtures.ts). 401 and 406 share a timestamp, so the higher id
+    // goes first (./feed.ts).
     const expected: Record<string, number[]> = {
-      athlete: [401, 406, 408, 403, 404, 405, 402], // medical sits with the other communities
-      parent: [401, 406, 404, 402],
-      teen: [401, 406, 403, 405, 402],
-      coach: [401, 406, 408, 403, 405, 402],
+      athlete: [406, 401, 408, 403, 404, 405, 402], // medical sits with the other communities
+      parent: [406, 401, 404, 402],
+      teen: [406, 401, 403, 405, 402],
+      coach: [406, 401, 408, 403, 405, 402],
       recruiter: [403, 405, 402], // official First Gen, then Team Impact
       alumni_athlete: [403, 405, 402],
       alumni_mentor: [407, 402], // their own post waiting for review leads Team Impact's

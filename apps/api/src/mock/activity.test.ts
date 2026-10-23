@@ -303,10 +303,10 @@ describe('feeds: people on two teams', () => {
     w.posts.push(at('2026-10-12T15:00:00.000Z', 491), at('2026-10-10T12:00:00.000Z', 492));
 
     // Lisa, a parent on both teams: both teams, then medical, then Team Impact.
-    expect(ids(w.feed(USERS.lisa))).toEqual([491, 401, 406, 492, 404, 402].map(id));
+    expect(ids(w.feed(USERS.lisa))).toEqual([491, 406, 401, 492, 404, 402].map(id));
     expect(ids(w.communityFeed(basketball, USERS.lisa))).toEqual([491, 492].map(id));
     const soccer = w.communities.find((c) => c.id === TEAM)!;
-    expect(ids(w.communityFeed(soccer, USERS.lisa))).toEqual([401, 406].map(id));
+    expect(ids(w.communityFeed(soccer, USERS.lisa))).toEqual([406, 401].map(id));
     // Jordan is only on soccer.
     expect(ids(w.feed(USERS.jordan))).not.toContain(id(491));
   });
