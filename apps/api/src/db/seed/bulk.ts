@@ -456,14 +456,20 @@ const addAthlete = (
     });
   }
   if (chance(0.6)) {
+    const id = uuid();
+    const createdAt = daysAgo(int(1, 300));
     rows.media.push({
-      id: uuid(),
+      id,
       ownerUserId: user.id,
-      kind: 'photo',
+      purpose: 'card_photo',
+      status: 'ready',
       storageKey: `seed/photos/${user.id}.jpg`,
+      mimeType: 'image/jpeg',
+      sizeBytes: 240_000,
+      rightsAffirmedAt: createdAt,
       width: 1080,
       height: 1350,
-      createdAt: daysAgo(int(1, 300)),
+      createdAt,
     });
   }
   if (chance(0.25)) {
@@ -471,8 +477,11 @@ const addAthlete = (
     rows.media.push({
       id: uuid(),
       ownerUserId: user.id,
-      kind: 'resume',
+      purpose: 'resume',
+      status: 'ready',
       storageKey: `seed/resumes/${user.id}.pdf`,
+      mimeType: 'application/pdf',
+      sizeBytes: 90_000,
       parseStatus,
       parsedPayload:
         parseStatus === 'failed'
@@ -534,16 +543,32 @@ const addFamily = (team: TeamInfo, email?: string, childCount = 1) => {
     source: pick(['join_code', 'join_request'] as const),
   });
   for (let c = 0; c < childCount; c++) {
-    rows.children.push({
+    const child = {
       id: uuid(),
       parentUserId: parent.id,
       teamId: team.id,
       firstName: faker.person.firstName(),
       age: int(5, 12),
       bio: chance(0.5) ? `Loves ${pick(Object.keys(SPORTS)).toLowerCase()} and pizza.` : null,
-      photoStorageKey: chance(0.5) ? `seed/children/${uuid()}.jpg` : null,
-      createdAt: daysAgo(int(1, 300)),
-    });
+    };
+    // Same Faker calls in the same order as before, so every other seeded id stays put.
+    const photoId = chance(0.5) ? uuid() : null;
+    const createdAt = daysAgo(int(1, 300));
+    rows.children.push({ ...child, createdAt });
+    if (photoId) {
+      rows.media.push({
+        id: photoId,
+        ownerUserId: parent.id,
+        purpose: 'child_photo',
+        status: 'ready',
+        childId: child.id,
+        storageKey: `seed/children/${photoId}.jpg`,
+        mimeType: 'image/jpeg',
+        sizeBytes: 240_000,
+        rightsAffirmedAt: createdAt,
+        createdAt,
+      });
+    }
   }
   return parent;
 };

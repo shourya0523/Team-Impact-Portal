@@ -98,6 +98,7 @@ erDiagram
         text first_name
         smallint age "no birthdate"
         text bio
+        uuid photo_media_id FK "current photo"
     }
     CONTACT_VISIBILITY {
         uuid user_id FK
@@ -188,6 +189,7 @@ erDiagram
     INGESTED_RECORDS }o--o| USERS : "claimed by"
     COLLEGES ||--o{ INGESTED_RECORDS : "rosters"
     USERS ||--o{ MEDIA : "uploads"
+    CHILDREN ||--o{ MEDIA : "photos of"
 
     CARDS {
         uuid id PK
@@ -218,8 +220,14 @@ erDiagram
     MEDIA {
         uuid id PK
         uuid owner_user_id FK
-        enum kind "photo, resume"
-        text storage_key UK
+        enum purpose "card_photo, child_photo, post_image, resume"
+        enum status "pending, ready, taken_down"
+        uuid child_id FK "child photos only"
+        text storage_key UK "private bucket, read via GET /media/:id"
+        text mime_type
+        int size_bytes
+        timestamptz rights_affirmed_at "required on photos"
+        timestamptz taken_down_at
         enum parse_status "nothing shown until confirmed"
         jsonb parsed_payload
     }
