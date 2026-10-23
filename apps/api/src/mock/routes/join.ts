@@ -4,6 +4,7 @@ import {
   CreateJoinRequest,
   FindTeamsQuery,
   JoinRequest,
+  searchFilters,
   TeamSummary,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
@@ -28,9 +29,9 @@ export const registerJoinRoutes = (
     '/teams',
     { schema: { querystring: FindTeamsQuery, response: { 200: z.array(TeamSummary) } } },
     async (request) => {
-      viewer(request);
+      const u = viewer(request);
       const { collegeId, sport } = request.query;
-      return world.teams
+      const teams = world.teams
         .filter(
           (t) =>
             isTeamLive(world, t.id) &&
@@ -38,6 +39,16 @@ export const registerJoinRoutes = (
             (!sport || t.sport.toLowerCase() === sport.toLowerCase()),
         )
         .map((t) => world.teamSummary(t.id));
+      world.track(u.id, {
+        name: 'search.run',
+        properties: {
+          searchId: world.newId(),
+          surface: 'teams',
+          filters: searchFilters(request.query),
+          resultCount: teams.length,
+        },
+      });
+      return teams;
     },
   );
 
@@ -80,6 +91,10 @@ export const registerJoinRoutes = (
             ? { ...base, role: 'athlete', classYear: body.classYear }
             : { ...base, role: 'teen' };
       world.joinRequests.push(created);
+      world.track(u.id, {
+        name: 'join_request.created',
+        properties: { joinRequestId: created.id, teamId: team.id, role: created.role },
+      });
       return reply.status(201).send(created);
     },
   );

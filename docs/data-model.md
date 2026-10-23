@@ -15,6 +15,7 @@ v2.1 team onboarding (TI-148/TI-149). **30 tables.** Source of truth is
 | + `coach_invites` (PRD v2.1); `schools` renamed `colleges`                                           | **30** |
 
 Identity-search auditing is an `events_log` event (`search.identity_filter`), not its own table.
+Event names and properties are defined once, in `packages/contracts/src/analytics.ts`.
 
 ## Rules the schema enforces
 
@@ -259,8 +260,9 @@ erDiagram
     }
     EVENTS_LOG {
         uuid id PK
-        uuid user_id FK
-        text event "incl. team/coach changes, identity searches"
+        uuid user_id FK "who did it; null = system"
+        text event "TRACKED_EVENTS in contracts"
+        uuid subject_id FK "who it was about"
         jsonb properties
     }
 ```

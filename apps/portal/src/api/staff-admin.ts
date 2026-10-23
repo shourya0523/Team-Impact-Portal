@@ -6,6 +6,7 @@ import type {
   CreateCompanyRequest,
   CreateTeamRequest,
   Post,
+  RemoveMemberResult,
   StaffCommunity,
   StaffUpdateTeamRequest,
   Team,
@@ -30,6 +31,11 @@ export const staffAdmin = {
   inviteCoach: (teamId: string, email: string) =>
     post<CoachInvite>(`/staff/teams/${teamId}/coach-invites`, { email }),
   revokeInvite: (id: string) => post<CoachInvite>(`/staff/coach-invites/${id}/revoke`),
+  /** A fresh link and 7 more days for the same email; the old link stops working. */
+  resendInvite: (id: string) => post<CoachInvite>(`/staff/coach-invites/${id}/resend`),
+  /** The shared roster route; a live team's last coach can't be removed. */
+  removeCoach: (teamId: string, userId: string) =>
+    request<RemoveMemberResult>(`/teams/${teamId}/members/${userId}`, { method: 'DELETE' }),
 
   createCompany: (body: CreateCompanyRequest) => post<Company>('/staff/companies', body),
   suspendCompany: (id: string) => post<Company>(`/staff/companies/${id}/suspend`),
