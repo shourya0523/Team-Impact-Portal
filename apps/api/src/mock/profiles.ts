@@ -3,6 +3,7 @@ import {
   CardFields,
   type CardVersion,
   type ChildProfile,
+  consentFlags,
   EXTRACTABLE_CARD_FIELDS,
   ExperienceEntry,
   hasBaseballCard,
@@ -341,6 +342,9 @@ export const unpublishCard = (world: MockWorld, u: MockUser, now: string): strin
   const card = cardOf(world, u.id);
   if (!card) return 'You have no Baseball Card yet.';
   card.visibility.published = false;
+  if (card.visibility.openToRecruiting) {
+    world.recordConsent(u.id, consentFlags.openToRecruiting, false);
+  }
   card.visibility.openToRecruiting = false;
   world.profiles.updatedAt.set(u.id, now);
   return null;

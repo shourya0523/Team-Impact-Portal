@@ -3,6 +3,7 @@ import {
   CoachInvite,
   College,
   Company,
+  consentFlags,
   CreateAnnouncementRequest,
   CreateCompanyRequest,
   CreateTeamRequest,
@@ -348,6 +349,9 @@ export const registerStaffAdminRoutes = (
         throw httpError(400, 'A private community can only merge into another private one');
       }
       for (const m of from.members) {
+        // The old community goes away, and with it any opt-in to being findable through it.
+        if (m.recruiterSearchOptIn)
+          world.recordConsent(m.userId, consentFlags.findableIn(from.id), false);
         if (into.members.some((x) => x.userId === m.userId)) continue;
         // Being findable through a community is its own opt-in; it never carries over.
         into.members.push({ userId: m.userId, joinedAt: m.joinedAt, recruiterSearchOptIn: false });

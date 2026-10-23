@@ -2,6 +2,9 @@ import { z } from 'zod';
 import {
   canBeOpenToRecruiting,
   ChildProfile,
+  ConsentHistory,
+  consentFlags,
+  type ContactSharing,
   hasBaseballCard,
   IdParams,
   MySettings,
@@ -92,13 +95,46 @@ export const registerProfileRoutes = (
         if (problem) throw httpError(400, problem);
       }
       if (card) {
+        // Each sharing choice that changes is a consent record; contact values are not.
+        const share = (
+          current: ContactSharing,
+          next: Partial<ContactSharing> | undefined,
+          flag: (channel: keyof ContactSharing) => string,
+        ) => {
+          for (const channel of ['email', 'phone', 'linkedin'] as const) {
+            const on = next?.[channel];
+            if (on !== undefined && on !== current[channel]) {
+              world.recordConsent(u.id, flag(channel), on);
+              current[channel] = on;
+            }
+          }
+        };
         if (contact) Object.assign(card.contact, contact);
-        if (familiesSee) Object.assign(card.visibility.familiesSee, familiesSee);
-        if (recruitersSee) Object.assign(card.visibility.recruitersSee, recruitersSee);
-        if (openToRecruiting !== undefined) card.visibility.openToRecruiting = openToRecruiting;
+        share(card.visibility.familiesSee, familiesSee, consentFlags.familiesSee);
+        share(card.visibility.recruitersSee, recruitersSee, consentFlags.recruitersSee);
+        if (
+          openToRecruiting !== undefined &&
+          openToRecruiting !== card.visibility.openToRecruiting
+        ) {
+          world.recordConsent(u.id, consentFlags.openToRecruiting, openToRecruiting);
+          card.visibility.openToRecruiting = openToRecruiting;
+        }
         world.profiles.updatedAt.set(u.id, new Date().toISOString());
       }
       return settingsFor(world, u);
+    },
+  );
+
+  /** The signed-in user's consent history: every privacy choice they made, newest first. */
+  app.get(
+    '/me/consent-history',
+    { schema: { response: { 200: ConsentHistory } } },
+    async (request) => {
+      const u = viewer(request);
+      return world.consentRecords
+        .filter((r) => r.userId === u.id)
+        .map(({ flag, value, recordedAt }) => ({ flag, value, recordedAt }))
+        .reverse();
     },
   );
 };
