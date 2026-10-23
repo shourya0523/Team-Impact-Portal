@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { UploadResponse } from '@team-impact/contracts';
-import { children, colleges, groups, media, memberships, teams, users } from '../db/schema';
+import { children, colleges, communities, media, memberships, teams, users } from '../db/schema';
 import { createTestApp } from '../test/app';
 
 type TestApp = Awaited<ReturnType<typeof createTestApp>>;
@@ -38,13 +38,13 @@ beforeAll(async () => {
     .insert(teams)
     .values({ collegeId: college!.id, sport: 'Soccer', gender: 'women', displayName: 'Jumbos' })
     .returning();
-  const [group] = await t.db
-    .insert(groups)
+  const [community] = await t.db
+    .insert(communities)
     .values({ kind: 'team', name: 'Jumbos', teamId: team!.id })
     .returning();
   await t.db.insert(memberships).values([
-    { userId: ids.parent, groupId: group!.id, source: 'join_code' },
-    { userId: ids.teammate, groupId: group!.id, source: 'join_code' },
+    { userId: ids.parent, communityId: community!.id, source: 'join_code' },
+    { userId: ids.teammate, communityId: community!.id, source: 'join_code' },
   ]);
   await t.db.insert(children).values({
     id: ids.child,

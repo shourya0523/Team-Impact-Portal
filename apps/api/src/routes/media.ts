@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { IdParams, UploadRequest, UploadResponse } from '@team-impact/contracts';
 import type { Authenticate, SessionUser } from '../auth';
 import type { Db } from '../db/client';
-import { children, groups, media, memberships } from '../db/schema';
+import { children, communities, media, memberships } from '../db/schema';
 import type { Storage } from '../storage';
 import type { ZodTypeProvider } from '../zod';
 
@@ -59,8 +59,9 @@ export const mediaRoutes = async (
     const [member] = await db
       .select({ id: memberships.id })
       .from(memberships)
-      .innerJoin(groups, eq(groups.id, memberships.groupId))
-      .where(and(eq(groups.teamId, child.teamId), eq(memberships.userId, user.id)))
+      // Only a team community has a team_id (a check constraint), so this is the child's team.
+      .innerJoin(communities, eq(communities.id, memberships.communityId))
+      .where(and(eq(communities.teamId, child.teamId), eq(memberships.userId, user.id)))
       .limit(1);
     return Boolean(member);
   };
