@@ -14,6 +14,8 @@ export interface AppOptions {
   sessionSecret: string;
   corsOrigins: string[];
   logger?: boolean;
+  /** Proxy hops to trust for the caller's IP (TRUST_PROXY). 0 when the API is reached directly. */
+  trustProxy?: number;
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
@@ -39,11 +41,18 @@ export const buildApp = async ({
   sessionSecret,
   corsOrigins,
   logger = false,
+  trustProxy = 0,
   flags = DEFAULT_FLAGS,
   mock = false,
   identity,
 }: AppOptions) => {
-  const app = useZodContracts(Fastify({ logger }));
+  const app = useZodContracts(
+    Fastify({
+      logger,
+      // Trust the nearest `trustProxy` hops' X-Forwarded-For entries, and no further.
+      trustProxy: (_address: string, hop: number) => hop < trustProxy,
+    }),
+  );
 
   // @fastify/cors only allows GET, HEAD and POST by default; the app also sends PUT, PATCH and DELETE.
   await app.register(cors, {
@@ -70,8 +79,18 @@ export const buildApp = async ({
       onMailError: (error, message) =>
         app.log.error({ err: error, subject: message.subject }, 'Auth email failed'),
     });
-    app.decorate('authenticate', sessionAuth(auth, identity.db));
-    registerAuthRoutes(app, auth);
+    const authenticate = sessionAuth(auth, identity.db);
+    app.decorate('authenticate', authenticate);
+    registerAuthRoutes(app, auth, {
+      authenticate,
+      apiUrl: identity.baseURL,
+      ownOrigins: [
+        identity.baseURL,
+        identity.links.portalUrl,
+        identity.links.athleteAppUrl,
+        ...corsOrigins,
+      ],
+    });
   }
 
   return app;

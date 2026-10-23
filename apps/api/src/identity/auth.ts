@@ -50,6 +50,8 @@ export interface AuthConfig {
   /** Logs a failed email send; the user can always ask for the link again. */
   onMailError: (error: unknown, message: MailMessage) => void;
   production: boolean;
+  /** Rate limiting is on in production; tests turn it on to check it. */
+  rateLimit?: boolean;
 }
 
 /**
@@ -103,6 +105,42 @@ export const createAuth = (config: AuthConfig) => {
       ...(config.production ? [] : ['exp://']),
     ],
     telemetry: { enabled: false },
+    // Per-IP limits on every auth endpoint, stricter on sign-in and sign-up (Better Auth's
+    // defaults). In memory, so per API instance: move to Valkey when there is more than one.
+    rateLimit: {
+      enabled: config.rateLimit ?? config.production,
+      customRules: {
+        // A whole team may sign up together on one campus Wi-Fi (one IP). 20 a minute allows that
+        // burst while keeping password guessing near Better Auth's default daily rate (3 per 10s).
+        '/sign-in/email': { window: MINUTE, max: 20 },
+        '/sign-up/email': { window: MINUTE, max: 20 },
+        // Both send an email to whatever address is typed: keep them from flooding an inbox.
+        '/send-verification-email': { window: 5 * MINUTE, max: 3 },
+        '/request-password-reset': { window: 5 * MINUTE, max: 3 },
+      },
+    },
+    // Only the endpoints we use are served. The rest would let a signed-in user edit or delete
+    // their account outside our rules (profile edits and account deletion are our own routes),
+    // or reach social sign-in, which isn't set up.
+    disabledPaths: [
+      '/update-user',
+      '/change-email',
+      '/delete-user',
+      '/delete-user/callback',
+      '/update-session',
+      '/sign-in/social',
+      '/link-social',
+      '/unlink-account',
+      '/callback/:id',
+      '/get-access-token',
+      '/refresh-token',
+      '/account-info',
+      '/list-accounts',
+      '/expo-authorization-proxy',
+      // Revokes one session by its token, which responses no longer carry (routes.ts). Sign-out,
+      // "sign out everywhere" and "sign out other devices" still work.
+      '/revoke-session',
+    ],
 
     database: drizzleAdapter(db, {
       provider: 'pg',
@@ -124,10 +162,12 @@ export const createAuth = (config: AuthConfig) => {
       fields: { name: 'firstName' },
       additionalFields: {
         lastName: { type: 'string', required: true },
-        userType: { type: [...schema.userType.enumValues], required: true },
+        // Server-owned (`input: false`): no request can write them directly, at sign-up or after.
+        // Sign-up sends `accountType` and `birthDate`, which the create hook validates and copies
+        // in; nothing can change them later. The database's NOT NULL still backs this up.
+        userType: { type: [...schema.userType.enumValues], required: false, input: false },
         // Birth date is collected only for the age gate, and never sent back to anyone.
-        dob: { type: 'string', required: true, returned: false },
-        // Server-owned: no request can set these.
+        dob: { type: 'string', required: false, input: false, returned: false },
         status: { type: ['active', 'suspended'], required: false, input: false },
         orgId: { type: 'string', required: false, input: false },
       },
@@ -202,24 +242,27 @@ export const createAuth = (config: AuthConfig) => {
             if (!ctx?.request) return;
             const body = (ctx.body ?? {}) as Record<string, unknown>;
             const refusal = checkSelfSignup({
-              userType: user.userType,
-              dob: user.dob,
+              accountType: body.accountType,
+              birthDate: body.birthDate,
               email: user.email,
               acceptTerms: body.acceptTerms,
               parentAgreed: body.parentAgreed,
             });
             if (refusal) throw refuse(refusal.field, refusal.message);
+            // Checked above: a self-sign-up type and a real ISO date.
+            const userType = body.accountType as AccountType;
+            const dob = body.birthDate as string;
 
-            if (user.userType === 'recruiter') {
-              const orgId = await companyFor(user.email);
-              if (!orgId) {
-                throw refuse(
-                  'email',
-                  'Your company isn’t a registered Team Impact partner yet. Ask your Team Impact contact to add it.',
-                );
-              }
-              return { data: { ...user, orgId } };
+            if (userType !== 'recruiter') return { data: { ...user, userType, dob } };
+
+            const orgId = await companyFor(user.email);
+            if (!orgId) {
+              throw refuse(
+                'email',
+                'Your company isn’t a registered Team Impact partner yet. Ask your Team Impact contact to add it.',
+              );
             }
+            return { data: { ...user, userType, dob, orgId } };
           },
           /** What a self-sign-up agreed to, kept as consent history (PRD §6). */
           after: async (user, ctx) => {

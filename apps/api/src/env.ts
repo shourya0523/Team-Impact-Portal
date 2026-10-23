@@ -24,6 +24,9 @@ const EnvSchema = z
     // Unset in development: emails are printed to the API log instead of sent.
     SMTP_URL: z.url().optional(),
     MAIL_FROM: z.string().min(3).default('Team Impact <no-reply@localhost>'),
+    // Proxies in front of the API (1 on DigitalOcean App Platform). Rate limits key on the caller's
+    // IP, so it must come from our proxy, not from a header anyone can send. 0 when reached directly.
+    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
   })

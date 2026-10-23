@@ -10,6 +10,7 @@ const app = await buildApp({
   sessionSecret: env.SESSION_SECRET,
   corsOrigins: env.CORS_ORIGINS,
   logger: true,
+  trustProxy: env.TRUST_PROXY,
   mock: env.MOCK_API,
   identity: database
     ? {

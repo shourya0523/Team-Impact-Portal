@@ -7,7 +7,8 @@
 //
 // The session comes from Better Auth (cookie in browsers, the Expo app's stored cookie on phones),
 // then the account is re-checked against the database, so a suspension, a deletion or a recruiter's
-// company being suspended takes effect on the very next request.
+// company being suspended takes effect on the very next request. A blocked account's sessions are
+// deleted there and then, so Better Auth's own endpoints (get-session) agree it is signed out.
 // =============================================================================================
 import { fromNodeHeaders } from 'better-auth/node';
 import { eq } from 'drizzle-orm';
@@ -40,7 +41,10 @@ export const sessionAuth =
       .from(schema.users)
       .leftJoin(schema.orgs, eq(schema.orgs.id, schema.users.orgId))
       .where(eq(schema.users.id, session.user.id));
-    if (signInBlock(row)) return null;
+    if (signInBlock(row)) {
+      await db.delete(schema.authSessions).where(eq(schema.authSessions.userId, session.user.id));
+      return null;
+    }
 
     return { id: session.user.id, userType: row!.userType };
   };

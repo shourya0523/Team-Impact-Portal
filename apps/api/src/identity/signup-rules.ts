@@ -32,10 +32,11 @@ export const SELF_SIGNUP_TYPES = [
 /** Oldest birth date accepted as real; anything older is almost certainly a typo. */
 const MAX_AGE = 120;
 
+/** What a sign-up request sends (body keys), before anything is trusted. */
 export interface SignupInput {
-  userType: unknown;
+  accountType: unknown;
   /** `YYYY-MM-DD`. */
-  dob: unknown;
+  birthDate: unknown;
   email: string;
   acceptTerms: unknown;
   /** Teens only: the terms confirm a parent or guardian agreed (PRD §3, T1). */
@@ -44,7 +45,7 @@ export interface SignupInput {
 
 /** Why a sign-up is refused, with the field a form should show it next to. */
 export interface SignupRefusal {
-  field: 'userType' | 'dob' | 'email' | 'acceptTerms' | 'parentAgreed';
+  field: 'accountType' | 'birthDate' | 'email' | 'acceptTerms' | 'parentAgreed';
   message: string;
 }
 
@@ -55,7 +56,7 @@ const refuse = (field: SignupRefusal['field'], message: string): SignupRefusal =
 
 /**
  * Checks a self-sign-up against the age and role rules. Returns the refusal, or null when the
- * account may be created as `input.userType`. `today` is injectable so tests pin birthdays.
+ * account may be created as `input.accountType`. `today` is injectable so tests pin birthdays.
  */
 export const checkSelfSignup = (
   input: SignupInput,
@@ -64,34 +65,34 @@ export const checkSelfSignup = (
   if (input.acceptTerms !== true) {
     return refuse('acceptTerms', 'Agree to the Terms and Privacy Policy to continue.');
   }
-  if (!SELF_SIGNUP_TYPES.includes(input.userType as (typeof SELF_SIGNUP_TYPES)[number])) {
-    return refuse('userType', 'Choose who you are: athlete, parent, teen, alumni or recruiter.');
+  if (!SELF_SIGNUP_TYPES.includes(input.accountType as (typeof SELF_SIGNUP_TYPES)[number])) {
+    return refuse('accountType', 'Choose who you are: athlete, parent, teen, alumni or recruiter.');
   }
-  const dob = CalendarDate.safeParse(input.dob);
-  if (!dob.success) return refuse('dob', 'Enter your birth date.');
+  const dob = CalendarDate.safeParse(input.birthDate);
+  if (!dob.success) return refuse('birthDate', 'Enter your birth date.');
 
   const age = ageOn(dob.data, today);
   const band = ageBand(age);
   if (band === 'child') {
     return refuse(
-      'dob',
+      'birthDate',
       'Kids under 13 join through a parent or guardian, who runs their profile.',
     );
   }
-  if (age > MAX_AGE) return refuse('dob', 'Check your birth date.');
+  if (age > MAX_AGE) return refuse('birthDate', 'Check your birth date.');
 
   if (band === 'teen') {
-    if (input.userType !== 'teen') {
-      return refuse('userType', 'Under 18s join as a teammate (teen account).');
+    if (input.accountType !== 'teen') {
+      return refuse('accountType', 'Under 18s join as a teammate (teen account).');
     }
     if (input.parentAgreed !== true) {
       return refuse('parentAgreed', 'Confirm a parent or guardian agreed to you joining.');
     }
-  } else if (input.userType === 'teen') {
-    return refuse('userType', 'The teammate account is for 13 to 17 year olds.');
+  } else if (input.accountType === 'teen') {
+    return refuse('accountType', 'The teammate account is for 13 to 17 year olds.');
   }
 
-  if (input.userType === 'recruiter' && isPersonalEmailDomain(emailDomain(input.email))) {
+  if (input.accountType === 'recruiter' && isPersonalEmailDomain(emailDomain(input.email))) {
     return refuse('email', 'Personal email addresses can’t be used. Use your work email.');
   }
   return null;

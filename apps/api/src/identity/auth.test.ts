@@ -65,8 +65,8 @@ const signUp = (overrides: Record<string, unknown> = {}) =>
     password: PASSWORD,
     name: 'Maya',
     lastName: 'Okafor',
-    userType: 'athlete',
-    dob: '2004-03-14',
+    accountType: 'athlete',
+    birthDate: '2004-03-14',
     acceptTerms: true,
     ...overrides,
   });
@@ -144,19 +144,19 @@ describe('sign-up', () => {
   });
 
   it('refuses under-13s and stores nothing', async () => {
-    const res = await signUp({ dob: '2016-01-01' });
+    const res = await signUp({ birthDate: '2016-01-01' });
     expect(res.statusCode).toBe(400);
-    expect(res.json()).toMatchObject({ code: 'SIGNUP_REFUSED', field: 'dob' });
+    expect(res.json()).toMatchObject({ code: 'SIGNUP_REFUSED', field: 'birthDate' });
     expect(await userByEmail('maya@tufts.edu')).toBeUndefined();
     expect(mailer.sent).toHaveLength(0);
   });
 
   it('makes 13 to 17 year olds teens, and records that a parent agreed', async () => {
-    const teen = { dob: '2011-05-01', userType: 'teen' };
+    const teen = { birthDate: '2011-05-01', accountType: 'teen' };
     expect((await signUp(teen)).json()).toMatchObject({ field: 'parentAgreed' });
     expect(
-      (await signUp({ ...teen, userType: 'athlete', parentAgreed: true })).json(),
-    ).toMatchObject({ field: 'userType' });
+      (await signUp({ ...teen, accountType: 'athlete', parentAgreed: true })).json(),
+    ).toMatchObject({ field: 'accountType' });
 
     expect((await signUp({ ...teen, parentAgreed: true })).statusCode).toBe(200);
     const user = await userByEmail('maya@tufts.edu');
@@ -169,9 +169,9 @@ describe('sign-up', () => {
   });
 
   it('never lets anyone sign up as staff or a coach, or set server-owned fields', async () => {
-    for (const userType of ['staff', 'coach']) {
-      const res = await signUp({ userType });
-      expect(res.statusCode, userType).toBe(400);
+    for (const accountType of ['staff', 'coach']) {
+      const res = await signUp({ accountType });
+      expect(res.statusCode, accountType).toBe(400);
     }
     // Status and company can't be chosen by the caller: Better Auth refuses the field itself.
     const org = await addCompany(['northbeam.com']);
@@ -202,7 +202,11 @@ describe('sign-up', () => {
 });
 
 describe('recruiter sign-up', () => {
-  const recruiter = (email: string) => ({ email, userType: 'recruiter', dob: '1990-02-02' });
+  const recruiter = (email: string) => ({
+    email,
+    accountType: 'recruiter',
+    birthDate: '1990-02-02',
+  });
 
   it('admits an address on a registered domain, or a subdomain, and links the company', async () => {
     const org = await addCompany(['northbeam.com']);
@@ -227,7 +231,7 @@ describe('recruiter sign-up', () => {
 
   it('must be an adult', async () => {
     await addCompany(['northbeam.com']);
-    const res = await signUp({ ...recruiter('sam@northbeam.com'), dob: '2010-01-01' });
+    const res = await signUp({ ...recruiter('sam@northbeam.com'), birthDate: '2010-01-01' });
     expect(res.statusCode).toBe(400);
   });
 });
@@ -321,6 +325,14 @@ describe('suspension and deletion', () => {
       .set({ status: 'suspended' })
       .where(eq(schema.users.email, 'maya@tufts.edu'));
     expect((await whoami(cookie)).statusCode).toBe(401);
+    // Its sessions are gone, so Better Auth's own endpoints say "signed out" too.
+    const session = await app.inject({
+      method: 'GET',
+      url: '/api/auth/get-session',
+      headers: { cookie },
+    });
+    expect(session.json()).toBeNull();
+    expect(await db.select().from(schema.authSessions)).toHaveLength(0);
     const res = await signIn();
     expect(res.statusCode).toBe(403);
     expect(res.json().code).toBe('ACCOUNT_SUSPENDED');
@@ -329,8 +341,8 @@ describe('suspension and deletion', () => {
   it('suspending a company locks out its recruiters', async () => {
     const org = await addCompany(['northbeam.com']);
     const cookie = await verifiedSignIn('sam@northbeam.com', {
-      userType: 'recruiter',
-      dob: '1990-02-02',
+      accountType: 'recruiter',
+      birthDate: '1990-02-02',
     });
     expect((await whoami(cookie)).json().userType).toBe('recruiter');
     await db.update(schema.orgs).set({ status: 'suspended' }).where(eq(schema.orgs.id, org.id));
@@ -390,5 +402,261 @@ describe('password reset', () => {
     const res = await post('/api/auth/request-password-reset', { email: 'ghost@tufts.edu' });
     expect(res.statusCode).toBe(200);
     expect(mailer.sent).toHaveLength(0);
+  });
+});
+
+describe('attack: choosing or changing your own account type or birth date', () => {
+  it('can’t be done through Better Auth’s update-user endpoint, which is switched off', async () => {
+    const cookie = await verifiedSignIn();
+    for (const change of [{ userType: 'staff' }, { userType: 'coach' }, { dob: '1990-01-01' }]) {
+      const res = await post('/api/auth/update-user', change, { cookie });
+      expect(res.statusCode, JSON.stringify(change)).toBe(404);
+    }
+    const user = await userByEmail('maya@tufts.edu');
+    expect(user).toMatchObject({ userType: 'athlete', dob: '2004-03-14' });
+    expect((await whoami(cookie)).json().userType).toBe('athlete');
+  });
+
+  it('can’t be done at sign-up by sending the stored field names', async () => {
+    for (const field of [{ userType: 'staff' }, { dob: '1990-01-01' }]) {
+      const res = await signUp(field);
+      expect(res.statusCode, JSON.stringify(field)).toBe(400);
+      expect(res.json().code).toBe('FIELD_NOT_ALLOWED');
+    }
+    expect(await userByEmail('maya@tufts.edu')).toBeUndefined();
+  });
+
+  it('serves none of the account endpoints we don’t use', async () => {
+    const cookie = await verifiedSignIn();
+    for (const path of [
+      '/api/auth/delete-user',
+      '/api/auth/change-email',
+      '/api/auth/update-session',
+      '/api/auth/sign-in/social',
+      '/api/auth/link-social',
+    ]) {
+      expect((await post(path, {}, { cookie })).statusCode, path).toBe(404);
+    }
+    // The account still exists and still signs in.
+    expect((await whoami(cookie)).statusCode).toBe(200);
+  });
+});
+
+describe('attack: stealing a session token from a page', () => {
+  it('no response carries a session token, only the HttpOnly cookie does', async () => {
+    await signUp();
+    await open(linkTo('maya@tufts.edu'));
+    const res = await signIn();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).not.toHaveProperty('token');
+    const cookie = cookieOf(res);
+    const token = res.cookies[0]!.value.split('.')[0]!;
+
+    const session = await app.inject({
+      method: 'GET',
+      url: '/api/auth/get-session',
+      headers: { cookie },
+    });
+    expect(session.statusCode).toBe(200);
+    expect(session.json().session).not.toHaveProperty('token');
+    const sessions = await app.inject({
+      method: 'GET',
+      url: '/api/auth/list-sessions',
+      headers: { cookie },
+    });
+    expect(sessions.statusCode).toBe(200);
+    for (const body of [res.body, session.body, sessions.body]) expect(body).not.toContain(token);
+    // Revoking one session needs its token, so that endpoint is off; signing out still works.
+    expect((await post('/api/auth/revoke-session', { token }, { cookie })).statusCode).toBe(404);
+  });
+});
+
+describe('attack: dodging the rate limit', () => {
+  /** A separate app with rate limiting on, as in production, and `trustProxy` proxy hops. */
+  const limitedApp = async (trustProxy: number) =>
+    buildApp({
+      sessionSecret: 's'.repeat(32),
+      corsOrigins: [PORTAL],
+      trustProxy,
+      identity: {
+        db,
+        secret: 's'.repeat(32),
+        baseURL: 'http://localhost:3000',
+        links: { portalUrl: 'http://portal.test', athleteAppUrl: 'http://app.test' },
+        mailer,
+        production: false,
+        rateLimit: true,
+      },
+    });
+  const attempt = (
+    limited: Awaited<ReturnType<typeof limitedApp>>,
+    remoteAddress: string,
+    forwardedFor?: string,
+  ) =>
+    limited.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in/email',
+      remoteAddress,
+      payload: { email: 'maya@tufts.edu', password: 'a wrong guess here' },
+      headers: { origin: PORTAL, ...(forwardedFor ? { 'x-forwarded-for': forwardedFor } : {}) },
+    });
+
+  it('limits password guesses per caller, whatever IP they claim in headers', async () => {
+    const limited = await limitedApp(0);
+    const statuses = [];
+    for (let i = 0; i < 23; i++) {
+      statuses.push((await attempt(limited, '203.0.113.7', `198.51.100.${i}`)).statusCode);
+    }
+    // 20 a minute per caller, then refused, whatever IP each request claimed.
+    expect(statuses.slice(0, 20).every((s) => s === 401)).toBe(true);
+    expect(statuses.slice(20)).toEqual([429, 429, 429]);
+    // Someone else is unaffected.
+    expect((await attempt(limited, '203.0.113.8')).statusCode).toBe(401);
+    await limited.close();
+  });
+
+  it('behind our proxy, limits each real caller the proxy reports, separately', async () => {
+    const limited = await limitedApp(1);
+    const proxy = '10.0.0.2';
+    for (let i = 0; i < 20; i++) await attempt(limited, proxy, '203.0.113.7');
+    expect((await attempt(limited, proxy, '203.0.113.7')).statusCode).toBe(429);
+    // A different user arriving through the same proxy has their own allowance.
+    expect((await attempt(limited, proxy, '203.0.113.9')).statusCode).toBe(401);
+    await limited.close();
+  });
+});
+
+describe('hardening', () => {
+  it('stores passwords as argon2id hashes, never as text', async () => {
+    await signUp();
+    const [account] = await db.select().from(schema.authAccounts);
+    expect(account!.providerId).toBe('credential');
+    expect(account!.password).toMatch(/^\$argon2id\$v=19\$m=65536,p=4,t=3\$/);
+    expect(account!.password).not.toContain(PASSWORD);
+  });
+
+  it('a duplicate sign-up doesn’t reveal the real account', async () => {
+    const first = await signUp();
+    const second = await signUp();
+    expect(second.statusCode).toBe(first.statusCode);
+    expect(second.json().user.id).not.toBe((await userByEmail('maya@tufts.edu'))!.id);
+  });
+
+  it('a wrong password never emails the account owner', async () => {
+    await signUp();
+    mailer.sent.length = 0;
+    expect((await signIn('maya@tufts.edu', 'not my password!')).statusCode).toBe(401);
+    expect(mailer.sent).toHaveLength(0);
+    // The right password on an unverified account does send a fresh link.
+    expect((await signIn()).statusCode).toBe(403);
+    expect(mailer.sent).toHaveLength(1);
+  });
+
+  it('refuses links edited to end on someone else’s site, before doing anything', async () => {
+    await signUp();
+    const real = linkTo('maya@tufts.edu');
+    for (const target of [
+      'https://evil.example/phish',
+      '//evil.example/phish',
+      'https://localhost:5173.evil.example',
+      'javascript:alert(1)',
+    ]) {
+      const link = new URL(real);
+      link.searchParams.set('callbackURL', target);
+      const res = await open(link);
+      expect(res.statusCode, target).toBe(400);
+      expect(res.json().code).toBe('INVALID_REDIRECT');
+    }
+    // Nothing was verified by the edited links; the real one still works.
+    expect((await userByEmail('maya@tufts.edu'))!.emailVerified).toBe(false);
+    expect((await open(real)).headers.location).toBe('http://app.test/verified');
+  });
+
+  it('accepts our own landing pages, including the app’s deep-link scheme', async () => {
+    await signUp();
+    const link = linkTo('maya@tufts.edu');
+    link.searchParams.set('callbackURL', 'teamimpact://verified');
+    const res = await open(link);
+    expect(res.statusCode).toBe(302);
+    expect(res.headers.location).toBe('teamimpact://verified');
+  });
+
+  it('a reset email links only to our own app, whatever redirect the request asks for', async () => {
+    await verifiedSignIn();
+    mailer.sent.length = 0;
+    const evil = await post('/api/auth/request-password-reset', {
+      email: 'maya@tufts.edu',
+      redirectTo: 'https://evil.example/steal',
+    });
+    // Refused outright, and nothing is sent.
+    expect(evil.statusCode).toBe(400);
+    expect(mailer.sent).toHaveLength(0);
+    const ok = await post('/api/auth/request-password-reset', {
+      email: 'maya@tufts.edu',
+      redirectTo: 'http://app.test/reset-password',
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(mailer.sent.at(-1)!.text).not.toContain('evil.example');
+  });
+
+  it('uses Secure, __Secure- prefixed cookies in production', async () => {
+    const prod = await buildApp({
+      sessionSecret: 's'.repeat(32),
+      corsOrigins: ['https://portal.teamimpact.org'],
+      identity: {
+        db,
+        secret: 's'.repeat(32),
+        baseURL: 'https://api.teamimpact.org',
+        links: { portalUrl: 'https://portal.teamimpact.org', athleteAppUrl: 'https://app.test' },
+        mailer,
+        production: true,
+      },
+    });
+    await signUp();
+    await open(linkTo('maya@tufts.edu'));
+    const res = await prod.inject({
+      method: 'POST',
+      url: '/api/auth/sign-in/email',
+      payload: { email: 'maya@tufts.edu', password: PASSWORD },
+      headers: { origin: 'https://portal.teamimpact.org' },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.cookies[0]).toMatchObject({
+      name: '__Secure-ti.session_token',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'Lax',
+    });
+    await prod.close();
+  });
+});
+
+describe('rate limits on emails', () => {
+  it('sends at most 3 reset emails per caller every 5 minutes', async () => {
+    const limited = await buildApp({
+      sessionSecret: 's'.repeat(32),
+      corsOrigins: [PORTAL],
+      identity: {
+        db,
+        secret: 's'.repeat(32),
+        baseURL: 'http://localhost:3000',
+        links: { portalUrl: 'http://portal.test', athleteAppUrl: 'http://app.test' },
+        mailer,
+        production: false,
+        rateLimit: true,
+      },
+    });
+    const ask = () =>
+      limited.inject({
+        method: 'POST',
+        url: '/api/auth/request-password-reset',
+        remoteAddress: '203.0.113.50',
+        payload: { email: 'anyone@tufts.edu' },
+        headers: { origin: PORTAL },
+      });
+    const statuses = [];
+    for (let i = 0; i < 4; i++) statuses.push((await ask()).statusCode);
+    expect(statuses).toEqual([200, 200, 200, 429]);
+    await limited.close();
   });
 });
