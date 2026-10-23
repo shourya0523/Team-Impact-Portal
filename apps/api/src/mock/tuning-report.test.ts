@@ -6,7 +6,6 @@ import {
   median,
   labelOf,
   overlap,
-  SWEEP,
   sweepReport,
   targetResults,
   teamLeadHours,
@@ -96,17 +95,22 @@ describe('the pilot ranking against the agreed targets', () => {
     expect(missed).toContain('VIRAL beats');
   });
 
-  it('sweeps the whole grid, with the pilot ranking meeting every target there too', () => {
-    const sweep = sweepReport();
-    const rows = sweep.split('\n').filter((line) => /^\| \d+ \|/.test(line));
-    const size =
-      SWEEP.halfLifeHours.length *
-      SWEEP.team.length *
-      SWEEP.damping.length *
-      SWEEP.commentWeight.length;
-    expect(rows).toHaveLength(size);
-    const pilot = rows.find((line) => line.includes(`| ${labelOf(PILOT_RANKING)} |`))!;
-    const [met, total] = pilot.split('|')[3]!.trim().split('/');
+  it('sweeps a grid, best first, with the pilot ranking meeting every target', () => {
+    // A small grid: the full 120-setting sweep is for `feed:tune --sweep`, not CI.
+    const grid = {
+      halfLifeHours: [48, PILOT_RANKING.halfLifeHours],
+      team: [PILOT_RANKING.communityWeight!.team!],
+      damping: [PILOT_RANKING.damping],
+      commentWeight: [PILOT_RANKING.commentWeight],
+    };
+    const rows = sweepReport(grid)
+      .split('\n')
+      .filter((line) => /^\| \d+ \|/.test(line));
+    expect(rows).toHaveLength(2);
+    const [met, total] = rows[0]!.split('|')[3]!.trim().split('/');
+    expect(rows[0]).toContain(`| ${labelOf(PILOT_RANKING)} |`);
     expect(met).toBe(total);
+    expect(rows[1]).toContain('48h');
+    expect(rows[1]).not.toContain('| – |');
   });
 });

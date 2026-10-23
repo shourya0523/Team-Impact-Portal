@@ -262,6 +262,16 @@ export interface TargetResult {
  * members. Freshness is measured against plain newest first, the freshest feed the data allows
  * (some personas simply have no day's worth of posts).
  */
+/** Plain newest first's median top-20 age per persona. The tuning world never changes: once. */
+const freshestCache = new Map<string, number>();
+const freshestFor = (user: MockUser) => {
+  if (!freshestCache.has(user.id)) {
+    const baseline = measure({ label: 'newest first', ranking: null }, user);
+    freshestCache.set(user.id, baseline.measures.freshness);
+  }
+  return freshestCache.get(user.id)!;
+};
+
 export const targetResults = (ranking: HeuristicParams): TargetResult[] => {
   const results: TargetResult[] = [];
   const add = (target: string, persona: string, value: string, pass: boolean) =>
@@ -284,7 +294,7 @@ export const targetResults = (ranking: HeuristicParams): TargetResult[] => {
     if (kinds.size >= 4) {
       add('≥ 3 communities in top 10', name, String(measures.variety), measures.variety >= 3);
     }
-    const freshest = measure({ label: 'newest first', ranking: null }, user).measures.freshness;
+    const freshest = freshestFor(user);
     add(
       'median age of top 20 ≤ newest first + 12h',
       name,
@@ -299,11 +309,18 @@ export const targetResults = (ranking: HeuristicParams): TargetResult[] => {
   return results;
 };
 
+export interface SweepGrid {
+  halfLifeHours: number[];
+  team: number[];
+  damping: readonly ('log' | 'sqrt')[];
+  commentWeight: number[];
+}
+
 /** The sweep grid: every combination is tried. */
-export const SWEEP = {
+export const SWEEP: SweepGrid = {
   halfLifeHours: [12, 18, 24, 36, 48],
   team: [2, 2.5, 3, 4],
-  damping: ['log', 'sqrt'] as const,
+  damping: ['log', 'sqrt'],
   commentWeight: [1, 2, 3],
 };
 
@@ -311,11 +328,11 @@ export const SWEEP = {
  * One row per setting in the grid, most targets met first; among ties, the team share closest to
  * the middle of its range (65%), averaged over personas, since that's the main trade-off.
  */
-export const sweepReport = () => {
-  const rows = SWEEP.halfLifeHours.flatMap((halfLifeHours) =>
-    SWEEP.team.flatMap((team) =>
-      SWEEP.damping.flatMap((damping) =>
-        SWEEP.commentWeight.map((commentWeight) => {
+export const sweepReport = (grid: SweepGrid = SWEEP) => {
+  const rows = grid.halfLifeHours.flatMap((halfLifeHours) =>
+    grid.team.flatMap((team) =>
+      grid.damping.flatMap((damping) =>
+        grid.commentWeight.map((commentWeight) => {
           const ranking: HeuristicParams = {
             ...PILOT_RANKING,
             halfLifeHours,
