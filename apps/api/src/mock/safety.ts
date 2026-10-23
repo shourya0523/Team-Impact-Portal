@@ -211,6 +211,8 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
+  // Their files go too, children's photos included (a parent owns their child's photo).
+  removeWhere(world.uploads, (x) => gone(x.ownerId));
   removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
   removeWhere(world.lists, (l) => gone(l.ownerId));
