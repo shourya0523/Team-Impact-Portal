@@ -16,13 +16,22 @@ export const actorOf = (world: MockWorld, u: MockUser): Actor => ({
   companyId: u.companyId ?? null,
 });
 
-export const cardFacts = (world: MockWorld, card: MockCard): CardFacts => ({
+/**
+ * `viewer`: who is looking, for the block between them and the card's owner. Null for checks
+ * about the card itself, with nobody in particular looking (`recruiterVisible`).
+ */
+export const cardFacts = (
+  world: MockWorld,
+  card: MockCard,
+  viewer: MockUser | null,
+): CardFacts => ({
   athleteId: card.face.athleteId,
   ownerRole: world.user(card.face.athleteId)?.role ?? 'athlete',
   teamId: card.face.teamId,
   published: card.visibility.published,
   openToRecruiting: card.visibility.openToRecruiting,
   ownerSuspended: isSuspended(world, card.face.athleteId),
+  blocked: viewer ? blockedBetween(world, viewer.id, card.face.athleteId) : false,
 });
 
 export const communityFacts = (

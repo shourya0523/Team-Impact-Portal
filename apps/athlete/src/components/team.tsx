@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import type { TeamMember, UserSummary } from '@team-impact/contracts';
 import { radius, spacing, colors } from '@team-impact/ui-tokens';
 import { useRole } from '@/navigation/role';
@@ -39,15 +40,18 @@ export function PersonRow({
   detail,
   children,
   right,
+  onPress,
 }: {
   user: UserSummary;
   detail: string;
   /** Extra lines under the detail, like a family's contact details. */
   children?: ReactNode;
   right?: ReactNode;
+  /** Opens the person's profile (where they can be reported or blocked). */
+  onPress?: () => void;
 }) {
-  return (
-    <View style={styles.row}>
+  const who = (
+    <>
       <Avatar name={fullName(user)} role={user.role} uri={user.avatarUrl ?? undefined} />
       <View style={styles.grow}>
         <Text weight="semibold">{fullName(user)}</Text>
@@ -56,10 +60,31 @@ export function PersonRow({
         </Text>
         {children}
       </View>
+    </>
+  );
+  return (
+    <View style={styles.row}>
+      {onPress ? (
+        // Only the person is tappable, so it never competes with buttons on the right.
+        <Pressable
+          style={[styles.row, styles.grow]}
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${fullName(user)}’s profile`}
+        >
+          {who}
+        </Pressable>
+      ) : (
+        who
+      )}
       {right}
     </View>
   );
 }
+
+/** Opens someone's profile, from a roster row or anywhere else a person is listed. */
+export const openProfile = (userId: string) =>
+  router.push({ pathname: '/me/profile/[id]', params: { id: userId } });
 
 /** Shown when the signed-in account isn't on a team yet. */
 export function NoTeam() {

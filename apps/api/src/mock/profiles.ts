@@ -20,6 +20,7 @@ import {
 import * as fx from './fixtures';
 import type { MockCard, MockUser } from './fixtures';
 import { actorOf, cardFacts } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 import type { MockChild } from './team';
 
@@ -99,7 +100,11 @@ export const createProfileState = (cards: MockCard[]): ProfileState => {
 
 /** Team and family only: the parent, and accounts on the child's team. Recruiters never. */
 export const canSeeChild = (world: MockWorld, child: MockChild, u: MockUser) =>
-  can(actorOf(world, u), 'child.read', { parentId: child.parentId, teamId: child.teamId });
+  can(actorOf(world, u), 'child.read', {
+    parentId: child.parentId,
+    teamId: child.teamId,
+    parentBlocked: blockedBetween(world, u.id, child.parentId),
+  });
 
 export const childProfile = (world: MockWorld, child: MockChild): ChildProfile => ({
   kind: 'child',
@@ -140,7 +145,8 @@ const canSeePerson = (world: MockWorld, t: MockUser, u: MockUser) => {
     role: t.role,
     teamIds: world.teamIdsOf(t.id),
     companyId: t.companyId ?? null,
-    card: card ? cardFacts(world, card) : null,
+    card: card ? cardFacts(world, card, u) : null,
+    blocked: blockedBetween(world, u.id, t.id),
     // Fellow members of an open interest community (never medical or private ones).
     sharesOpenCommunity: world.communities.some(
       (c) =>

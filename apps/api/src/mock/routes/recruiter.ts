@@ -25,7 +25,8 @@ export const registerRecruiterRoutes = (
     async (request) => {
       const u = requireRole(request, 'recruiter');
       const q = request.query;
-      let cards = world.cards.filter(world.recruiterCanSee);
+      // Published, open to recruiting, and not across a block with this recruiter.
+      let cards = world.cards.filter((card) => world.canReadCard(card, u));
 
       if (q.communityId) {
         if (!world.flags.identitySearch) throw httpError(400, 'The community filter is off');
@@ -76,9 +77,10 @@ export const registerRecruiterRoutes = (
     },
   );
 
-  app.get('/lists', { schema: { response: { 200: z.array(RecruiterList) } } }, async (request) =>
-    world.listsFor(requireRole(request, 'recruiter')).map(world.list),
-  );
+  app.get('/lists', { schema: { response: { 200: z.array(RecruiterList) } } }, async (request) => {
+    const u = requireRole(request, 'recruiter');
+    return world.listsFor(u).map((l) => world.list(l, u));
+  });
 
   app.get(
     '/lists/:id',
