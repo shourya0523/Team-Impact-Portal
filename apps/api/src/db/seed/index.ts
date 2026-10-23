@@ -78,6 +78,7 @@ const rows = {
   joinRequests: [] as Row<typeof schema.joinRequests>[],
   children: [] as Row<typeof schema.children>[],
   consentRecords: [] as Row<typeof schema.consentRecords>[],
+  authAccounts: [] as Row<typeof schema.authAccounts>[],
   contactVisibility: [] as Row<typeof schema.contactVisibility>[],
   deviceTokens: [] as Row<typeof schema.deviceTokens>[],
   blocks: [] as Row<typeof schema.blocks>[],
@@ -112,15 +113,24 @@ const addUser = (
     id: uuid(),
     userType,
     email: `${slug(firstName)}.${slug(lastName)}.${++emailCounter}@example.test`,
-    passwordHash: DEV_PASSWORD_HASH,
     firstName,
     lastName,
     dob: faker.date.birthdate({ mode: 'age', min, max }).toISOString().slice(0, 10),
+    emailVerified: true,
     emailVerifiedAt: createdAt,
     createdAt,
     ...overrides,
   };
   rows.users.push(user);
+  // Every seeded account signs in with email and password (Better Auth's "credential" account).
+  rows.authAccounts.push({
+    id: uuid(),
+    userId: user.id,
+    accountId: user.id,
+    providerId: 'credential',
+    password: DEV_PASSWORD_HASH,
+    createdAt,
+  });
   rows.consentRecords.push({
     id: uuid(),
     userId: user.id,
@@ -1066,6 +1076,7 @@ const ORDER: [PgTable, object[]][] = [
   [schema.orgs, rows.orgs],
   [schema.orgDomains, rows.orgDomains],
   [schema.users, rows.users],
+  [schema.authAccounts, rows.authAccounts],
   [schema.teams, rows.teams],
   [schema.coachInvites, rows.coachInvites],
   [schema.groups, rows.groups],
