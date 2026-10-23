@@ -287,6 +287,72 @@ describe('teens: only ever seen in their team community', () => {
   });
 });
 
+describe('feeds: pages', () => {
+  type Page = { items: { id: string }[]; nextCursor: string | null } | null;
+
+  /**
+   * Every page in turn, `limit` at a time, joined back together. `expected` is the whole feed: a
+   * walk never needs more pages than it has posts (plus one), so a cursor that doesn't move on
+   * fails instead of looping forever.
+   */
+  const walk = (next: (cursor?: string) => Page, limit: number, expected: unknown[]) => {
+    const items: { id: string }[] = [];
+    let cursor: string | undefined;
+    for (let pages = 1; ; pages++) {
+      const page = next(cursor);
+      expect(page, 'a cursor we issued').not.toBeNull();
+      expect(page!.items.length).toBeLessThanOrEqual(limit);
+      items.push(...page!.items);
+      if (!page!.nextCursor) return items;
+      cursor = page!.nextCursor;
+      if (pages > expected.length + 1) throw new Error('paging never ended');
+    }
+  };
+
+  it('pages through every home and community feed to exactly the full feed', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    // A rally and comment on posts that land past the first page, so their counts come from
+    // the page they're on.
+    w.rallies.push({ postId: id(402), userId: USERS.jordan.id });
+    const comment = w.comments.find((k) => k.postId === id(405))!;
+    w.comments.push({ ...comment, id: id(1399) });
+
+    for (const u of w.users) {
+      const all = w.feed(u);
+      const home = walk((cursor) => w.feedPage(u, { cursor, limit: 2 }), 2, all);
+      expect(home, u.firstName).toEqual(all);
+      for (const c of w.communities) {
+        const inC = w.communityFeed(c, u);
+        const own = walk((cursor) => w.communityFeedPage(c, u, { cursor, limit: 2 }), 2, inC);
+        expect(own, `${u.firstName} in ${c.name}`).toEqual(inC);
+      }
+    }
+    const jordan = walk(
+      (cursor) => w.feedPage(USERS.jordan, { cursor, limit: 2 }),
+      2,
+      w.feed(USERS.jordan),
+    );
+    expect(jordan.find((p) => p.id === id(402))).toMatchObject({ likedByMe: true });
+    expect(jordan.find((p) => p.id === id(405))).toMatchObject({ commentCount: 2 });
+  });
+
+  it('refuses a cursor from another feed, even one the reader can’t see', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const home = w.feedPage(USERS.jordan, { limit: 1 })!;
+    const team = w.communities.find((c) => c.id === TEAM)!;
+    const medical = w.communities.find((c) => c.id === MEDICAL)!;
+    expect(
+      w.communityFeedPage(team, USERS.jordan, { cursor: home.nextCursor!, limit: 1 }),
+    ).toBeNull();
+    // The coach doesn't read the medical community: an empty page, but a bad cursor is still bad.
+    expect(w.communityFeedPage(medical, USERS.coach, { limit: 20 })).toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(w.communityFeedPage(medical, USERS.coach, { cursor: 'nope', limit: 20 })).toBeNull();
+  });
+});
+
 describe('feeds: people on two teams', () => {
   it('puts both teams first, mixed newest first, and keeps each team page to its own', () => {
     const w = new MockWorld({ identitySearch: true, medicalCommunities: true });

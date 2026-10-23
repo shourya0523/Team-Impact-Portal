@@ -19,7 +19,7 @@ import {
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import { rank } from './feed';
+import { pageOf, rank } from './feed';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
@@ -32,6 +32,9 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+
+/** A feed page request: the route's query, plus the time for tests that need a fixed one. */
+type PageRequest = { cursor?: string; limit: number; now?: string };
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -237,7 +240,7 @@ export class MockWorld {
 
   /**
    * Approved comment counts and `u`'s rallies for a set of posts, one pass over each list rather
-   * than one per post.
+   * than one per post. `posts` must already be ones `u` can see (`canSeePost`); this only counts.
    *
    * Kept simple on purpose: the mock stores comments and rallies as flat arrays with no index by
    * post, so this reads every comment and rally in the world, not just those on `posts`. Fine at
@@ -285,15 +288,49 @@ export class MockWorld {
       : { ...shared, kind: p.kind };
   };
 
-  /** The posts `u` sees in `readable` (communities they read), in feed order (`./feed.ts`). */
-  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] => {
+  /** The stored posts `u` sees in `readable` (communities they read), in feed order (`./feed.ts`). */
+  private rankedIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
     const communityOf = (p: MockPost) => readable.get(p.communityId)!;
     const visible = this.posts.filter(
       (p) => readable.has(p.communityId) && this.canSeePost(p, communityOf(p), u),
     );
-    const counts = this.engagement(visible, communityOf, u);
-    return rank(visible, communityOf).map((p) => this.toPost(p, communityOf(p), counts));
+    return { ranked: rank(visible, communityOf), communityOf };
   };
+
+  /** Stored posts in the shape the API returns, counting comments and rallies for these only. */
+  private shape = (posts: MockPost[], communityOf: (p: MockPost) => MockCommunity, u: MockUser) => {
+    const counts = this.engagement(posts, communityOf, u);
+    return posts.map((p) => this.toPost(p, communityOf(p), counts));
+  };
+
+  /** Every post `u` sees in `readable`, in feed order. The routes page through `feedPage`. */
+  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] => {
+    const { ranked, communityOf } = this.rankedIn(readable, u);
+    return this.shape(ranked, communityOf, u);
+  };
+
+  /**
+   * One page of the posts `u` sees in `readable`. Only the page's posts are counted and shaped.
+   * Null for a cursor that isn't valid for this feed (the route answers 400).
+   */
+  private pageIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    feed: string,
+    { cursor, limit, now = new Date().toISOString() }: PageRequest,
+  ): { items: Post[]; nextCursor: string | null } | null => {
+    const { ranked, communityOf } = this.rankedIn(readable, u);
+    const page = pageOf(ranked, communityOf, { feed, cursor, limit, now });
+    return page && { items: this.shape(page.posts, communityOf, u), nextCursor: page.nextCursor };
+  };
+
+  /** One page of `u`'s home feed. */
+  feedPage = (u: MockUser, request: PageRequest) =>
+    this.pageIn(this.homeCommunities(u), u, 'home', request);
+
+  /** One page of a community's own feed: empty for anyone who doesn't read it. */
+  communityFeedPage = (c: MockCommunity, u: MockUser, request: PageRequest) =>
+    this.pageIn(this.readsCommunity(c, u) ? new Map([[c.id, c]]) : new Map(), u, c.id, request);
 
   /** One post as `u` reads it in `c`, or undefined if they can't. Callers check `u` reads `c`. */
   postView = (p: MockPost, c: MockCommunity, u: MockUser): Post | undefined =>
