@@ -4,7 +4,11 @@ import { tuningWorld } from './tuning';
 import {
   hoursAboveQuiet,
   median,
+  labelOf,
   overlap,
+  SWEEP,
+  sweepReport,
+  targetResults,
   teamLeadHours,
   PERSONAS,
   tuningReport,
@@ -65,5 +69,44 @@ describe('tuning report', () => {
 
   it('leaves every other world on the default ranking', () => {
     expect(tuningWorld().ranking).toEqual(PILOT_RANKING);
+  });
+});
+
+describe('the pilot ranking against the agreed targets', () => {
+  const failures = (results: ReturnType<typeof targetResults>) =>
+    results
+      .filter((r) => !r.pass)
+      .map((r) => `${r.target}${r.persona ? ` (${r.persona})` : ''}: ${r.value}`);
+
+  it('meets every target, for every persona it applies to', () => {
+    const results = targetResults(PILOT_RANKING);
+    expect(results.length).toBeGreaterThanOrEqual(15);
+    expect(failures(results)).toEqual([]);
+  });
+
+  it('would catch a team-heavy, slow-decaying formula', () => {
+    const heavy = {
+      ...PILOT_RANKING,
+      halfLifeHours: 48,
+      communityWeight: { ...PILOT_RANKING.communityWeight, team: 6 },
+    };
+    const missed = failures(targetResults(heavy)).join('\n');
+    expect(missed).toContain('team post leads');
+    expect(missed).toContain('team share of top 10');
+    expect(missed).toContain('VIRAL beats');
+  });
+
+  it('sweeps the whole grid, with the pilot ranking meeting every target there too', () => {
+    const sweep = sweepReport();
+    const rows = sweep.split('\n').filter((line) => /^\| \d+ \|/.test(line));
+    const size =
+      SWEEP.halfLifeHours.length *
+      SWEEP.team.length *
+      SWEEP.damping.length *
+      SWEEP.commentWeight.length;
+    expect(rows).toHaveLength(size);
+    const pilot = rows.find((line) => line.includes(`| ${labelOf(PILOT_RANKING)} |`))!;
+    const [met, total] = pilot.split('|')[3]!.trim().split('/');
+    expect(met).toBe(total);
   });
 });

@@ -245,3 +245,115 @@ export const tuningReport = (variants: Variant[] = VARIANTS) => {
   }
   return [...lines, '', ...details].join('\n');
 };
+
+// Targets and the sweep (step 6: agreed before looking at results).
+
+export interface TargetResult {
+  target: string;
+  /** Empty for targets about the formula itself rather than one persona's feed. */
+  persona: string;
+  value: string;
+  pass: boolean;
+}
+
+/**
+ * Every agreed target, checked against the tuning world. Per persona where it applies: team share
+ * only for people on a team, variety only for people in 4 or more communities, QUIET only for its
+ * members. Freshness is measured against plain newest first, the freshest feed the data allows
+ * (some personas simply have no day's worth of posts).
+ */
+export const targetResults = (ranking: HeuristicParams): TargetResult[] => {
+  const results: TargetResult[] = [];
+  const add = (target: string, persona: string, value: string, pass: boolean) =>
+    results.push({ target, persona, value, pass });
+  const variant = { label: labelOf(ranking), ranking };
+
+  const lead = teamLeadHours(ranking);
+  add('team post leads 12–48h', '', `${Math.round(lead)}h`, lead >= 12 && lead <= 48);
+  const viral = hoursAboveQuiet(ranking, 80, 25);
+  add('VIRAL beats a new quiet post ≤ 72h', '', `${Math.round(viral)}h`, viral <= 72);
+
+  for (const { label, user } of PERSONAS) {
+    const name = label.split(' (')[0]!;
+    const { feed, measures } = measure(variant, user);
+    const kinds = new Set(feed.map((p) => p.community.id));
+    if (feed.some((p) => p.community.kind === 'team')) {
+      const share = measures.teamShare;
+      add('team share of top 10 50–80%', name, percent(share), share >= 0.5 && share <= 0.8);
+    }
+    if (kinds.size >= 4) {
+      add('≥ 3 communities in top 10', name, String(measures.variety), measures.variety >= 3);
+    }
+    const freshest = measure({ label: 'newest first', ranking: null }, user).measures.freshness;
+    add(
+      'median age of top 20 ≤ newest first + 12h',
+      name,
+      `${formatAge(measures.freshness)} vs ${formatAge(freshest)}`,
+      measures.freshness <= freshest + 12,
+    );
+    if (measures.quiet !== null) {
+      add('QUIET on page 1', name, cell(measures.quiet), measures.quiet <= TOP);
+    }
+    add('top 10 kept after an hour ≥ 80%', name, percent(measures.churn), measures.churn >= 0.8);
+  }
+  return results;
+};
+
+/** The sweep grid: every combination is tried. */
+export const SWEEP = {
+  halfLifeHours: [12, 18, 24, 36, 48],
+  team: [2, 2.5, 3, 4],
+  damping: ['log', 'sqrt'] as const,
+  commentWeight: [1, 2, 3],
+};
+
+/**
+ * One row per setting in the grid, most targets met first; among ties, the team share closest to
+ * the middle of its range (65%), averaged over personas, since that's the main trade-off.
+ */
+export const sweepReport = () => {
+  const rows = SWEEP.halfLifeHours.flatMap((halfLifeHours) =>
+    SWEEP.team.flatMap((team) =>
+      SWEEP.damping.flatMap((damping) =>
+        SWEEP.commentWeight.map((commentWeight) => {
+          const ranking: HeuristicParams = {
+            ...PILOT_RANKING,
+            halfLifeHours,
+            commentWeight,
+            damping,
+            communityWeight: { ...PILOT_RANKING.communityWeight, team },
+          };
+          const results = targetResults(ranking);
+          const shares = results
+            .filter((r) => r.target.startsWith('team share'))
+            .map((r) => Number(r.value.replace('%', '')) / 100);
+          return {
+            ranking,
+            met: results.filter((r) => r.pass).length,
+            total: results.length,
+            balance: shares.reduce((sum, s) => sum + Math.abs(s - 0.65), 0) / shares.length,
+            misses: results.filter((r) => !r.pass),
+          };
+        }),
+      ),
+    ),
+  );
+  rows.sort((a, b) => b.met - a.met || a.balance - b.balance);
+  return [
+    '# Feed ranking: sweep',
+    '',
+    `${rows.length} settings against the agreed targets (\`targetResults\` in`,
+    '`src/mock/tuning-report.ts`). Most targets met first; ties by team share nearest 65%.',
+    '',
+    '| # | Settings | Targets met | Misses |',
+    '|---|---|---|---|',
+    ...rows.map(
+      (r, i) =>
+        `| ${i + 1} | ${labelOf(r.ranking)} | ${r.met}/${r.total} | ${
+          r.misses
+            .map((m) => `${m.target}${m.persona ? ` (${m.persona}: ${m.value})` : ` (${m.value})`}`)
+            .join('; ') || '–'
+        } |`,
+    ),
+  ].join('\n');
+};

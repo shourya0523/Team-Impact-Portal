@@ -53,13 +53,14 @@ export const heuristic =
   };
 
 /**
- * The pilot's ranking until it's tuned on seeded data (`pnpm --filter @team-impact/api feed:tune`):
- * team 4, other communities 1.5, Team Impact 1, so a quiet team post stays above an equally quiet
- * post elsewhere for halfLife × log₂(4 / 1.5) ≈ 34 hours. Provisional; the chosen values go in
- * Notion "Stack decisions".
+ * The pilot's ranking, tuned on seeded data (`pnpm --filter @team-impact/api feed:tune --sweep`
+ * against the targets in `./tuning-report.ts`). Recency halves every 12 hours; a comment counts as
+ * two rallies; team 4, other communities 1.5, Team Impact 1, so a quiet team post stays above an
+ * equally quiet post elsewhere for 12 × log₂(4 / 1.5) ≈ 17 hours. Recorded in Notion "Stack
+ * decisions"; the lead may still adjust it.
  */
 export const PILOT_RANKING: HeuristicParams = {
-  halfLifeHours: 24,
+  halfLifeHours: 12,
   commentWeight: 2,
   damping: 'log',
   communityWeight: { team: 4, interest: 1.5, medical: 1.5, team_impact: 1 },
