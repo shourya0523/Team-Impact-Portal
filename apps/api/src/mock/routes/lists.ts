@@ -58,10 +58,13 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
         l.name.trim().toLowerCase() === name.trim().toLowerCase(),
     );
 
-  /** On the employer portal at all: never a child, teen or athlete who isn't open to recruiting. */
-  const visibleAthlete = (athleteId: string) => {
+  /**
+   * On the employer portal at all (never a child, teen or athlete who isn't open to recruiting),
+   * and not across a block with `u`.
+   */
+  const visibleAthlete = (athleteId: string, u: MockUser) => {
     const card = world.cards.find((c) => c.face.athleteId === athleteId);
-    if (!card || !world.recruiterCanSee(card)) throw httpError(404, 'No such athlete');
+    if (!card || !world.canReadCard(card, u)) throw httpError(404, 'No such athlete');
     return card;
   };
 
@@ -92,7 +95,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
         updatedAt: now,
       };
       world.lists.push(list);
-      return reply.status(201).send(world.list(list));
+      return reply.status(201).send(world.list(list, u));
     },
   );
 
@@ -112,7 +115,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       if (b.note !== undefined) list.note = b.note || null;
       if (b.sharedWithUserIds) list.sharedWithIds = [...new Set(b.sharedWithUserIds)];
       touch(list);
-      return world.list(list);
+      return world.list(list, u);
     },
   );
 
@@ -135,7 +138,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
         list.sharedWithIds.push(request.body.userId);
         touch(list);
       }
-      return world.list(list);
+      return world.list(list, u);
     },
   );
 
@@ -146,7 +149,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       const u = recruiter(request);
       const list = listOf(u, request.params.id);
       const { athleteId } = request.params;
-      visibleAthlete(athleteId);
+      visibleAthlete(athleteId, u);
       if (list.entries.some((e) => e.athleteId === athleteId)) {
         throw httpError(409, 'Already on this list');
       }
@@ -186,7 +189,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       if (!list.entries.some((e) => e.athleteId === athleteId)) {
         throw httpError(404, 'Not on this list');
       }
-      visibleAthlete(athleteId);
+      visibleAthlete(athleteId, u);
       const note = {
         id: world.newId(),
         athleteId,

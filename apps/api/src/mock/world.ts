@@ -358,7 +358,11 @@ export class MockWorld {
   };
 
   /** On the employer portal at all: a published card, open to recruiting, of an athlete. */
-  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card));
+  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card, null));
+
+  /** Whether `u` may read this card at all, blocks included (search, lists). */
+  canReadCard = (card: MockCard, u: MockUser) =>
+    can(actorOf(this, u), 'card.read', cardFacts(this, card, u));
 
   private static share = (
     contact: MockCard['contact'],
@@ -375,7 +379,7 @@ export class MockWorld {
     if (!card) return null;
     const face = this.cardFace(card);
     const none: ContactSharing = { email: false, phone: false, linkedin: false };
-    const facts = cardFacts(this, card);
+    const facts = cardFacts(this, card, u);
     const actor = actorOf(this, u);
     if (!can(actor, 'card.read', facts)) return null;
     const all: ContactSharing = { email: true, phone: true, linkedin: true };
@@ -395,13 +399,17 @@ export class MockWorld {
       (l) => l.companyId === u.companyId && (l.ownerId === u.id || l.sharedWithIds.includes(u.id)),
     );
 
-  private visibleEntries = (l: MockList) =>
+  /**
+   * A list's athletes that `u` may see: still on the employer portal, and not across a block with
+   * `u`. Per viewer, since colleagues share a list but each has their own blocks.
+   */
+  private visibleEntries = (l: MockList, u: MockUser) =>
     l.entries.filter((e) => {
       const card = this.cards.find((c) => c.face.athleteId === e.athleteId);
-      return card && this.recruiterCanSee(card);
+      return !!card && this.canReadCard(card, u);
     });
 
-  list = (l: MockList): RecruiterList => ({
+  list = (l: MockList, u: MockUser): RecruiterList => ({
     id: l.id,
     companyId: l.companyId,
     name: l.name,
@@ -409,14 +417,14 @@ export class MockWorld {
     note: l.note,
     owner: fx.summaryOf(this.user(l.ownerId)!),
     sharedWith: l.sharedWithIds.map((uid) => fx.summaryOf(this.user(uid)!)),
-    athleteCount: this.visibleEntries(l).length,
+    athleteCount: this.visibleEntries(l, u).length,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   });
 
   listDetail = (l: MockList, u: MockUser): RecruiterListDetail => ({
-    ...this.list(l),
-    entries: this.visibleEntries(l).map((e) => ({
+    ...this.list(l, u),
+    entries: this.visibleEntries(l, u).map((e) => ({
       card: this.cardFor(e.athleteId, u)!,
       addedBy: fx.summaryOf(this.user(e.addedById)!),
       addedAt: e.addedAt,
