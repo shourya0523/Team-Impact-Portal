@@ -64,6 +64,12 @@ function Person({ p }: { p: PersonProfile }) {
         <Avatar name={`${p.user.firstName} ${p.user.lastName}`} role={p.user.role} size="lg" />
         <Badge caps variant="brandTint" label={ROLE_LABEL[p.user.role]} />
       </View>
+      {/* A recruiter's profile sits under their company (PRD §2). */}
+      {p.company && (
+        <Text variant="small" color="secondary">
+          Recruiter at {p.company.name}
+        </Text>
+      )}
       {p.card && (
         <View style={styles.center}>
           <AthleteCard

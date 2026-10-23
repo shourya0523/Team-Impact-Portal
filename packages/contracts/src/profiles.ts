@@ -8,6 +8,7 @@ import {
   UpdateCardRequest,
 } from './cards';
 import { Id, PersonName, Timestamp } from './common';
+import { CompanySummary } from './companies';
 import {
   ContactDetails,
   ContactSharing,
@@ -51,6 +52,8 @@ export const PersonProfile = z.object({
   card: CardFace.nullable(),
   /** Only the channels shared with the viewer. Always empty for teen viewers. */
   contact: SharedContact,
+  /** Recruiters only: the company they recruit for. A recruiter's profile sits under it (PRD §2). */
+  company: CompanySummary.nullable(),
 });
 export type PersonProfile = z.infer<typeof PersonProfile>;
 
