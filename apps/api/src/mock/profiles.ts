@@ -201,7 +201,18 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     communities: profileCommunities(world, t, u),
     card,
     contact,
+    company: companyOf(world, t),
   };
+};
+
+/**
+ * A recruiter's company, shown on their profile (PRD §2). Everyone who may open a recruiter's
+ * profile at all (colleagues and staff, per `person.read`) may see who they recruit for.
+ */
+const companyOf = (world: MockWorld, t: MockUser) => {
+  if (t.role !== 'recruiter' || !t.companyId) return null;
+  const company = world.companies.find((c) => c.id === t.companyId);
+  return company ? { id: company.id, name: company.name } : null;
 };
 
 // Settings -----------------------------------------------------------------------------------------

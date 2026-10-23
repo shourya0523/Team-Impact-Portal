@@ -57,6 +57,10 @@ export const Company = z.object({
 });
 export type Company = z.infer<typeof Company>;
 
+/** A company as anyone allowed to see a recruiter sees it: its name, never its domains. */
+export const CompanySummary = Company.pick({ id: true, name: true });
+export type CompanySummary = z.infer<typeof CompanySummary>;
+
 /** Staff onboard a sponsor company with its email domains; its recruiters then sign up themselves. */
 export const CreateCompanyRequest = z.object({
   name: z.string().trim().min(1).max(120),
