@@ -337,6 +337,50 @@ describe('mock API: communities', () => {
   });
 });
 
+describe('mock API: feed pages', () => {
+  /** Every page of `url`, two at a time over HTTP, joined back together. */
+  const walk = async (get: Awaited<ReturnType<typeof signIn>>['get'], url: string, max: number) => {
+    const items: string[] = [];
+    let cursor: string | null = null;
+    for (let pages = 1; ; pages++) {
+      const q = new URLSearchParams({ limit: '2', ...(cursor ? { cursor } : {}) });
+      const { body } = await get(`${url}?${q}`);
+      items.push(...ids(body.items));
+      cursor = body.nextCursor;
+      if (!cursor) return items;
+      if (pages > max + 1) throw new Error('paging never ended');
+    }
+  };
+
+  it('walks both feeds page by page to the same posts as one big page', async () => {
+    const { get } = await signIn('athlete');
+    for (const url of ['/feed', `/communities/${FIRST_GEN}/posts`]) {
+      const all = ids((await get(`${url}?limit=100`)).body.items);
+      expect(await walk(get, url, all.length), url).toEqual(all);
+    }
+  });
+
+  it('answers 400 for a cursor it didn’t issue, or one from another feed', async () => {
+    const { get } = await signIn('athlete');
+    for (const url of ['/feed?cursor=nope', `/communities/${TEAM}/posts?cursor=nope`]) {
+      const res = await get(url);
+      expect(res.status, url).toBe(400);
+      expect(res.body.error.code).toBe('bad_request');
+    }
+    const home = (await get('/feed?limit=1')).body.nextCursor;
+    const q = new URLSearchParams({ cursor: home });
+    expect((await get(`/communities/${TEAM}/posts?${q}`)).status).toBe(400);
+  });
+
+  it('answers 404, not 400, when the reader can’t see the community at all', async () => {
+    const teen = await signIn('teen');
+    expect((await teen.get(`/communities/${MEDICAL}/posts?cursor=nope`)).status).toBe(404);
+    await close?.();
+    const recruiter = await signIn('recruiter');
+    expect((await recruiter.get(`/communities/${TEAM}/posts?cursor=nope`)).status).toBe(404);
+  });
+});
+
 describe('mock API: staff and join flow', () => {
   it('gives staff the teams, companies and moderation pages, and no one else', async () => {
     const staff = await signIn('staff');
