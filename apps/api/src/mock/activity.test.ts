@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import {
@@ -350,6 +350,30 @@ describe('feeds: pages', () => {
       nextCursor: null,
     });
     expect(w.communityFeedPage(medical, USERS.coach, { cursor: 'nope', limit: 20 })).toBeNull();
+  });
+
+  it('neither repeats nor skips when a post is approved between two pages', async () => {
+    // New posts are stamped with the clock; fix it after the fixtures (Oct 8–12) so the new post
+    // is the newest team post and lands at the very top.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-20T12:00:00.000Z') });
+    try {
+      const { as } = await world();
+      const jordan = await as('athlete');
+      const first = (await jordan.get('/feed?limit=2')).body;
+      expect(ids(first.items)).toEqual([406, 401].map(id));
+
+      const coach = await as('coach');
+      const created = await coach.post(`/communities/${TEAM}/posts`, { text: 'Lift moved to 8.' });
+      await approve(await as('staff'), created.body.id);
+
+      // A position-based cursor would now return 401 again (everything moved down one).
+      const q = new URLSearchParams({ limit: '2', cursor: first.nextCursor });
+      expect(ids((await jordan.get(`/feed?${q}`)).body.items)).toEqual([408, 403].map(id));
+      // Starting over shows it first: the second page left it out on purpose.
+      expect(ids((await jordan.get('/feed?limit=2')).body.items)[0]).toBe(created.body.id);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

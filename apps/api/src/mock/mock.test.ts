@@ -372,6 +372,29 @@ describe('mock API: feed pages', () => {
     expect((await get(`/communities/${TEAM}/posts?${q}`)).status).toBe(400);
   });
 
+  it('pages 20 by default, allows up to 100, and refuses 0 or 101', async () => {
+    const { get, send } = await signIn('coach');
+    // Twenty held posts: the coach sees their own, so the coach's feeds grow past 20.
+    for (let n = 1; n <= 20; n++) {
+      expect(
+        (await send('POST', `/communities/${TEAM}/posts`, { text: `Drill ${n}` })).status,
+      ).toBe(201);
+    }
+    const home = (await get('/feed?limit=100')).body.items.length;
+    const team = (await get(`/communities/${TEAM}/posts?limit=100`)).body.items.length;
+    expect([home, team]).toEqual([26, 22]);
+
+    for (const url of ['/feed', `/communities/${TEAM}/posts`]) {
+      const first = (await get(url)).body;
+      expect(first.items, url).toHaveLength(20);
+      expect(first.nextCursor, url).not.toBeNull();
+      expect((await get(`${url}?limit=100`)).body.nextCursor, url).toBeNull();
+      for (const limit of [0, 101]) {
+        expect((await get(`${url}?limit=${limit}`)).status, `${url} limit ${limit}`).toBe(400);
+      }
+    }
+  });
+
   it('answers 404, not 400, when the reader can’t see the community at all', async () => {
     const teen = await signIn('teen');
     expect((await teen.get(`/communities/${MEDICAL}/posts?cursor=nope`)).status).toBe(404);
