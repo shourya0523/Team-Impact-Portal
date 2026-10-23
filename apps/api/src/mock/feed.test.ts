@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { pageOf, rank } from './feed';
-import { COMMUNITIES, id, type MockPost } from './fixtures';
+import { heuristic, type HeuristicParams, pageOf, rank } from './feed';
+import { COMMUNITIES, id, type MockCommunity, type MockPost } from './fixtures';
 
 const TEAM = COMMUNITIES.find((c) => c.kind === 'team')!;
 const INTEREST = COMMUNITIES.find((c) => c.kind === 'interest')!;
@@ -153,9 +153,118 @@ describe('feed: cursors that aren’t ours', () => {
     expect(request(encode({ ...decoded, v: 2 }))).toBeNull();
     expect(request(encode({ ...decoded, asOf: 'yesterday' }))).toBeNull();
     expect(request(encode({ ...decoded, after: { ...decoded.after, tier: 'x' } }))).toBeNull();
+    expect(request(encode({ ...decoded, after: { ...decoded.after, score: 'x' } }))).toBeNull();
   });
 
   it('refuses a cursor from another feed', () => {
     expect(request(valid, TEAM.id)).toBeNull();
+  });
+});
+
+describe('feed: heuristic score', () => {
+  const PARAMS: HeuristicParams = { halfLifeHours: 24, commentWeight: 2, damping: 'log' };
+  const noComments = () => 0;
+  const PRIVATE = COMMUNITIES.find((c) => c.kind === 'interest' && c.private)!;
+  const MEDICAL = COMMUNITIES.find((c) => c.kind === 'medical')!;
+  const hoursBefore = (hours: number) =>
+    new Date(Date.parse(NOW) - hours * 3_600_000).toISOString();
+  const at = (hours: number, likeCount = 0) => ({
+    ...post(1, INTEREST.id, hoursBefore(hours)),
+    likeCount,
+  });
+  const score = (
+    p: MockPost,
+    params = PARAMS,
+    comments = noComments,
+    c: MockCommunity = INTEREST,
+  ) => heuristic(params, comments)(p, c, NOW);
+
+  it('halves with every half-life', () => {
+    expect(score(at(24, 5)) / score(at(0, 5))).toBeCloseTo(0.5, 10);
+    expect(score(at(72, 5)) / score(at(0, 5))).toBeCloseTo(0.125, 10);
+  });
+
+  it('never drops as rallies or comments go up', () => {
+    let previous = 0;
+    for (let likes = 0; likes <= 200; likes++) {
+      const next = score(at(10, likes));
+      expect(next).toBeGreaterThanOrEqual(previous);
+      previous = next;
+    }
+    expect(score(at(10), PARAMS, () => 3)).toBeGreaterThan(score(at(10)));
+  });
+
+  it('counts a comment as `commentWeight` rallies', () => {
+    expect(score(at(0, 0), PARAMS, () => 1)).toBe(score(at(0, 2)));
+  });
+
+  it('damps with ln(1 + x) or √x, starting from 1 so a quiet post still scores', () => {
+    expect(score(at(0, 0))).toBe(1);
+    expect(score(at(0, Math.E - 1))).toBeCloseTo(2, 10);
+    expect(score(at(0, 9), { ...PARAMS, damping: 'sqrt' })).toBe(4);
+  });
+
+  it('multiplies by the community’s weight, and the private weight on top', () => {
+    const params = {
+      ...PARAMS,
+      communityWeight: { interest: 2, medical: 3 },
+      privateWeight: 1.5,
+    };
+    const p = at(0, 4);
+    const base = score(p);
+    expect(score(p, params)).toBeCloseTo(base * 2, 10);
+    // The fixture medical community is private too, so both weights apply.
+    expect(score(p, params, noComments, MEDICAL)).toBeCloseTo(base * 3 * 1.5, 10);
+    expect(score(p, params, noComments, PRIVATE)).toBeCloseTo(base * 2 * 1.5, 10);
+  });
+
+  it('treats a post made after `asOf` as brand new, not from the future', () => {
+    expect(score(at(-5, 3))).toBe(score(at(0, 3)));
+  });
+
+  it('never lets a score cross tiers', () => {
+    const scorer = heuristic(PARAMS, noComments);
+    const viral = { ...post(1, TEAM_IMPACT.id, NOW), likeCount: 10_000 };
+    const stale = post(2, TEAM.id, hoursBefore(24 * 21));
+    expect(ids(rank([viral, stale], communityOf, scorer, NOW))).toEqual([id(2), id(1)]);
+  });
+});
+
+describe('feed: pages with the heuristic', () => {
+  const scorer = heuristic({ halfLifeHours: 12, commentWeight: 2, damping: 'log' }, () => 0);
+  /** The seven posts again, with spread-out rallies so the score reorders them within tiers. */
+  const posts = POSTS.map((p, i) => ({ ...p, likeCount: [3, 90, 0, 7, 1, 0, 12][i]! }));
+  const first = (limit: number) =>
+    pageOf(posts, communityOf, { feed: 'home', limit, now: NOW }, scorer)!;
+
+  it('covers the whole ranking once, in order', () => {
+    const order = ids(rank(posts, communityOf, scorer, NOW));
+    expect(order).not.toEqual(RANKED); // the score really did reorder something
+    const seen: string[] = [];
+    let page = first(2);
+    for (let pages = 1; ; pages++) {
+      seen.push(...ids(page.posts));
+      if (!page.nextCursor) break;
+      if (pages > posts.length + 1) throw new Error('paging never ended');
+      page = pageOf(
+        posts,
+        communityOf,
+        { feed: 'home', cursor: page.nextCursor, limit: 2, now: NOW },
+        scorer,
+      )!;
+    }
+    expect(seen).toEqual(order);
+  });
+
+  it('scores later pages as of the first page’s time', () => {
+    const later = new Date(Date.parse(NOW) + 5 * 3_600_000).toISOString();
+    const second = pageOf(
+      posts,
+      communityOf,
+      { feed: 'home', cursor: first(2).nextCursor!, limit: 2, now: later },
+      scorer,
+    )!;
+    expect(second.asOf).toBe(NOW);
+    expect(ids(second.posts)).toEqual(ids(rank(posts, communityOf, scorer, NOW)).slice(2, 4));
   });
 });

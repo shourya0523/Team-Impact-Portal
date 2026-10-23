@@ -19,7 +19,7 @@ import {
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import { pageOf, rank } from './feed';
+import { byRecency, heuristic, type HeuristicParams, pageOf, rank, type Scorer } from './feed';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
@@ -213,11 +213,11 @@ export class MockWorld {
   private homeCommunities = (u: MockUser) =>
     new Map(this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]));
 
-  feed = (u: MockUser): Post[] => this.postsIn(this.homeCommunities(u), u);
+  feed = (u: MockUser, asOf?: string): Post[] => this.postsIn(this.homeCommunities(u), u, asOf);
 
   /** One community's own feed, for its members (and recruiters, in official ones). */
-  communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
-    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
+  communityFeed = (c: MockCommunity, u: MockUser, asOf?: string): Post[] =>
+    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u, asOf) : [];
 
   /**
    * A teen's name only ever shows in the community of a team they're on (CLAUDE.md hard rules):
@@ -288,13 +288,33 @@ export class MockWorld {
       : { ...shared, kind: p.kind };
   };
 
-  /** The stored posts `u` sees in `readable` (communities they read), in feed order (`./feed.ts`). */
-  private rankedIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
+  /**
+   * How feeds order posts within a tier: null is newest first (`byRecency`); otherwise the pilot
+   * heuristic with these knobs (`./feed.ts`). The tuning script sets it to compare formulas.
+   */
+  ranking: HeuristicParams | null = null;
+
+  /** The stored posts `u` sees in `readable` (communities they read), and how to score them. */
+  private visibleIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
     const communityOf = (p: MockPost) => readable.get(p.communityId)!;
     const visible = this.posts.filter(
       (p) => readable.has(p.communityId) && this.canSeePost(p, communityOf(p), u),
     );
-    return { ranked: rank(visible, communityOf), communityOf };
+    return { visible, communityOf, scorer: this.scorerFor(visible, communityOf, u) };
+  };
+
+  /**
+   * Newest first needs no counts. The heuristic scores engagement, so it counts comments for
+   * every visible post, not just the page.
+   */
+  private scorerFor = (
+    visible: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ): Scorer => {
+    if (!this.ranking) return byRecency;
+    const { commentCounts } = this.engagement(visible, communityOf, u);
+    return heuristic(this.ranking, (postId) => commentCounts.get(postId) ?? 0);
   };
 
   /** Stored posts in the shape the API returns, counting comments and rallies for these only. */
@@ -303,10 +323,14 @@ export class MockWorld {
     return posts.map((p) => this.toPost(p, communityOf(p), counts));
   };
 
-  /** Every post `u` sees in `readable`, in feed order. The routes page through `feedPage`. */
-  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] => {
-    const { ranked, communityOf } = this.rankedIn(readable, u);
-    return this.shape(ranked, communityOf, u);
+  /** Every post `u` sees in `readable`, in feed order as of `asOf`. Routes page via `feedPage`. */
+  postsIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    asOf = new Date().toISOString(),
+  ): Post[] => {
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    return this.shape(rank(visible, communityOf, scorer, asOf), communityOf, u);
   };
 
   /**
@@ -319,8 +343,8 @@ export class MockWorld {
     feed: string,
     { cursor, limit, now = new Date().toISOString() }: PageRequest,
   ): { items: Post[]; nextCursor: string | null } | null => {
-    const { ranked, communityOf } = this.rankedIn(readable, u);
-    const page = pageOf(ranked, communityOf, { feed, cursor, limit, now });
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    const page = pageOf(visible, communityOf, { feed, cursor, limit, now }, scorer);
     return page && { items: this.shape(page.posts, communityOf, u), nextCursor: page.nextCursor };
   };
 

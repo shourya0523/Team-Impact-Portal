@@ -83,4 +83,31 @@ describe('tuning world', () => {
     expect(jordan.has(TUNING.QUIET)).toBe(true);
     expect(w.feed(USERS.noah).some((p) => p.id === TUNING.QUIET)).toBe(false);
   });
+
+  it('pages through the heuristic feed exactly, for every persona', () => {
+    const w = tuningWorld();
+    w.ranking = { halfLifeHours: 24, commentWeight: 2, damping: 'log' };
+    for (const u of [USERS.jordan, USERS.lisa, USERS.noah, USERS.coach, USERS.elena]) {
+      const all = w.feed(u, TUNING_NOW);
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      for (let pages = 1; ; pages++) {
+        const page = w.feedPage(u, { cursor, limit: 7, now: TUNING_NOW })!;
+        seen.push(...page.items.map((p) => p.id));
+        if (!page.nextCursor) break;
+        if (pages > all.length + 1) throw new Error('paging never ended');
+        cursor = page.nextCursor;
+      }
+      expect(seen, u.firstName).toEqual(all.map((p) => p.id));
+    }
+  });
+
+  it('feeds the formula real comment counts', () => {
+    const w = tuningWorld();
+    const order = (commentWeight: number) => {
+      w.ranking = { halfLifeHours: 24, commentWeight, damping: 'log' };
+      return w.feed(USERS.jordan, TUNING_NOW).map((p) => p.id);
+    };
+    expect(order(50)).not.toEqual(order(0));
+  });
 });

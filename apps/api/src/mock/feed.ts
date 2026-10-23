@@ -15,35 +15,82 @@ export const TIER: Record<MockCommunity['kind'], number> = {
   team_impact: 2,
 };
 
+/**
+ * Scores order posts within a tier (higher first). Tiers never mix, whatever the score.
+ * `asOf` is when the run of pages was first asked for, so time-based scores match on every page.
+ */
+export type Scorer = (p: MockPost, c: MockCommunity, asOf: string) => number;
+
+/** Newest first: the score is the post's own time. The default until ranking is tuned. */
+export const byRecency: Scorer = (p) => Date.parse(p.createdAt);
+
+/** The pilot heuristic's knobs (PRD §5: recency decay × community weight × engagement). */
+export interface HeuristicParams {
+  /** A post's recency halves every this many hours. */
+  halfLifeHours: number;
+  /** How many rallies one comment is worth. */
+  commentWeight: number;
+  /** Keeps a very popular post from dwarfing the rest: `log` is ln(1 + x), `sqrt` is √x. */
+  damping: 'log' | 'sqrt';
+  /** Per kind of community, 1 when left out. Only reorders posts within a tier. */
+  communityWeight?: Partial<Record<MockCommunity['kind'], number>>;
+  /** Extra weight for private communities, 1 when left out. */
+  privateWeight?: number;
+}
+
+const HOUR = 3_600_000;
+
+/**
+ * recency × community weight × engagement, where recency = 0.5^(age / half-life) and engagement =
+ * 1 + damp(rallies + commentWeight × comments). Engagement starts at 1, so a quiet new post still
+ * scores. A post newer than `asOf` (made after the first page) counts as age 0.
+ */
+export const heuristic =
+  (params: HeuristicParams, commentsOf: (postId: string) => number): Scorer =>
+  (p, c, asOf) => {
+    const ageHours = Math.max(0, (Date.parse(asOf) - Date.parse(p.createdAt)) / HOUR);
+    const recency = 0.5 ** (ageHours / params.halfLifeHours);
+    const weight =
+      (params.communityWeight?.[c.kind] ?? 1) *
+      ('private' in c && c.private ? (params.privateWeight ?? 1) : 1);
+    const activity = p.likeCount + params.commentWeight * commentsOf(p.id);
+    const damped = params.damping === 'log' ? Math.log1p(activity) : Math.sqrt(activity);
+    return recency * weight * (1 + damped);
+  };
+
 /** Where a post sits in feed order. Ids are unique, so no two posts share a key. */
 const SortKey = z.object({
   tier: z.number().int(),
-  createdAt: Timestamp,
+  score: z.number(),
   id: z.string().min(1),
 });
 type SortKey = z.infer<typeof SortKey>;
 
 type CommunityOf = (p: MockPost) => MockCommunity;
 
-const keyOf = (p: MockPost, communityOf: CommunityOf): SortKey => ({
-  tier: TIER[communityOf(p).kind],
-  createdAt: p.createdAt,
-  id: p.id,
-});
-
-/** Plain string order: ISO timestamps and fixed-width ids sort correctly without a locale. */
+/** Plain string order: fixed-width ids sort correctly without a locale. */
 const byString = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
-/** Negative when `a` comes first: lower tier, then newer, then (same moment) the higher id. */
+/** Negative when `a` comes first: lower tier, then higher score, then (a tie) the higher id. */
 const compare = (a: SortKey, b: SortKey) =>
-  a.tier - b.tier || byString(b.createdAt, a.createdAt) || byString(b.id, a.id);
+  a.tier - b.tier || b.score - a.score || byString(b.id, a.id);
 
-/** Posts in feed order. A total order, so a cursor always knows exactly where it stopped. */
-export const rank = (posts: MockPost[], communityOf: CommunityOf): MockPost[] =>
+/** Each post with its key, in feed order. Scores are worked out once per post. */
+const keyed = (posts: MockPost[], communityOf: CommunityOf, scorer: Scorer, asOf: string) =>
   posts
-    .map((p) => ({ p, key: keyOf(p, communityOf) }))
-    .sort((a, b) => compare(a.key, b.key))
-    .map(({ p }) => p);
+    .map((p) => {
+      const c = communityOf(p);
+      return { p, key: { tier: TIER[c.kind], score: scorer(p, c, asOf), id: p.id } };
+    })
+    .sort((a, b) => compare(a.key, b.key));
+
+/** Posts in feed order, scored as of `asOf`. A total order, so a cursor knows where it stopped. */
+export const rank = (
+  posts: MockPost[],
+  communityOf: CommunityOf,
+  scorer: Scorer = byRecency,
+  asOf = new Date().toISOString(),
+): MockPost[] => keyed(posts, communityOf, scorer, asOf).map(({ p }) => p);
 
 /**
  * What a cursor carries: which feed it belongs to (`home` or a community id), when its first page
@@ -87,34 +134,35 @@ export interface FeedPage {
 }
 
 /**
- * One page of `ranked` (already in `rank` order): the posts strictly after the cursor's last one.
- * It goes by key, not position, so posts added or removed between pages never cause a repeat or a
- * gap. Returns null for a cursor that's invalid or from another feed (the route answers 400).
+ * One page of `posts` (visible to the reader, any order): the posts strictly after the cursor's
+ * last one, in feed order. The cursor is read first, so every page is scored as of the first
+ * page's time. It goes by key, not position, so posts added or removed between pages never cause
+ * a repeat or a gap. Returns null for a cursor that's invalid or from another feed (400).
  *
- * The mock has every ranked post in memory, so it finds the start with a scan; the real query
- * filters on the key instead (`WHERE (tier, created_at, id) > …`) and fetches `limit + 1`.
+ * The mock has every post in memory, so it scores and sorts them all; the real query filters on
+ * the key instead (`WHERE (tier, score, id) > …`) and fetches `limit + 1`.
  */
 export const pageOf = (
-  ranked: MockPost[],
+  posts: MockPost[],
   communityOf: CommunityOf,
   { feed, cursor, limit, now }: FeedPageRequest,
+  scorer: Scorer = byRecency,
 ): FeedPage | null => {
-  let asOf = now;
-  let start = 0;
+  let c: Cursor | null = null;
   if (cursor !== undefined) {
-    const c = decodeCursor(cursor);
+    c = decodeCursor(cursor);
     if (!c || c.feed !== feed) return null;
-    asOf = c.asOf;
-    start = ranked.findIndex((p) => compare(keyOf(p, communityOf), c.after) > 0);
-    if (start === -1) start = ranked.length;
   }
-  const posts = ranked.slice(start, start + limit);
-  const last = posts.at(-1);
+  const asOf = c?.asOf ?? now;
+  const ranked = keyed(posts, communityOf, scorer, asOf);
+  let start = c ? ranked.findIndex(({ key }) => compare(key, c.after) > 0) : 0;
+  if (start === -1) start = ranked.length;
+  const page = ranked.slice(start, start + limit);
+  const last = page.at(-1);
   const more = start + limit < ranked.length;
   return {
-    posts,
+    posts: page.map(({ p }) => p),
     asOf,
-    nextCursor:
-      more && last ? encodeCursor({ v: 1, feed, asOf, after: keyOf(last, communityOf) }) : null,
+    nextCursor: more && last ? encodeCursor({ v: 1, feed, asOf, after: last.key }) : null,
   };
 };
