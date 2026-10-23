@@ -1,6 +1,8 @@
 import {
   type CalendarEvent,
-  canJoinCommunity,
+  can,
+  contactAudience,
+  recruiterVisible,
   type CardFace,
   type CardWithContact,
   type Community,
@@ -20,9 +22,10 @@ import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import { actorOf, cardFacts, communityFacts } from './policy';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
-import { isSuspended, newStaffToolsState } from './staff-tools';
+import { newStaffToolsState } from './staff-tools';
 import {
   initialCoachInvites,
   initialQrCodes,
@@ -127,32 +130,12 @@ export class MockWorld {
   };
 
   /** Whether `u` may see the community exists: listed, openable, its name shown. */
-  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (c.kind === 'medical' && !this.flags.medicalCommunities) return false;
-    if (c.moderation === 'removed') return false;
-    const creator = 'createdById' in c && c.createdById === u.id;
-    if (c.moderation !== 'approved' && u.role !== 'staff' && !creator) return false;
-    if (u.role === 'staff') return true;
-    switch (c.kind) {
-      case 'team':
-        return this.membership(c, u) !== null;
-      case 'team_impact':
-        return true;
-      case 'medical':
-        // Teens and recruiters never see medical communities, not even their names.
-        return canJoinCommunity(u.role, 'medical');
-      case 'interest':
-        return u.role === 'recruiter' ? c.official : true;
-    }
-  };
+  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.see', communityFacts(this, c, u));
 
   /** Whose posts and events reach `u`'s feed: their communities, plus what recruiters may read. */
-  readsCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (!this.canSeeCommunity(c, u)) return false;
-    if (this.membership(c, u)) return true;
-    if (u.role !== 'recruiter') return false;
-    return c.kind === 'team_impact' || (c.kind === 'interest' && c.official);
-  };
+  readsCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.read', communityFacts(this, c, u));
 
   community = (c: MockCommunity, u: MockUser): Community => {
     const base = {
@@ -259,7 +242,7 @@ export class MockWorld {
   join = (c: MockCommunity, u: MockUser): string | null => {
     if (c.kind !== 'interest' && c.kind !== 'medical')
       return 'This community can’t be joined directly';
-    if (!canJoinCommunity(u.role, c.kind) || c.moderation !== 'approved') {
+    if (!can(actorOf(this, u), 'community.join', { kind: c.kind }) || c.moderation !== 'approved') {
       return 'You can’t join this community';
     }
     if (c.members.some((m) => m.userId === u.id)) return null;
@@ -353,15 +336,7 @@ export class MockWorld {
   };
 
   /** On the employer portal at all: a published card, open to recruiting, of an athlete. */
-  recruiterCanSee = (card: MockCard) => {
-    const owner = this.user(card.face.athleteId);
-    return (
-      card.visibility.published &&
-      card.visibility.openToRecruiting &&
-      !isSuspended(this, card.face.athleteId) &&
-      (owner?.role === 'athlete' || owner?.role === 'alumni_athlete')
-    );
-  };
+  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card));
 
   private static share = (
     contact: MockCard['contact'],
@@ -378,23 +353,16 @@ export class MockWorld {
     if (!card) return null;
     const face = this.cardFace(card);
     const none: ContactSharing = { email: false, phone: false, linkedin: false };
-    if (u.id === athleteId) {
-      return {
-        ...face,
-        contact: MockWorld.share(card.contact, { email: true, phone: true, linkedin: true }),
-      };
-    }
-    if (!card.visibility.published) return null;
-    if (u.role === 'recruiter') {
-      return this.recruiterCanSee(card)
-        ? { ...face, contact: MockWorld.share(card.contact, card.visibility.recruitersSee) }
-        : null;
-    }
-    if (u.role === 'staff') return { ...face, contact: {} };
-    const sameTeam = card.face.teamId !== null && this.teamIdsOf(u.id).includes(card.face.teamId);
-    if (!sameTeam) return null;
-    // Teens never see athletes' contact details; approved parents see the family set.
-    const sharing = u.role === 'parent' ? card.visibility.familiesSee : none;
+    const facts = cardFacts(this, card);
+    const actor = actorOf(this, u);
+    if (!can(actor, 'card.read', facts)) return null;
+    const all: ContactSharing = { email: true, phone: true, linkedin: true };
+    const sharing = {
+      owner: all,
+      recruiters: card.visibility.recruitersSee,
+      families: card.visibility.familiesSee,
+      none,
+    }[contactAudience(actor, facts)];
     return { ...face, contact: MockWorld.share(card.contact, sharing) };
   };
 

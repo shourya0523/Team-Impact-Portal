@@ -30,8 +30,8 @@ Not merged on purpose:
 
 ## Known gaps to handle first
 
-1. **Communities.** Done in the contracts: `packages/contracts/src/communities.ts` replaces `groups.ts`, with kinds `team`, `team_impact`, `medical`, `interest`, and `official` on interest only. Posts, events, announcements and opportunities now carry a `communityId` / `community` instead of an `audience`, and reports can target a community. `canCreateCommunity` and `canJoinCommunity` encode the PRD §5 table. The DB `group_kind` enum (`team, college, affinity, org, platform`) is still the old model; leave the migration alone unless asked, because the lead owns that call.
-2. **Alumni roles.** Contracts split alumni into `alumni_athlete` and `alumni_mentor` (matches PRD §2, §8). The DB `user_type` has a single `alumni`. Mock data follows the contracts.
+1. **Communities.** Done in the contracts: `packages/contracts/src/communities.ts` replaces `groups.ts`, with kinds `team`, `team_impact`, `medical`, `interest`, and `official` on interest only. Posts, events, announcements and opportunities now carry a `communityId` / `community` instead of an `audience`, and reports can target a community. `canCreateCommunity` and `canJoinCommunity` encode the PRD §5 table. The database matches since migration `0002_communities`.
+2. **Alumni roles.** Contracts split alumni into `alumni_athlete` and `alumni_mentor` (matches PRD §2, §8). The database matches since `0002_communities`. Mock data follows the contracts.
 3. ~~**Token conflict** noted above.~~ Resolved: Signing Day tokens (see CLAUDE.md, Design system).
 
 ## Mock API (done)

@@ -12,9 +12,11 @@ import {
   type TeamQrCode,
   type TeamRoster,
   type UpdateTeamRequest,
+  can,
 } from '@team-impact/contracts';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
+import { actorOf } from './policy';
 import type { MockWorld } from './world';
 
 /**
@@ -191,16 +193,17 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
 
 // Who may do what ---------------------------------------------------------------------------------
 
+/** The team's own coaches: the only ones who get family contact details. */
 export const isCoachOf = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'coach' && world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.familyContacts', { teamId });
 
 /** Approve, remove, edit, make codes and invite coaches: the team's coaches, and staff. */
 export const canManageTeam = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || isCoachOf(world, u, teamId);
+  can(actorOf(world, u), 'team.manage', { teamId });
 
 /** The roster is for the team itself and staff; everyone else gets a 404. */
 export const canSeeRoster = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.roster', { teamId });
 
 // Teams -------------------------------------------------------------------------------------------
 
