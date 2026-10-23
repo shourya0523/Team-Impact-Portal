@@ -8,6 +8,7 @@ import {
   type QrCodeLifetime,
   type RosterChild,
   type Team,
+  type TeamAthleteContacts,
   type TeamMember,
   type TeamQrCode,
   type TeamRoster,
@@ -272,6 +273,30 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     canManage: manage,
     pendingRequestCount: manage ? pendingRequests(world, teamId).length : null,
   };
+};
+
+/**
+ * The team's athletes with what each shares with families (PRD §6, F4), for an approved parent on
+ * the team; null for anyone else (the route answers 403). It reads through `cardFor`, the rule the
+ * athlete's profile already uses, so the two can't disagree: only the athlete's family channels,
+ * and nothing while their card is unpublished. Teens are never parents, so they never get here.
+ */
+export const athleteContacts = (
+  world: MockWorld,
+  teamId: string,
+  viewer: MockUser,
+): TeamAthleteContacts | null => {
+  if (viewer.role !== 'parent' || !world.teamIdsOf(viewer.id).includes(teamId)) return null;
+  return world.teamMembers
+    .filter((m) => m.teamId === teamId)
+    .flatMap((m) => {
+      const athlete = world.user(m.userId);
+      if (athlete?.role !== 'athlete') return [];
+      return [
+        { athlete: summaryOf(athlete), contact: world.cardFor(athlete.id, viewer)?.contact ?? {} },
+      ];
+    })
+    .sort((a, b) => a.athlete.firstName.localeCompare(b.athlete.firstName));
 };
 
 /**
