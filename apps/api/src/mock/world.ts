@@ -21,7 +21,16 @@ import { eventRow } from '../events-log';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import {
+  byRecency,
+  heuristic,
+  type HeuristicParams,
+  PILOT_RANKING,
+  pageOf,
+  rank,
+  type Scorer,
+} from './feed';
+import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
 import { isSuspended, newStaffToolsState } from './staff-tools';
@@ -33,6 +42,9 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+
+/** A feed page request: the route's query, plus the time for tests that need a fixed one. */
+type PageRequest = { cursor?: string; limit: number; now?: string };
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -213,9 +225,6 @@ export class MockWorld {
       c.kind === 'interest' ? c.members.filter((m) => m.recruiterSearchOptIn).length : null,
   });
 
-  /** Ranking for the pilot: team first, then other communities, then Team Impact; newest first. */
-  private static WEIGHT = { team: 0, interest: 1, medical: 1, team_impact: 2 } as const;
-
   /**
    * Communities whose posts and events reach `u`'s home feed and events list: every one they read,
    * medical and private ones included (PRD v2.3). Private ones only ever reach members.
@@ -223,45 +232,158 @@ export class MockWorld {
   private homeCommunities = (u: MockUser) =>
     new Map(this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]));
 
-  feed = (u: MockUser): Post[] => this.postsIn(this.homeCommunities(u), u);
+  feed = (u: MockUser, asOf?: string): Post[] => this.postsIn(this.homeCommunities(u), u, asOf);
 
   /** One community's own feed, for its members (and recruiters, in official ones). */
-  communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
-    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
+  communityFeed = (c: MockCommunity, u: MockUser, asOf?: string): Post[] =>
+    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u, asOf) : [];
 
-  /** Approved posts, plus the viewer's own while they wait for review ("Waiting for review"). */
-  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
-    this.posts
-      .filter((p) => readable.has(p.communityId))
-      .filter(
-        (p) => p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id),
-      )
-      .filter((p) => !hiddenFor(this, u, p))
-      .sort(
-        (a, b) =>
-          MockWorld.WEIGHT[readable.get(a.communityId)!.kind] -
-            MockWorld.WEIGHT[readable.get(b.communityId)!.kind] ||
-          b.createdAt.localeCompare(a.createdAt),
-      )
-      .map((p) => {
-        const c = readable.get(p.communityId)!;
-        const { authorId, communityId, opportunity, ...rest } = p;
-        void authorId;
-        void communityId;
-        const shared = {
-          ...rest,
-          author: fx.summaryOf(this.user(p.authorId)!),
-          community: { id: c.id, name: c.name, kind: c.kind },
-          imageUrl: p.imageUrl ?? null,
-          commentCount: this.comments.filter(
-            (k) => k.postId === p.id && k.moderation === 'approved',
-          ).length,
-          likedByMe: this.rallies.some((r) => r.postId === p.id && r.userId === u.id),
-        };
-        return p.kind === 'opportunity'
-          ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
-          : { ...shared, kind: p.kind };
-      });
+  /**
+   * A teen's name only ever shows in the community of a team they're on (CLAUDE.md hard rules):
+   * not another team's, and not their old team's once a coach removes them. Posting and
+   * commenting already enforce this; reads check again so nothing that slipped in can leak.
+   */
+  teenOutsideTeam = (authorId: string, c: MockCommunity) =>
+    this.user(authorId)?.role === 'teen' &&
+    (c.kind !== 'team' || !this.teamIdsOf(authorId).includes(c.teamId));
+
+  /**
+   * Whether `u` sees post `p` in `c`, a community they read: approved, or their own while it waits
+   * for review ("Waiting for review"); never a teen's outside their team; never one a block or
+   * their own report hides.
+   */
+  private canSeePost = (p: MockPost, c: MockCommunity, u: MockUser) =>
+    (p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id)) &&
+    !this.teenOutsideTeam(p.authorId, c) &&
+    !hiddenFor(this, u, p);
+
+  /**
+   * Approved comment counts and `u`'s rallies for a set of posts, one pass over each list rather
+   * than one per post. `posts` must already be ones `u` can see (`canSeePost`); this only counts.
+   *
+   * Kept simple on purpose: the mock stores comments and rallies as flat arrays with no index by
+   * post, so this reads every comment and rally in the world, not just those on `posts`. Fine at
+   * fixture size; an index would have to be kept in step with every write. The real API should
+   * only touch these posts' rows: one grouped count per post (`comments_post_created_idx`) and
+   * the viewer's rallies on them.
+   */
+  private engagement = (
+    posts: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ) => {
+    const inPost = new Map(posts.map((p) => [p.id, communityOf(p)]));
+    const commentCounts = new Map<string, number>();
+    for (const k of this.comments) {
+      const c = inPost.get(k.postId);
+      if (!c || k.moderation !== 'approved' || this.teenOutsideTeam(k.authorId, c)) continue;
+      commentCounts.set(k.postId, (commentCounts.get(k.postId) ?? 0) + 1);
+    }
+    const rallied = new Set(
+      this.rallies.filter((r) => r.userId === u.id && inPost.has(r.postId)).map((r) => r.postId),
+    );
+    return { commentCounts, rallied };
+  };
+
+  /** A stored post in the shape the API returns. */
+  private toPost = (
+    p: MockPost,
+    c: MockCommunity,
+    { commentCounts, rallied }: ReturnType<MockWorld['engagement']>,
+  ): Post => {
+    const { authorId, communityId, opportunity, ...rest } = p;
+    void authorId;
+    void communityId;
+    const shared = {
+      ...rest,
+      author: fx.summaryOf(this.user(p.authorId)!),
+      community: { id: c.id, name: c.name, kind: c.kind },
+      imageUrl: p.imageUrl ?? null,
+      commentCount: commentCounts.get(p.id) ?? 0,
+      likedByMe: rallied.has(p.id),
+    };
+    return p.kind === 'opportunity'
+      ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
+      : { ...shared, kind: p.kind };
+  };
+
+  /**
+   * How feeds rank posts: the pilot heuristic (`PILOT_RANKING` in `./feed.ts`) unless changed. The
+   * tuning script swaps in other settings to compare them; null is plain newest first.
+   */
+  ranking: HeuristicParams | null = structuredClone(PILOT_RANKING);
+
+  /** The stored posts `u` sees in `readable` (communities they read), and how to score them. */
+  private visibleIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
+    const communityOf = (p: MockPost) => readable.get(p.communityId)!;
+    const visible = this.posts.filter(
+      (p) => readable.has(p.communityId) && this.canSeePost(p, communityOf(p), u),
+    );
+    return { visible, communityOf, scorer: this.scorerFor(visible, communityOf, u) };
+  };
+
+  /**
+   * The heuristic scores engagement, so it counts comments for every visible post, not just the
+   * page (the page's own counts for the response come from `shape`). Newest first needs none.
+   */
+  private scorerFor = (
+    visible: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ): Scorer => {
+    if (!this.ranking) return byRecency;
+    const { commentCounts } = this.engagement(visible, communityOf, u);
+    return heuristic(this.ranking, (postId) => commentCounts.get(postId) ?? 0);
+  };
+
+  /** Stored posts in the shape the API returns, counting comments and rallies for these only. */
+  private shape = (posts: MockPost[], communityOf: (p: MockPost) => MockCommunity, u: MockUser) => {
+    const counts = this.engagement(posts, communityOf, u);
+    return posts.map((p) => this.toPost(p, communityOf(p), counts));
+  };
+
+  /** Every post `u` sees in `readable`, in feed order as of `asOf`. Routes page via `feedPage`. */
+  postsIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    asOf = new Date().toISOString(),
+  ): Post[] => {
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    return this.shape(rank(visible, communityOf, scorer, asOf), communityOf, u);
+  };
+
+  /**
+   * One page of the posts `u` sees in `readable`. Only the page's posts are counted and shaped.
+   * Null for a cursor that isn't valid for this feed (the route answers 400).
+   */
+  private pageIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    feed: string,
+    { cursor, limit, now = new Date().toISOString() }: PageRequest,
+  ): { items: Post[]; nextCursor: string | null } | null => {
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    const page = pageOf(visible, communityOf, { feed, cursor, limit, now }, scorer);
+    return page && { items: this.shape(page.posts, communityOf, u), nextCursor: page.nextCursor };
+  };
+
+  /** One page of `u`'s home feed. */
+  feedPage = (u: MockUser, request: PageRequest) =>
+    this.pageIn(this.homeCommunities(u), u, 'home', request);
+
+  /** One page of a community's own feed: empty for anyone who doesn't read it. */
+  communityFeedPage = (c: MockCommunity, u: MockUser, request: PageRequest) =>
+    this.pageIn(this.readsCommunity(c, u) ? new Map([[c.id, c]]) : new Map(), u, c.id, request);
+
+  /** One post as `u` reads it in `c`, or undefined if they can't. Callers check `u` reads `c`. */
+  postView = (p: MockPost, c: MockCommunity, u: MockUser): Post | undefined =>
+    p.communityId === c.id && this.canSeePost(p, c, u)
+      ? this.toPost(
+          p,
+          c,
+          this.engagement([p], () => c, u),
+        )
+      : undefined;
 
   /**
    * Join an interest or medical community. Team communities follow the team and everyone is

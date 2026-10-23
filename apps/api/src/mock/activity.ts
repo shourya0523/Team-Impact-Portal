@@ -286,14 +286,21 @@ export const toComment = (world: MockWorld, k: MockComment): Comment => ({
 });
 
 /** Approved comments, plus the viewer's own while they wait for review. Oldest first. */
-export const commentsFor = (world: MockWorld, postId: string, u: MockUser): Comment[] =>
-  world.comments
-    .filter(
-      (k) =>
-        k.postId === postId &&
-        (k.moderation === 'approved' || (k.moderation === 'in_review' && k.authorId === u.id)),
-    )
-    // Blocks and the viewer's own reports hide comments too (./safety.ts).
-    .filter((k) => !hiddenFor(world, u, k))
-    .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map((k) => toComment(world, k));
+export const commentsFor = (world: MockWorld, postId: string, u: MockUser): Comment[] => {
+  const p = world.posts.find((x) => x.id === postId);
+  const c = p && world.communities.find((x) => x.id === p.communityId);
+  if (!c) return [];
+  return (
+    world.comments
+      .filter(
+        (k) =>
+          k.postId === postId &&
+          (k.moderation === 'approved' || (k.moderation === 'in_review' && k.authorId === u.id)),
+      )
+      .filter((k) => !world.teenOutsideTeam(k.authorId, c))
+      // Blocks and the viewer's own reports hide comments too (./safety.ts).
+      .filter((k) => !hiddenFor(world, u, k))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((k) => toComment(world, k))
+  );
+};

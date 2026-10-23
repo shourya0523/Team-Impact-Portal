@@ -10,6 +10,7 @@
     "lint": "eslint src",
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
+    "feed:tune": "tsx src/mock/tune.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:rollback": "tsx --env-file-if-exists=../../.env src/db/rollback.ts",

@@ -147,7 +147,7 @@ export const myReport = (world: MockWorld, r: MockReport) => ({
 /** A stored post in the shape `u` reads it, through the feed's own mapping. */
 export const toPost = (world: MockWorld, p: MockPost, u: MockUser): Post | undefined => {
   const c = world.communities.find((x) => x.id === p.communityId);
-  return c ? world.postsIn(new Map([[c.id, c]]), u).find((x) => x.id === p.id) : undefined;
+  return c ? world.postView(p, c, u) : undefined;
 };
 
 const removeWhere = <T>(items: T[], drop: (item: T) => boolean) => {

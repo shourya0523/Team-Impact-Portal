@@ -24,8 +24,10 @@ export const seenCommunity = (world: MockWorld, u: MockUser, id: string) => {
 
 /** Posts, comments and rallies. Everything new is held for moderation (P5). */
 export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
-  const postView = (c: MockCommunity, u: MockUser, postId: string) =>
-    world.postsIn(new Map([[c.id, c]]), u).find((p) => p.id === postId);
+  const postView = (c: MockCommunity, u: MockUser, postId: string) => {
+    const p = world.posts.find((x) => x.id === postId);
+    return p && world.postView(p, c, u);
+  };
 
   /** A post the viewer can read: approved in a community they read, or their own held one. */
   const readablePost = (request: FastifyRequest, postId: string) => {
