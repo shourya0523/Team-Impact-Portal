@@ -179,6 +179,8 @@ export const MyCardState = z.object({
   /** Unpublished edits. Only the athlete sees them; publishing makes them the card. */
   draft: UpdateCardRequest.nullable(),
   pendingResume: ResumeExtraction.nullable(),
+  /** The season a save or publish goes into, known even before the first card. */
+  currentSeason: z.number().int(),
 });
 export type MyCardState = z.infer<typeof MyCardState>;
 

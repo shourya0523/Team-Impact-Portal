@@ -23,6 +23,23 @@ pnpm demo:card          # opens straight into the athlete card demo
 Always start Expo **from `apps/athlete`**. From the repo root it can't find the app, and it
 creates a stray `tsconfig.json` and `.expo/` there.
 
+### On a physical phone
+
+The app calls the API at `EXPO_PUBLIC_API_URL`, default `http://localhost:3000`. That works on web
+and the iOS Simulator, but on a phone `localhost` is the phone itself ("Could not connect to the
+server"). To test on a phone, point everything at your Mac's address (`ipconfig getifaddr en0`):
+
+1. `apps/athlete/.env.local`: `EXPO_PUBLIC_API_URL=http://<your-ip>:3000`. Expo only reads env
+   files from `apps/athlete`, and bakes `EXPO_PUBLIC_*` in at bundle time, so restart with
+   `npx expo start -c`.
+2. Root `.env`: `CORS_ORIGINS=http://localhost:5173,http://localhost:8081,http://<your-ip>:8081`,
+   then restart `pnpm dev:mock` (env files are only read at startup).
+3. On web, open `http://<your-ip>:8081` yourself; `w` opens `localhost`. The session cookie is
+   `SameSite=Lax`, so a page on `localhost` calling the API on the IP never sends it and every
+   request answers "Sign in first".
+
+Both files are gitignored and personal to your machine. Update them when your IP changes.
+
 ## How Expo Router reads the folders
 
 Routes are **files**. There's no route table anywhere. A file's path under `src/app/` is its URL:
@@ -250,6 +267,35 @@ chain existing screens together rather than adding new ones.
 **Typed routes.** `typedRoutes` is on, so every `href` is checked against the real files, and a
 typo or a link to a missing screen is a type error. Expo regenerates the list whenever it runs, so
 a red underline on a brand-new route disappears once `npx expo start` is running.
+
+## Joining a team
+
+Two lanes, both for athletes, parents and teens:
+
+- **Slow lane:** `/onboarding/find-team` → `/onboarding/request` → `/onboarding/pending` (polls
+  `/me` until the coach approves) → `/signed`. A college with no registered team, or a search that
+  matches nothing, offers an email to appdev@teamimpact.org.
+- **Fast lane:** `/scan` → `/signed`, no approval. The camera (`src/components/QrScanner.tsx`,
+  `expo-camera`) reads the coach's QR; typing the code printed under it is the fallback.
+  `codeFromScan` and `qrProblem` in `src/components/join.ts` read the code out of the QR's link and
+  turn API errors into a message with a next step (410 expired/turned off, 404 not ours, 409
+  already on the team).
+
+**Testing codes** (mock API, `pnpm dev:mock`). Sign in as a newcomer (Leo, Rosa or Eli); the
+regular mock users are already on a team.
+
+- A real QR: sign in as the coach on a second screen, Team → QR code. "Turn off" there gives a
+  revoked code.
+- Typed: `tufts-soccer-live-qr-2026` (or its short code `JUMB-Q7K4`, any case),
+  `tufts-soccer-revoked-qr-2026`, `tufts-soccer-expired-qr-2026` (`QR_TOKENS` in
+  `apps/api/src/mock/team.ts`). For a QR of the expired code, paste it into any QR generator.
+- The mock data lives in memory: restart the API to reset joins and codes.
+
+**Camera.** The permission text is set by the `expo-camera` plugin in `app.json`, and only shows in
+a dev or store build (`npx expo run:ios`); Expo Go shows its own. Web needs `localhost` or HTTPS.
+The iOS Simulator has no camera. To test a denied camera: iOS Settings → Expo Go (or the dev build)
+→ Camera off; Android: App info → Permissions → Camera. Only reinstalling the app brings back the
+first-time prompt on iOS.
 
 ## Card demo
 
