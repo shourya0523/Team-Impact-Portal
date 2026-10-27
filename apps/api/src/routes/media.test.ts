@@ -27,6 +27,7 @@ const addUser = (id: string, userType: 'parent' | 'athlete' | 'staff') =>
     dob: '1990-01-01',
   });
 
+// Booting PGlite and running the migrations can take a while on a busy CI runner.
 beforeAll(async () => {
   t = await createTestApp();
   await addUser(ids.parent, 'parent');
@@ -53,7 +54,7 @@ beforeAll(async () => {
     firstName: 'Sam',
     age: 8,
   });
-});
+}, 30_000);
 
 afterAll(() => t.close());
 
