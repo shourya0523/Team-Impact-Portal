@@ -10,7 +10,7 @@ import type {
 import { NOTIFICATION_PREF } from '@team-impact/contracts';
 import { id, summaryOf, USERS } from './fixtures';
 import type { MockCommunity, MockUser } from './fixtures';
-import { hiddenFor } from './safety';
+import { blockedBetween, hiddenFor } from './safety';
 import { isSuspended } from './staff-tools';
 import type { MockWorld } from './world';
 
@@ -140,6 +140,19 @@ export const canReceive = (world: MockWorld, userId: string, communityId: string
   return !!u && !!c && !isSuspended(world, userId) && world.canSeeCommunity(c, u);
 };
 
+/**
+ * Kinds that are about another person's own activity, so a block between the reader and that
+ * person silences them (PRD §9). Join approvals, warnings and announcements still arrive: those
+ * are about the reader's account, not the other person's content (and staff can't be blocked).
+ */
+const SILENCED_BY_BLOCKS: ReadonlySet<NotificationKind> = new Set(['reply', 'event']);
+
+/** Whether a block between the reader and the actor silences this notification. */
+export const silencedByBlock = (
+  world: MockWorld,
+  n: Pick<MockNotification, 'userId' | 'kind' | 'actorId'>,
+) => SILENCED_BY_BLOCKS.has(n.kind) && !!n.actorId && blockedBetween(world, n.userId, n.actorId);
+
 /** True when push text must not say anything about the community. Unknown counts as discreet. */
 const isDiscreet = (world: MockWorld, communityId: string) => {
   const c = world.communities.find((x) => x.id === communityId);
@@ -156,6 +169,8 @@ export const notify = (
 ) => {
   // Staff warnings always arrive; every other kind follows the reader's switch.
   if (n.kind !== 'warning' && !prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
+  // Nothing about someone the reader blocked (or who blocked them).
+  if (silencedByBlock(world, n)) return;
   const stored: MockNotification = {
     ...n,
     id: world.newId(),

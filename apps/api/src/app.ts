@@ -10,6 +10,7 @@ import {
 import type { Db } from './db/client';
 import { isActiveUser, track } from './events-log';
 import { registerMockRoutes } from './mock/routes';
+import { mediaRoutes, type MediaRoutesOptions } from './routes/media';
 import { MockWorld } from './mock/world';
 import { httpError, useZodContracts } from './zod';
 
@@ -27,6 +28,8 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
+  /** Database, bucket and auth for the upload routes; absent on mocks. */
+  media?: MediaRoutesOptions;
 }
 
 /** Identity search and medical communities ship on for the pilot (PRD §7, §5). */
@@ -40,6 +43,7 @@ export const buildApp = async ({
   logger = false,
   flags = DEFAULT_FLAGS,
   mock = false,
+  media,
 }: AppOptions) => {
   const app = useZodContracts(Fastify({ logger }));
 
@@ -70,6 +74,7 @@ export const buildApp = async ({
       return reply.status(204).send();
     });
   }
+  if (media) await app.register(mediaRoutes, media);
 
   return app;
 };

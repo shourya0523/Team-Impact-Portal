@@ -1,12 +1,109 @@
+import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { ChildProfile } from '@team-impact/contracts';
 import { colors, spacing } from '@team-impact/ui-tokens';
-import { api, ApiRequestError } from '@/api';
+import { api, ApiRequestError, uploadPhoto, UploadProblem } from '@/api';
+import { CheckRow } from '@/components/signup';
 import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { Avatar, Button, Card, Icon, Input, TeamAvatar, Text } from '@/ui';
+
+/**
+ * Adds or changes the child's photo (PRD F3) through the one upload path. The parent first
+ * confirms they have the right to share it, which the API requires for every photo.
+ */
+function ChildPhoto({
+  child,
+  onChange,
+}: {
+  child: ChildProfile;
+  onChange: (c: ChildProfile) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rights, setRights] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const choose = async () => {
+    setError(null);
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      // A square crop re-encodes the photo, and 'compatible' asks iOS for JPEG rather than HEIC,
+      // which browsers can't show and the API doesn't accept.
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
+    const asset = picked.canceled ? null : picked.assets[0];
+    if (!asset) return;
+    setBusy(true);
+    try {
+      await uploadPhoto(asset.uri, { purpose: 'child_photo', childId: child.id }, asset.mimeType);
+      const updated = (await api.children()).find((c) => c.id === child.id);
+      if (updated) onChange(updated);
+      setOpen(false);
+      setRights(false);
+    } catch (e) {
+      setError(
+        e instanceof UploadProblem
+          ? e.message
+          : e instanceof ApiRequestError && e.body.error.issues?.[0]
+            ? e.body.error.issues[0].message
+            : 'The photo didn’t upload. Try again.',
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!open) {
+    return (
+      <Button
+        label={child.photoUrl ? 'Change photo' : 'Add photo'}
+        variant="secondary"
+        size="sm"
+        onPress={() => setOpen(true)}
+      />
+    );
+  }
+  return (
+    <View style={styles.block}>
+      <CheckRow
+        label={`I have the right to share this photo of ${child.firstName}`}
+        checked={rights}
+        onToggle={() => setRights((r) => !r)}
+      />
+      <Text variant="caption" color="muted">
+        Only your team and family see it. Never in search, recruiter views or card exports.
+      </Text>
+      {error && <ErrorText>{error}</ErrorText>}
+      <View style={styles.row}>
+        <Button
+          label="Cancel"
+          variant="secondary"
+          size="sm"
+          stretch
+          onPress={() => {
+            setOpen(false);
+            setRights(false);
+            setError(null);
+          }}
+        />
+        <Button
+          label={busy ? 'Uploading…' : 'Choose photo'}
+          size="sm"
+          stretch
+          disabled={!rights || busy}
+          onPress={() => void choose()}
+        />
+      </View>
+    </View>
+  );
+}
 
 /** The parent edits what the team sees: first name, age and an optional interests bio (PRD F3). */
 function ChildCard({ child }: { child: ChildProfile }) {
@@ -61,6 +158,7 @@ function ChildCard({ child }: { child: ChildProfile }) {
             )}
           </View>
         </View>
+        <ChildPhoto child={current} onChange={setCurrent} />
         {editing ? (
           <>
             <Input label="First name" value={firstName} onChangeText={setFirstName} />

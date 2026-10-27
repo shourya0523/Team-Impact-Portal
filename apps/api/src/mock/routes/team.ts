@@ -10,6 +10,7 @@ import {
   QrCodeJoin,
   RemoveMemberResult,
   Team,
+  TeamAthleteContacts,
   TeamMemberParams,
   TeamQrCode,
   TeamRoster,
@@ -110,6 +111,18 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request) => {
       const u = visibleTeam(request, request.params.id);
       return area.roster(world, request.params.id, u)!;
+    },
+  );
+
+  app.get(
+    '/teams/:id/athlete-contacts',
+    { schema: { params: IdParams, response: { 200: TeamAthleteContacts } } },
+    async (request) => {
+      const u = visibleTeam(request, request.params.id);
+      const contacts = area.athleteContacts(world, request.params.id, u);
+      if (!contacts)
+        throw httpError(403, 'Only families on the team see athletes’ contact details');
+      return contacts;
     },
   );
 

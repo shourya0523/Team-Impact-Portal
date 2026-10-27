@@ -1,9 +1,12 @@
 import {
   type CalendarEvent,
-  canJoinCommunity,
+  can,
+  contactAudience,
+  recruiterVisible,
   type CardFace,
   type CardWithContact,
   type Community,
+  consentFlags,
   type ContactSharing,
   type FeatureFlags,
   type IdentitySearchLogEntry,
@@ -31,9 +34,10 @@ import {
   type Scorer,
 } from './feed';
 import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
+import { actorOf, cardFacts, communityFacts } from './policy';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
-import { isSuspended, newStaffToolsState } from './staff-tools';
+import { newStaffToolsState } from './staff-tools';
 import {
   initialCoachInvites,
   initialQrCodes,
@@ -42,6 +46,15 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+import type { MockUpload } from './uploads';
+
+/** One row of consent history (see `MockWorld.consentRecords`). */
+export interface MockConsentRecord {
+  userId: string;
+  flag: string;
+  value: boolean;
+  recordedAt: string;
+}
 
 /** A feed page request: the route's query, plus the time for tests that need a fixed one. */
 type PageRequest = { cursor?: string; limit: number; now?: string };
@@ -91,6 +104,13 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /** Uploaded files and their state, kept in memory (`./uploads.ts`). */
+  readonly uploads: MockUpload[] = [];
+  /**
+   * Append-only consent history, like `consent_records`: every privacy choice gets a timestamped
+   * row and none is ever edited. Write through `recordConsent`.
+   */
+  readonly consentRecords: MockConsentRecord[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
   /** What the real routes write to events_log, checked the same way (`track()`, src/events-log.ts). */
@@ -106,6 +126,11 @@ export class MockWorld {
     const list: readonly TrackedEvent[] = 'name' in events ? [events] : events;
     const occurredAt = new Date().toISOString();
     this.eventsLog.push(...list.map((event) => ({ ...eventRow(userId, event), occurredAt })));
+  };
+
+  /** Appends one consent record. Call it only when a value actually changes. */
+  recordConsent = (userId: string, flag: string, value: boolean) => {
+    this.consentRecords.push({ userId, flag, value, recordedAt: new Date().toISOString() });
   };
 
   user = (userId: string) => this.users.find((u) => u.id === userId);
@@ -150,32 +175,12 @@ export class MockWorld {
   };
 
   /** Whether `u` may see the community exists: listed, openable, its name shown. */
-  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (c.kind === 'medical' && !this.flags.medicalCommunities) return false;
-    if (c.moderation === 'removed') return false;
-    const creator = 'createdById' in c && c.createdById === u.id;
-    if (c.moderation !== 'approved' && u.role !== 'staff' && !creator) return false;
-    if (u.role === 'staff') return true;
-    switch (c.kind) {
-      case 'team':
-        return this.membership(c, u) !== null;
-      case 'team_impact':
-        return true;
-      case 'medical':
-        // Teens and recruiters never see medical communities, not even their names.
-        return canJoinCommunity(u.role, 'medical');
-      case 'interest':
-        return u.role === 'recruiter' ? c.official : true;
-    }
-  };
+  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.see', communityFacts(this, c, u));
 
   /** Whose posts and events reach `u`'s feed: their communities, plus what recruiters may read. */
-  readsCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (!this.canSeeCommunity(c, u)) return false;
-    if (this.membership(c, u)) return true;
-    if (u.role !== 'recruiter') return false;
-    return c.kind === 'team_impact' || (c.kind === 'interest' && c.official);
-  };
+  readsCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.read', communityFacts(this, c, u));
 
   community = (c: MockCommunity, u: MockUser): Community => {
     const base = {
@@ -392,7 +397,7 @@ export class MockWorld {
   join = (c: MockCommunity, u: MockUser): string | null => {
     if (c.kind !== 'interest' && c.kind !== 'medical')
       return 'This community can’t be joined directly';
-    if (!canJoinCommunity(u.role, c.kind) || c.moderation !== 'approved') {
+    if (!can(actorOf(this, u), 'community.join', { kind: c.kind }) || c.moderation !== 'approved') {
       return 'You can’t join this community';
     }
     if (c.members.some((m) => m.userId === u.id)) return null;
@@ -450,6 +455,9 @@ export class MockWorld {
     if (!member) return 'Join the community first';
     const card = this.cards.find((k) => k.face.athleteId === u.id);
     if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    if ((member.recruiterSearchOptIn ?? false) !== findable) {
+      this.recordConsent(u.id, consentFlags.findableIn(c.id), findable);
+    }
     member.recruiterSearchOptIn = findable;
     return null;
   };
@@ -486,15 +494,11 @@ export class MockWorld {
   };
 
   /** On the employer portal at all: a published card, open to recruiting, of an athlete. */
-  recruiterCanSee = (card: MockCard) => {
-    const owner = this.user(card.face.athleteId);
-    return (
-      card.visibility.published &&
-      card.visibility.openToRecruiting &&
-      !isSuspended(this, card.face.athleteId) &&
-      (owner?.role === 'athlete' || owner?.role === 'alumni_athlete')
-    );
-  };
+  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card, null));
+
+  /** Whether `u` may read this card at all, blocks included (search, lists). */
+  canReadCard = (card: MockCard, u: MockUser) =>
+    can(actorOf(this, u), 'card.read', cardFacts(this, card, u));
 
   private static share = (
     contact: MockCard['contact'],
@@ -511,23 +515,16 @@ export class MockWorld {
     if (!card) return null;
     const face = this.cardFace(card);
     const none: ContactSharing = { email: false, phone: false, linkedin: false };
-    if (u.id === athleteId) {
-      return {
-        ...face,
-        contact: MockWorld.share(card.contact, { email: true, phone: true, linkedin: true }),
-      };
-    }
-    if (!card.visibility.published) return null;
-    if (u.role === 'recruiter') {
-      return this.recruiterCanSee(card)
-        ? { ...face, contact: MockWorld.share(card.contact, card.visibility.recruitersSee) }
-        : null;
-    }
-    if (u.role === 'staff') return { ...face, contact: {} };
-    const sameTeam = card.face.teamId !== null && this.teamIdsOf(u.id).includes(card.face.teamId);
-    if (!sameTeam) return null;
-    // Teens never see athletes' contact details; approved parents see the family set.
-    const sharing = u.role === 'parent' ? card.visibility.familiesSee : none;
+    const facts = cardFacts(this, card, u);
+    const actor = actorOf(this, u);
+    if (!can(actor, 'card.read', facts)) return null;
+    const all: ContactSharing = { email: true, phone: true, linkedin: true };
+    const sharing = {
+      owner: all,
+      recruiters: card.visibility.recruitersSee,
+      families: card.visibility.familiesSee,
+      none,
+    }[contactAudience(actor, facts)];
     return { ...face, contact: MockWorld.share(card.contact, sharing) };
   };
 
@@ -538,13 +535,17 @@ export class MockWorld {
       (l) => l.companyId === u.companyId && (l.ownerId === u.id || l.sharedWithIds.includes(u.id)),
     );
 
-  private visibleEntries = (l: MockList) =>
+  /**
+   * A list's athletes that `u` may see: still on the employer portal, and not across a block with
+   * `u`. Per viewer, since colleagues share a list but each has their own blocks.
+   */
+  private visibleEntries = (l: MockList, u: MockUser) =>
     l.entries.filter((e) => {
       const card = this.cards.find((c) => c.face.athleteId === e.athleteId);
-      return card && this.recruiterCanSee(card);
+      return !!card && this.canReadCard(card, u);
     });
 
-  list = (l: MockList): RecruiterList => ({
+  list = (l: MockList, u: MockUser): RecruiterList => ({
     id: l.id,
     companyId: l.companyId,
     name: l.name,
@@ -552,14 +553,14 @@ export class MockWorld {
     note: l.note,
     owner: fx.summaryOf(this.user(l.ownerId)!),
     sharedWith: l.sharedWithIds.map((uid) => fx.summaryOf(this.user(uid)!)),
-    athleteCount: this.visibleEntries(l).length,
+    athleteCount: this.visibleEntries(l, u).length,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   });
 
   listDetail = (l: MockList, u: MockUser): RecruiterListDetail => ({
-    ...this.list(l),
-    entries: this.visibleEntries(l).map((e) => ({
+    ...this.list(l, u),
+    entries: this.visibleEntries(l, u).map((e) => ({
       card: this.cardFor(e.athleteId, u)!,
       addedBy: fx.summaryOf(this.user(e.addedById)!),
       addedAt: e.addedAt,

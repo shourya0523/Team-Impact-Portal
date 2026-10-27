@@ -15,9 +15,12 @@
     "db:migrate": "drizzle-kit migrate",
     "db:rollback": "tsx --env-file-if-exists=../../.env src/db/rollback.ts",
     "db:seed": "tsx --env-file-if-exists=../../.env src/db/seed/index.ts",
+    "db:seed:bulk": "tsx --env-file-if-exists=../../.env src/db/seed/index.ts --bulk",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1152.0",
+    "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@team-impact/contracts": "workspace:*",
@@ -28,7 +31,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.8",
+    "@electric-sql/pglite": "^0.5.10",
     "@faker-js/faker": "^10.6.0",
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.11",

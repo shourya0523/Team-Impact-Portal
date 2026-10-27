@@ -1,11 +1,20 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useState } from 'react';
-import { Linking, StyleSheet, View } from 'react-native';
-import type { JoinRequest, TeamMember, TeamRoster } from '@team-impact/contracts';
+import { StyleSheet, View } from 'react-native';
+import type { JoinRequest, SharedContact, TeamMember, TeamRoster } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
-import { api, track } from '@/api';
+import { api } from '@/api';
+import { ContactLinks, hasContact } from '@/components/contact';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { fullName, joinedLine, nameList, NoTeam, PersonRow, useTeamId } from '@/components/team';
+import {
+  fullName,
+  joinedLine,
+  nameList,
+  NoTeam,
+  openProfile,
+  PersonRow,
+  useTeamId,
+} from '@/components/team';
 import { Async, ErrorText, Gutter, Screen, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -88,7 +97,18 @@ function RemoveButton({ member, myId }: { member: TeamMember; myId: string | und
   );
 }
 
-function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
+/** Athlete id to what they share with families. Only loaded for parents (see `TeamScreen`). */
+type FamilyContacts = ReadonlyMap<string, SharedContact>;
+
+function Members({
+  roster,
+  tab,
+  familyContacts,
+}: {
+  roster: TeamRoster;
+  tab: Tab;
+  familyContacts: FamilyContacts | null;
+}) {
   const { me } = useRole();
   const manage = roster.canManage;
   const right = (m: TeamMember) => manage && <RemoveButton member={m} myId={me?.id} />;
@@ -98,46 +118,40 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
     return (
       <Card>
         {roster.parents.map((p) => (
-          <PersonRow key={p.user.id} user={p.user} detail={joinedLine(p)} right={right(p)}>
+          <PersonRow
+            key={p.user.id}
+            user={p.user}
+            detail={joinedLine(p)}
+            right={right(p)}
+            onPress={() => openProfile(p.user.id)}
+          >
             {p.children.length > 0 && (
               <Text variant="small" color="secondary">
                 Parent of {nameList(p.children.map((c) => c.firstName))}
               </Text>
             )}
             {/* Only the team's own coaches get these; the API sends null to everyone else. */}
-            {p.contact?.email && (
-              <Text
-                variant="small"
-                color="brand"
-                accessibilityRole="link"
-                onPress={() => {
-                  track({
-                    name: 'contact.viewed',
-                    properties: { channel: 'email' },
-                    subjectId: p.user.id,
-                  });
-                  Linking.openURL(`mailto:${p.contact!.email}`);
-                }}
-              >
-                {p.contact.email}
-              </Text>
-            )}
-            {p.contact?.phone && (
-              <Text
-                variant="small"
-                color="brand"
-                accessibilityRole="link"
-                onPress={() => {
-                  track({
-                    name: 'contact.viewed',
-                    properties: { channel: 'phone' },
-                    subjectId: p.user.id,
-                  });
-                  Linking.openURL(`tel:${p.contact!.phone!.replace(/[^+\d]/g, '')}`);
-                }}
-              >
-                {p.contact.phone}
-              </Text>
+            {p.contact && <ContactLinks contact={p.contact} ownerId={p.user.id} />}
+          </PersonRow>
+        ))}
+      </Card>
+    );
+  }
+
+  if (tab === 'athletes') {
+    if (!roster.athletes.length) return <Empty what="athletes" />;
+    return (
+      <Card>
+        {roster.athletes.map((a) => (
+          <PersonRow
+            key={a.user.id}
+            user={a.user}
+            detail={joinedLine(a)}
+            right={right(a)}
+            onPress={() => openProfile(a.user.id)}
+          >
+            {familyContacts && (
+              <AthleteContact contact={familyContacts.get(a.user.id)} ownerId={a.user.id} />
             )}
           </PersonRow>
         ))}
@@ -150,10 +164,34 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
   return (
     <Card>
       {list.map((m) => (
-        <PersonRow key={m.user.id} user={m.user} detail={joinedLine(m)} right={right(m)} />
+        <PersonRow
+          key={m.user.id}
+          user={m.user}
+          detail={joinedLine(m)}
+          right={right(m)}
+          onPress={() => openProfile(m.user.id)}
+        />
       ))}
     </Card>
   );
+}
+
+/** What a parent sees under an athlete: the contacts the athlete shares with families (PRD F4). */
+function AthleteContact({
+  contact,
+  ownerId,
+}: {
+  contact: SharedContact | undefined;
+  ownerId: string;
+}) {
+  if (!contact || !hasContact(contact)) {
+    return (
+      <Text variant="small" color="muted">
+        Hasn’t shared contact details with families
+      </Text>
+    );
+  }
+  return <ContactLinks contact={contact} ownerId={ownerId} />;
 }
 
 function Empty({ what }: { what: string }) {
@@ -188,15 +226,32 @@ function CoachTools() {
 /**
  * "/team": the roster for everyone on the team, grouped by role. Coaches also get join approvals,
  * removing members, the QR code, adding coaches and editing the team. Families' contact details
- * reach the team's coaches only; teens never see anyone's (PRD §6).
+ * reach the team's coaches only; parents see the contacts each athlete shares with families; teens
+ * never see anyone's (PRD §6).
  */
 export default function TeamScreen() {
   const { role } = useRole();
   const teamId = useTeamId();
   const [tab, setTab] = useState<Tab>('athletes');
   const roster = useApi(() => (teamId ? api.roster(teamId) : Promise.resolve(null)), [teamId]);
-  // Back from removing someone or editing the team: show what changed.
+  // Athletes' family contacts come from their own route, for parents only: the roster itself
+  // never carries them, so nobody else (teens included) is ever sent one.
+  const parent = role === 'parent';
+  const contacts = useApi(
+    () =>
+      teamId && parent
+        ? api
+            .athleteContacts(teamId)
+            .then((list): FamilyContacts => new Map(list.map((a) => [a.athlete.id, a.contact])))
+        : Promise.resolve(null),
+    [teamId, parent],
+  );
+  // Back from removing someone or editing the team, or after an athlete changed what they share.
   useFocusEffect(roster.reload);
+  useFocusEffect(contacts.reload);
+  // Shown only once loaded: while loading, or if loading fails, the roster shows without them
+  // rather than wrongly saying an athlete shares nothing.
+  const familyContacts = contacts.state.status === 'ready' ? contacts.state.data : null;
 
   const loaded = roster.state.status === 'ready' ? roster.state.data : null;
   const waiting = loaded?.pendingRequestCount ?? 0;
@@ -231,7 +286,7 @@ export default function TeamScreen() {
                       : []),
                   ]}
                 />
-                <Members roster={r} tab={tab} />
+                <Members roster={r} tab={tab} familyContacts={familyContacts} />
                 {role === 'teen' && (
                   <Text variant="small" color="secondary">
                     Contact details stay private between athletes, families and coaches.

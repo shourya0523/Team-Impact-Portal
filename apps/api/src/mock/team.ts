@@ -9,14 +9,18 @@ import {
   type RosterChild,
   type StaffUpdateTeamRequest,
   type Team,
+  type TeamAthleteContacts,
   type TeamMember,
   type TeamQrCode,
   type TeamRoster,
   type UpdateTeamRequest,
+  can,
 } from '@team-impact/contracts';
 import { isReadableTeamColor } from '@team-impact/ui-tokens';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
+import { actorOf } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
 /**
@@ -193,16 +197,17 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
 
 // Who may do what ---------------------------------------------------------------------------------
 
+/** The team's own coaches: the only ones who get family contact details. */
 export const isCoachOf = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'coach' && world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.familyContacts', { teamId });
 
 /** Approve, remove, edit, make codes and invite coaches: the team's coaches, and staff. */
 export const canManageTeam = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || isCoachOf(world, u, teamId);
+  can(actorOf(world, u), 'team.manage', { teamId });
 
 /** The roster is for the team itself and staff; everyone else gets a 404. */
 export const canSeeRoster = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.roster', { teamId });
 
 // Teams -------------------------------------------------------------------------------------------
 
@@ -313,6 +318,14 @@ const childrenOf = (world: MockWorld, parentId: string, teamId: string): RosterC
     .filter((c) => c.parentId === parentId && c.teamId === teamId)
     .map(({ id: childId, firstName }) => ({ id: childId, firstName }));
 
+/** Whether `memberId` shows on `viewer`'s roster of `teamId`, blocks included. */
+const listsMember = (world: MockWorld, viewer: MockUser, teamId: string, memberId: string) =>
+  can(actorOf(world, viewer), 'team.listMember', {
+    teamId,
+    memberId,
+    blocked: blockedBetween(world, viewer.id, memberId),
+  });
+
 export const roster = (world: MockWorld, teamId: string, viewer: MockUser): TeamRoster | null => {
   const t = team(world, teamId);
   if (!t) return null;
@@ -324,7 +337,9 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
-      if (!u) return [];
+      // A block hides the member (and a parent's children with them) from the viewer, unless the
+      // viewer runs the team (PRD §9; `team.listMember`).
+      if (!u || !listsMember(world, viewer, teamId, u.id)) return [];
       const member: TeamMember = {
         user: summaryOf(u),
         joinedVia: m.joinedVia,
@@ -355,6 +370,30 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     canManage: manage,
     pendingRequestCount: manage ? pendingRequests(world, teamId).length : null,
   };
+};
+
+/**
+ * The team's athletes with what each shares with families (PRD §6, F4), for an approved parent on
+ * the team; null for anyone else (the route answers 403). It reads through `cardFor`, the rule the
+ * athlete's profile already uses, so the two can't disagree: only the athlete's family channels,
+ * and nothing while their card is unpublished. Teens are never parents, so they never get here.
+ */
+export const athleteContacts = (
+  world: MockWorld,
+  teamId: string,
+  viewer: MockUser,
+): TeamAthleteContacts | null => {
+  if (viewer.role !== 'parent' || !world.teamIdsOf(viewer.id).includes(teamId)) return null;
+  return world.teamMembers
+    .filter((m) => m.teamId === teamId)
+    .flatMap((m) => {
+      const athlete = world.user(m.userId);
+      if (athlete?.role !== 'athlete' || !listsMember(world, viewer, teamId, athlete.id)) return [];
+      return [
+        { athlete: summaryOf(athlete), contact: world.cardFor(athlete.id, viewer)?.contact ?? {} },
+      ];
+    })
+    .sort((a, b) => a.athlete.firstName.localeCompare(b.athlete.firstName));
 };
 
 /**
