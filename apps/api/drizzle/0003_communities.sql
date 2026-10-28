@@ -65,7 +65,10 @@ ALTER INDEX "memberships_group_id_idx" RENAME TO "memberships_community_id_idx";
 ALTER TABLE "posts" RENAME COLUMN "group_id" TO "community_id";--> statement-breakpoint
 ALTER TABLE "posts" RENAME CONSTRAINT "posts_group_id_groups_id_fk" TO "posts_community_id_communities_id_fk";--> statement-breakpoint
 ALTER INDEX "posts_group_created_idx" RENAME TO "posts_community_created_idx";--> statement-breakpoint
--- Network-wide posts now live in the Team Impact community.
+-- Network-wide posts now live in the Team Impact community. Posts elsewhere that were shared
+-- network-wide stay in their own community and lose that reach on purpose: moving them would
+-- strip their team or interest context and republish team posts (which can involve teens and
+-- children) to the whole network. Authors who want reach can repost in Team Impact.
 DROP INDEX "posts_network_feed_idx";--> statement-breakpoint
 ALTER TABLE "posts" DROP COLUMN "visibility";--> statement-breakpoint
 DROP TYPE "public"."post_visibility";--> statement-breakpoint

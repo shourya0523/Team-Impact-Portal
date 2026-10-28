@@ -3,7 +3,8 @@
 -- affinity groups (private ones members-only), alumni mentors come back as alumni, and
 -- notifications, community join requests, QR labels and lifetimes, team about text and event
 -- details and end times are dropped; invited teams come back as live. College and org
--- groups deleted on the way up are not recreated.
+-- groups deleted on the way up are not recreated. Team and interest posts that were shared
+-- network-wide come back group-only (only Team Impact posts come back as network).
 DROP TABLE "notifications";
 DROP TABLE "community_join_requests";
 DROP TYPE "public"."notification_kind";

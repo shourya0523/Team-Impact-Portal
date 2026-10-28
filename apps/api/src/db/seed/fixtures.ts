@@ -5,6 +5,7 @@
 // Fields the schema has no column for yet are noted where they're dropped; the real route layer
 // adds them as it needs them.
 import { createHash } from 'node:crypto';
+import type { ModerationStatus } from '@team-impact/contracts';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { COMMENTS } from '../../mock/activity';
 import * as fx from '../../mock/fixtures';
@@ -20,8 +21,20 @@ export const DEV_PASSWORD_HASH =
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 const date = (iso: string) => new Date(iso);
 
+type DbEnum<E extends { enumValues: readonly string[] }> = E['enumValues'][number];
+
 // Mock moderation is the contract's; the database also has `rejected`, which the mock never uses.
-const moderation = (status: string) => (status === 'in_review' ? 'pending' : status) as never;
+const MODERATION: Record<ModerationStatus, DbEnum<typeof schema.moderationStatus>> = {
+  in_review: 'pending',
+  approved: 'approved',
+  removed: 'removed',
+};
+const moderation = (status: ModerationStatus) => MODERATION[status];
+
+const MEMBERSHIP_SOURCE: Record<
+  (typeof fx.TEAM_MEMBERS)[number]['joinedVia'],
+  DbEnum<typeof schema.membershipSource>
+> = { coach_invite: 'coach_invite', join_request: 'join_request', qr_code: 'join_code' };
 
 // Birth dates are only collected to check age. Teens are 15, everyone else an adult.
 const DOB: Partial<Record<fx.MockUser['role'], string>> = { teen: '2011-05-01' };
@@ -126,7 +139,7 @@ export const fixtureRows = (now = Date.now()) => {
       role: m.userId === fx.USERS.coach.id ? ('coach' as const) : ('member' as const),
       season: '2026-27',
       joinedAt: date(m.joinedAt),
-      source: m.joinedVia === 'qr_code' ? ('join_code' as const) : (m.joinedVia as 'coach_invite'),
+      source: MEMBERSHIP_SOURCE[m.joinedVia],
       joinCodeId: m.joinedVia === 'qr_code' ? liveCode.id : null,
     })),
     ...fx.COMMUNITIES.flatMap((c) =>
