@@ -95,6 +95,7 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
         });
       }
       e.goingCount = Math.max(0, e.goingCount + Number(status === 'going') - Number(wasGoing));
+      world.track(u.id, { name: 'rsvp.set', properties: { calendarEventId: e.id, status } });
       return world.calendarEvent(e, c, u);
     },
   );

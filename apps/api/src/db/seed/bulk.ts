@@ -8,7 +8,8 @@
 import { createHash } from 'node:crypto';
 import { faker } from '@faker-js/faker';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import { QR_SHORT_CODE_ALPHABET } from '@team-impact/contracts';
+import { QR_SHORT_CODE_ALPHABET, type Role, type TrackedEvent } from '@team-impact/contracts';
+import { eventRow } from '../../events-log';
 import * as schema from '../schema';
 import {
   AFFINITY_GROUPS,
@@ -154,8 +155,20 @@ const addUser = (
   return user;
 };
 
-const log = (userId: string | null, event: string, properties: object, occurredAt = recent(365)) =>
-  rows.eventsLog.push({ id: uuid(), userId, event, properties, occurredAt });
+const log = (userId: string | null, event: TrackedEvent, occurredAt = recent(365)) =>
+  rows.eventsLog.push({ id: uuid(), ...eventRow(userId, event), occurredAt });
+
+/** The contracts' role for each seeded user type. */
+const ROLE_BY_USER_TYPE: Record<(typeof schema.userType.enumValues)[number], Role> = {
+  athlete: 'athlete',
+  alumni_athlete: 'alumni_athlete',
+  alumni_mentor: 'alumni_mentor',
+  recruiter: 'recruiter',
+  staff: 'staff',
+  coach: 'coach',
+  parent: 'parent',
+  teen: 'teen',
+};
 
 /** Community members, for picking realistic authors, commenters and RSVPs. */
 const communityMembers = new Map<string, string[]>();
@@ -235,6 +248,8 @@ const addTeam = (
   const label = gender === 'women' ? "Women's" : gender === 'men' ? "Men's" : 'Coed';
   const displayName = `${college.name} ${label} ${sport}`;
   const createdAt = daysAgo(int(380, 700));
+  const color = extra.color ?? (chance(0.6) ? pick(TEAM_COLORS) : null);
+  const status = chance(0.03) ? ('archived' as const) : ('live' as const);
   rows.teams.push({
     id: teamId,
     collegeId: college.id,
@@ -242,11 +257,11 @@ const addTeam = (
     gender,
     division: college.division,
     displayName,
-    color: extra.color ?? (chance(0.6) ? pick(TEAM_COLORS) : null),
-    status: chance(0.03) ? 'archived' : 'live',
+    color,
+    status,
     createdAt,
   });
-  log(staff.id, 'team.created', { teamId, displayName }, createdAt);
+  log(staff.id, { name: 'team.created', properties: { teamId } }, createdAt);
   const community = addCommunity({ kind: 'team', name: displayName, teamId, createdAt });
 
   const coach = extra.coach ?? addUser('coach', { collegeId: college.id });
@@ -270,7 +285,11 @@ const addTeam = (
       joinedAt: createdAt,
     });
   }
-  log(staff.id, 'coach.added', { teamId, coachId: coach.id, via: 'invite' }, createdAt);
+  log(
+    staff.id,
+    { name: 'coach.added', subjectId: coach.id, properties: { teamId, via: 'invite' } },
+    createdAt,
+  );
 
   const joinCodeId = uuid();
   rows.joinCodes.push({
@@ -281,6 +300,8 @@ const addTeam = (
     createdBy: coach.id,
     expiresAt: daysAhead(int(1, 7)),
     createdAt: daysAgo(int(0, 6)),
+    // Archiving a team revokes its codes.
+    ...(status === 'archived' && { revokedAt: daysAgo(0) }),
   });
   // An older code that has expired, so codes have history.
   rows.joinCodes.push({
@@ -291,6 +312,7 @@ const addTeam = (
     createdBy: coach.id,
     expiresAt: daysAgo(int(20, 60)),
     createdAt: daysAgo(int(61, 90)),
+    ...(status === 'archived' && { revokedAt: daysAgo(0) }),
   });
 
   if (chance(0.25)) {
@@ -303,7 +325,11 @@ const addTeam = (
       source: 'coach_added',
       addedBy: coach.id,
     });
-    log(coach.id, 'coach.added', { teamId, coachId: assistant.id, via: 'coach' });
+    log(coach.id, {
+      name: 'coach.added',
+      subjectId: assistant.id,
+      properties: { teamId, via: 'coach' },
+    });
   }
 
   const team = {
@@ -492,9 +518,10 @@ const seasonsFrom = (start: number): Season[] => SEASONS.slice(start) as Season[
 // and one pending coach invite.
 const tuftsCoach = addUser('coach', { email: 'tufts.coach@example.test', collegeId: tufts.id });
 const tuftsTeam = addTeam(tufts, 'Soccer', 'women', { color: '#3E8EDE', coach: tuftsCoach });
-log(staff.id, 'team.updated', { teamId: tuftsTeam.id, changes: { color: '#3E8EDE' } });
+log(staff.id, { name: 'team.updated', properties: { teamId: tuftsTeam.id, fields: ['color'] } });
+const tuftsInviteId = uuid();
 rows.coachInvites.push({
-  id: uuid(),
+  id: tuftsInviteId,
   teamId: tuftsTeam.id,
   email: 'tufts.assistant@example.test',
   tokenHash: sha256('seed-pending-coach-invite'),
@@ -502,7 +529,10 @@ rows.coachInvites.push({
   expiresAt: daysAhead(6),
   createdAt: daysAgo(1),
 });
-log(staff.id, 'coach.invited', { teamId: tuftsTeam.id, email: 'tufts.assistant@example.test' });
+log(staff.id, {
+  name: 'coach.invited',
+  properties: { teamId: tuftsTeam.id, inviteId: tuftsInviteId },
+});
 rows.joinCodes.push({
   id: uuid(),
   teamId: tuftsTeam.id,
@@ -723,7 +753,10 @@ const affinityGroups = [
     addCommunity({ kind: 'interest', name, createdBy: pick(athletes).user.id }),
   ),
 ];
-log(staff.id, 'community.marked_official', { communityId: officialAffinity.id });
+log(staff.id, {
+  name: 'community.marked_official',
+  properties: { communityId: officialAffinity.id },
+});
 for (const group of affinityGroups) {
   const members = faker.helpers.arrayElements([...athletes.map((a) => a.user), ...alumni], {
     min: 40,
@@ -830,10 +863,15 @@ for (const { org, recruiters } of recruitersByOrg) {
   if (org.tier === 'premium') {
     for (let i = 0; i < 12; i++) {
       const recruiter = pick(recruiters);
-      log(recruiter.id, 'search.identity_filter', {
-        recruiterId: recruiter.id,
-        orgId: org.id,
-        filter: { affinityGroupId: officialAffinity.id, sport: pick(Object.keys(SPORTS)) },
+      log(recruiter.id, {
+        name: 'search.identity_filter',
+        properties: {
+          searchId: uuid(),
+          communityId: officialAffinity.id,
+          companyId: org.id,
+          filters: ['sport'],
+          resultCount: int(0, 40),
+        },
       });
     }
   }
@@ -1039,11 +1077,15 @@ for (let i = 0; i < 60; i++) {
 }
 
 for (const user of rows.users.slice(0, 1500)) {
-  log(user.id!, 'user.signed_up', { userType: user.userType }, user.createdAt as Date);
+  log(
+    user.id!,
+    { name: 'user.signed_up', properties: { role: ROLE_BY_USER_TYPE[user.userType] } },
+    user.createdAt as Date,
+  );
 }
 for (const card of rows.cards.filter((c) => c.status === 'published').slice(0, 1500)) {
   if (card.athleteId)
-    log(card.athleteId, 'card.published', { cardId: card.id, season: card.season });
+    log(card.athleteId, { name: 'card.published', properties: { cardId: card.id! } });
 }
 
 // Insert order follows the foreign keys.

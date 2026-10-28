@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router';
+import type { ContactSharing } from '@team-impact/contracts';
 import { AthleteCard } from '@team-impact/ui-primitives/web';
 import { colors, fontWeight, spacing, typography } from '@team-impact/ui-tokens';
 import { toCardData } from '../../athleteCard';
-import { api } from '../../api';
+import { api, track } from '../../api';
 import { Form, FormError, useAction } from '../../forms';
 import { Async, Button, Card, PageHeader, Select, Text } from '../../ui';
 import { useApi } from '../../useApi';
@@ -69,7 +70,26 @@ const SaveToList = ({ athleteId }: { athleteId: string }) => {
   );
 };
 
-const Row = ({ label, value }: { label: string; value: string | null | undefined }) =>
+type Channel = keyof ContactSharing;
+
+const HREF: Record<Channel, (value: string) => string> = {
+  email: (v) => `mailto:${v}`,
+  phone: (v) => `tel:${v.replace(/[^+\d]/g, '')}`,
+  linkedin: (v) => (/^https?:\/\//.test(v) ? v : `https://${v}`),
+};
+
+/** A shared contact detail. Opening or copying it is logged as a contact view. */
+const Row = ({
+  label,
+  channel,
+  value,
+  onOpen,
+}: {
+  label: string;
+  channel: Channel;
+  value: string | null | undefined;
+  onOpen: (channel: Channel) => void;
+}) =>
   value ? (
     <div
       style={{
@@ -83,7 +103,16 @@ const Row = ({ label, value }: { label: string; value: string | null | undefined
         {label}
       </Text>
       <Text as="dd" variant="small">
-        {value}
+        <a
+          href={HREF[channel](value)}
+          target={channel === 'linkedin' ? '_blank' : undefined}
+          rel="noreferrer"
+          onClick={() => onOpen(channel)}
+          onCopy={() => onOpen(channel)}
+          style={{ color: colors.brand }}
+        >
+          {value}
+        </a>
       </Text>
     </div>
   ) : null;
@@ -93,6 +122,17 @@ export const AthletePage = () => {
   const { id = '' } = useParams();
   const { state } = useApi(() => api.card(id), [id]);
   const [flipped, setFlipped] = useState(false);
+  const card = state.status === 'ready' ? state.data : null;
+
+  // Logged when the card arrives rather than on mount, so StrictMode's double mount counts once.
+  useEffect(() => {
+    if (card) {
+      track({ name: 'card.viewed', properties: { cardId: card.id }, subjectId: card.athleteId });
+    }
+  }, [card?.id]);
+
+  const viewContact = (channel: Channel) =>
+    card && track({ name: 'contact.viewed', properties: { channel }, subjectId: card.athleteId });
 
   return (
     <>
@@ -164,9 +204,24 @@ export const AthletePage = () => {
                     app.
                   </Text>
                   <dl style={{ margin: 0 }}>
-                    <Row label="Email" value={card.contact.email} />
-                    <Row label="Phone" value={card.contact.phone} />
-                    <Row label="LinkedIn" value={card.contact.linkedinUrl} />
+                    <Row
+                      label="Email"
+                      channel="email"
+                      value={card.contact.email}
+                      onOpen={viewContact}
+                    />
+                    <Row
+                      label="Phone"
+                      channel="phone"
+                      value={card.contact.phone}
+                      onOpen={viewContact}
+                    />
+                    <Row
+                      label="LinkedIn"
+                      channel="linkedin"
+                      value={card.contact.linkedinUrl}
+                      onOpen={viewContact}
+                    />
                   </dl>
                   {!card.contact.email && !card.contact.phone && !card.contact.linkedinUrl && (
                     <Text variant="small" color="muted">

@@ -1,5 +1,5 @@
 -- Groups become communities (PRD v2.3 §5) and the other schema gaps close (TI Postgres ticket).
--- Reverse with `pnpm --filter @team-impact/api db:rollback` (drizzle/down/0002_communities.sql).
+-- Reverse with `pnpm --filter @team-impact/api db:rollback` (drizzle/down/0003_communities.sql).
 --
 -- Kinds map team -> team, platform -> team_impact, affinity -> interest. College and org groups
 -- have no community equivalent (recruiters join nothing), so they are deleted with their posts,

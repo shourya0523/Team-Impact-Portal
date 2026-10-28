@@ -1,7 +1,7 @@
 # Data model
 
 The schema TI-14 implements: the TI-4 v2 model (PRD v2, see the TI-4 v2 validation doc) plus PRD
-v2.1 team onboarding (TI-148/TI-149) and PRD v2.3 communities (migration `0002_communities`).
+v2.1 team onboarding (TI-148/TI-149) and PRD v2.3 communities (migration `0003_communities`).
 **32 tables.** Source of truth is
 `apps/api/src/db/schema/`; this page explains it. If you change the schema, update the diagrams here.
 
@@ -17,6 +17,7 @@ v2.1 team onboarding (TI-148/TI-149) and PRD v2.3 communities (migration `0002_c
 | + `community_join_requests`, `notifications` (PRD v2.3); `groups` renamed `communities`              | **32** |
 
 Identity-search auditing is an `events_log` event (`search.identity_filter`), not its own table.
+Event names and properties are defined once, in `packages/contracts/src/analytics.ts`.
 
 ## Rules the schema enforces
 
@@ -296,8 +297,9 @@ erDiagram
     }
     EVENTS_LOG {
         uuid id PK
-        uuid user_id FK
-        text event "incl. team/coach changes, identity searches"
+        uuid user_id FK "who did it; null = system"
+        text event "TRACKED_EVENTS in contracts"
+        uuid subject_id FK "who it was about"
         jsonb properties
     }
 ```
@@ -353,7 +355,7 @@ Small calls made while implementing, flagged for review:
 - `schools` → `colleges` everywhere (`users.college_id`, `ingested_records.college_id`), per
   PRD v2.1.
 - `users` gains `first_name`, `last_name` (signup collects them) and `open_to_recruiting`.
-- `groups` became `communities` in `0002_communities` (PRD v2.3). Kinds map team → team,
+- `groups` became `communities` in `0003_communities` (PRD v2.3). Kinds map team → team,
   platform → team_impact, affinity → interest; college and org groups had no equivalent and were
   dropped. Network-wide posts (`posts.visibility = network`) now live in the Team Impact community.
   The down migration is lossy where the old model has no slot (see its header).

@@ -1,4 +1,4 @@
--- Reverses 0002_communities.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
+-- Reverses 0003_communities.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
 -- Lossy where the old model has no slot: medical and interest communities both come back as
 -- affinity groups (private ones members-only), alumni mentors come back as alumni, and
 -- notifications, community join requests, QR labels and lifetimes, team about text and event

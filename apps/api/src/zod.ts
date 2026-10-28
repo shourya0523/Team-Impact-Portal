@@ -33,6 +33,10 @@ const apiError = (code: ErrorCode, message: string, issues?: Issues): ApiError =
   error: { code, message, issues },
 });
 
+/** Throw from a handler to answer with the shared error shape: `throw httpError(404, 'No such team')`. */
+export const httpError = (statusCode: number, message: string) =>
+  Object.assign(new Error(message), { statusCode });
+
 /**
  * Validates requests and serializes responses with the shared Zod contracts. Request parts are
  * replaced with their parsed values, so defaults and transforms apply. Responses are parsed too,
