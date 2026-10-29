@@ -9,7 +9,7 @@ import {
   RsvpRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { holdForReview } from '../activity';
+import { holdOrPublish } from '../activity';
 import { summaryOf } from '../fixtures';
 import type { MockEvent } from '../fixtures';
 import { hiddenFor } from '../safety';
@@ -17,7 +17,7 @@ import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 import { seenCommunity } from './posts';
 
-/** Creating events (held for moderation), RSVPs, and the organizer's attendee list. */
+/** Creating events (held for moderation, except staff's), RSVPs, and the organizer's attendee list. */
 export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   /** An event the viewer can read: approved in a community they read, or their own held one. */
   const readableEvent = (request: FastifyRequest, eventId: string) => {
@@ -60,7 +60,7 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
       };
       world.events.push(created);
       world.rsvps.push({ eventId: created.id, userId: u.id, status: 'going', respondedAt: now });
-      holdForReview(world, { kind: 'event', id: created.id }, `${title} · ${location}`);
+      holdOrPublish(world, u, { kind: 'event', id: created.id }, `${title} · ${location}`);
       return reply.status(201).send(world.calendarEvent(created, c, u));
     },
   );

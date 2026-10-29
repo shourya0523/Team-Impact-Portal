@@ -10,7 +10,7 @@ import {
   Post,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { commentsFor, holdForReview, toComment } from '../activity';
+import { announce, commentsFor, holdForReview, holdOrPublish, toComment } from '../activity';
 import type { MockCommunity, MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -22,7 +22,7 @@ export const seenCommunity = (world: MockWorld, u: MockUser, id: string) => {
   return c;
 };
 
-/** Posts, comments and rallies. Everything new is held for moderation (P5). */
+/** Posts, comments and rallies. Everything new is held for moderation (P5), except staff posts. */
 export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   const postView = (c: MockCommunity, u: MockUser, postId: string) => {
     const p = world.posts.find((x) => x.id === postId);
@@ -58,11 +58,15 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       if (!canPostIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t post in this community');
       }
-      // Staff posts in Team Impact's community are its announcements (TI-146).
-      const announcement = u.role === 'staff' && c.kind === 'team_impact';
+      // Staff posts in Team Impact's community are its announcements (TI-146). The app always pushes
+      // them: it has no push switch, unlike the portal.
+      if (u.role === 'staff' && c.kind === 'team_impact') {
+        const created = announce(world, u, c, request.body, { push: true });
+        return reply.status(201).send(postView(c, u, created.id)!);
+      }
       const created = {
         id: world.newId(),
-        kind: announcement ? ('announcement' as const) : ('post' as const),
+        kind: 'post' as const,
         authorId: u.id,
         communityId: c.id,
         text: request.body.text,
@@ -74,7 +78,7 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
         createdAt: new Date().toISOString(),
       };
       world.posts.push(created);
-      holdForReview(world, { kind: 'post', id: created.id }, created.text);
+      holdOrPublish(world, u, { kind: 'post', id: created.id }, created.text);
       world.track(u.id, {
         name: 'post.created',
         properties: { postId: created.id, kind: created.kind },

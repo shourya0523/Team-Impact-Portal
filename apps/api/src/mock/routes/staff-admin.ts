@@ -19,7 +19,8 @@ import {
   type TrackedEvent,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { summaryOf, type MockPost } from '../fixtures';
+import { announce } from '../activity';
+import { summaryOf } from '../fixtures';
 import { toPost } from '../safety';
 import { isSuspended } from '../staff-tools';
 import {
@@ -469,24 +470,7 @@ export const registerStaffAdminRoutes = (
       if (c.kind !== 'team_impact' && c.kind !== 'team') {
         throw httpError(400, 'Announcements go to Team Impact’s community or a team’s');
       }
-      const post: MockPost = {
-        id: world.newId(),
-        kind: 'announcement',
-        authorId: u.id,
-        communityId: c.id,
-        text: request.body.text,
-        official: true,
-        likeCount: 0,
-        commentCount: 0,
-        // Staff wrote it, so it skips the review queue.
-        moderation: 'approved',
-        createdAt: new Date().toISOString(),
-      };
-      world.posts.push(post);
-      world.track(u.id, {
-        name: 'post.created',
-        properties: { postId: post.id, kind: 'announcement' },
-      });
+      const post = announce(world, u, c, request.body, { push: request.body.sendPush });
       return reply.status(201).send(toPost(world, post, u)!);
     },
   );
