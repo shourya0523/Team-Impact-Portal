@@ -31,9 +31,9 @@ type SvgRef = { toDataURL: (callback: (base64: string) => void) => void };
 
 /** Who joined through one code. The coach can remove anyone from the roster. */
 function Joins({ codeId }: { codeId: string }) {
-  const { state } = useApi(() => api.qrCodeJoins(codeId), [codeId]);
+  const { state, reload } = useApi(() => api.qrCodeJoins(codeId), [codeId]);
   return (
-    <Async state={state}>
+    <Async state={state} onRetry={reload}>
       {(joins) =>
         joins.length ? (
           <View style={styles.joins}>
@@ -62,7 +62,16 @@ function LiveCode({ code, onRevoke }: { code: TeamQrCode; onRevoke: () => void }
     svg.current?.toDataURL((base64) => {
       savePng(base64, fileName).catch((e: Error) => setError(e.message));
     });
-  const revoke = () => api.revokeQrCode(code.id).then(onRevoke, (e: Error) => setError(e.message));
+  const [revoking, setRevoking] = useState(false);
+  // On success the list reloads and this card moves to "Earlier codes", so only a failure resets.
+  const revoke = () => {
+    setRevoking(true);
+    setError(null);
+    api.revokeQrCode(code.id).then(onRevoke, (e: Error) => {
+      setRevoking(false);
+      setError(e.message);
+    });
+  };
 
   return (
     <Card>
@@ -123,7 +132,14 @@ function LiveCode({ code, onRevoke }: { code: TeamQrCode; onRevoke: () => void }
           stretch
           onPress={() => setShowJoins((v) => !v)}
         />
-        <Button label="Turn off" variant="ink" size="sm" stretch onPress={revoke} />
+        <Button
+          label={revoking ? 'Turning off…' : 'Turn off'}
+          variant="ink"
+          size="sm"
+          stretch
+          disabled={revoking}
+          onPress={revoke}
+        />
       </View>
       {showJoins && <Joins codeId={code.id} />}
       {error && <ErrorText>{error}</ErrorText>}
@@ -211,7 +227,7 @@ export default function CoachQR() {
   const codes = useApi(() => (teamId ? api.qrCodes(teamId) : Promise.resolve(null)), [teamId]);
   return (
     <Screen eyebrow="Team" title="QR codes" back>
-      <Async state={codes.state}>
+      <Async state={codes.state} onRetry={codes.reload}>
         {(list) => {
           if (!list || !teamId) {
             return (
