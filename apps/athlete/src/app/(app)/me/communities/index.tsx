@@ -108,7 +108,10 @@ export default function Communities() {
       </Gutter>
       <Async state={state}>
         {(all) => {
-          const match = (x: Community) => x.name.toLowerCase().includes(query.trim().toLowerCase());
+          // Name or description, so a private community is findable by what it's for (PRD v2.3).
+          const q = query.trim().toLowerCase();
+          const match = (x: Community) =>
+            x.name.toLowerCase().includes(q) || x.about.toLowerCase().includes(q);
           const mine = all.filter((x) => x.myMembership && match(x));
           const others = all.filter((x) => !x.myMembership && match(x));
           return (
