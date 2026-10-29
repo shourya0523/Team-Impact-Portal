@@ -22,6 +22,13 @@
       "when": 1792098984361,
       "tag": "0002_events_log_subject",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792788186805,
+      "tag": "0003_communities",
+      "breakpoints": true
     }
   ]
 }
