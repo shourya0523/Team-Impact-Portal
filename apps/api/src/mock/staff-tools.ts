@@ -176,7 +176,7 @@ export const warn = (
   ticket: { id: string; target: Target; preview: string },
   note: string | null,
 ) => {
-  const home = world.communities.find((c) => c.kind === 'team_impact')!;
+  const home = world.teamImpact();
   notify(world, {
     userId: author.id,
     kind: 'warning',

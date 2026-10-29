@@ -215,7 +215,6 @@ describe('staff: published at once, no review queue', () => {
     const { as } = await world();
     const staff = await as('staff');
     const res = await staff.post('/staff/announcements', {
-      communityId: TEAM_IMPACT,
       text: 'Draft day applications are open.',
       sendPush: false,
     });

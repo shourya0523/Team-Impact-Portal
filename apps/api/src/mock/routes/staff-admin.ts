@@ -466,11 +466,9 @@ export const registerStaffAdminRoutes = (
     { schema: { body: CreateAnnouncementRequest, response: { 201: Post } } },
     async (request, reply) => {
       const u = staffOnly(request);
-      const c = findCommunity(request.body.communityId, u);
-      if (c.kind !== 'team_impact' && c.kind !== 'team') {
-        throw httpError(400, 'Announcements go to Team Impact’s community or a team’s');
-      }
-      const post = announce(world, u, c, request.body, { push: request.body.sendPush });
+      const post = announce(world, u, world.teamImpact(), request.body, {
+        push: request.body.sendPush,
+      });
       return reply.status(201).send(toPost(world, post, u)!);
     },
   );
