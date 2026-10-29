@@ -133,7 +133,7 @@ export default function EditTeam() {
   return (
     <Screen eyebrow="Team" title="Edit team" back>
       <Gutter>
-        <Async state={roster.state}>
+        <Async state={roster.state} onRetry={roster.reload}>
           {(r) =>
             !r ? (
               <NoTeam />

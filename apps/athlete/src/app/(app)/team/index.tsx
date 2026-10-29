@@ -23,54 +23,90 @@ const requestDetail = (r: JoinRequest) => {
 };
 
 /** Join requests waiting on the coach: the slow lane. Nothing about the team shows until approved. */
-function Approvals({ teamId, onChange }: { teamId: string; onChange: () => void }) {
-  const { state, reload } = useApi(() => api.teamJoinRequests(teamId), [teamId]);
+function Approvals({
+  teamId,
+  waiting,
+  onChange,
+}: {
+  teamId: string;
+  /** The roster's request count: when it changes, the queue loads again (and keeps `done`). */
+  waiting: number | null;
+  onChange: () => void;
+}) {
+  const { state, reload } = useApi(() => api.teamJoinRequests(teamId), [teamId, waiting]);
   const [error, setError] = useState<string | null>(null);
-  const decide = (id: string, decision: 'approve' | 'decline') =>
-    api.decideJoinRequest(id, decision).then(
+  const [deciding, setDeciding] = useState<string | null>(null);
+  /** The last decision, e.g. "Kai Brooks is on the team." Outside the list, so it outlives the last row. */
+  const [done, setDone] = useState<string | null>(null);
+
+  const decide = (r: JoinRequest, decision: 'approve' | 'decline') => {
+    setDeciding(r.id);
+    setError(null);
+    setDone(null);
+    return api.decideJoinRequest(r.id, decision).then(
       () => {
-        setError(null);
+        setDeciding(null);
+        setDone(
+          `${fullName(r.requester)} ${decision === 'approve' ? 'is on the team' : 'was declined'}.`,
+        );
         reload();
         onChange();
       },
-      (e: Error) => setError(e.message),
+      (e: Error) => {
+        setError(e.message);
+        setDeciding(null);
+      },
     );
+  };
   return (
-    <Async state={state}>
-      {(requests) =>
-        requests.length > 0 && (
-          <Card>
-            <View style={styles.between}>
-              <Text weight="semibold">Asking to join</Text>
-              <Badge label={`${requests.length} waiting`} variant="action" caps />
-            </View>
-            {requests.map((r) => (
-              <View key={r.id} style={styles.request}>
-                <PersonRow user={r.requester} detail={requestDetail(r)} />
-                <View style={styles.buttons}>
-                  <Button
-                    label="Decline"
-                    variant="secondary"
-                    size="sm"
-                    stretch
-                    accessibilityLabel={`Decline ${fullName(r.requester)}`}
-                    onPress={() => decide(r.id, 'decline')}
-                  />
-                  <Button
-                    label="Approve"
-                    variant="brand"
-                    size="sm"
-                    stretch
-                    accessibilityLabel={`Approve ${fullName(r.requester)}`}
-                    onPress={() => decide(r.id, 'approve')}
-                  />
-                </View>
+    <Async state={state} onRetry={reload}>
+      {(requests) => (
+        <>
+          {done && (
+            <Text variant="small" color="success">
+              {done}
+            </Text>
+          )}
+          {requests.length === 0 ? (
+            <Text variant="small" color="secondary">
+              Nobody is asking to join right now.
+            </Text>
+          ) : (
+            <Card>
+              <View style={styles.between}>
+                <Text weight="semibold">Asking to join</Text>
+                <Badge label={`${requests.length} waiting`} variant="action" caps />
               </View>
-            ))}
-            {error && <ErrorText>{error}</ErrorText>}
-          </Card>
-        )
-      }
+              {requests.map((r) => (
+                <View key={r.id} style={styles.request}>
+                  <PersonRow user={r.requester} detail={requestDetail(r)} />
+                  <View style={styles.buttons}>
+                    <Button
+                      label={deciding === r.id ? 'Declining…' : 'Decline'}
+                      variant="secondary"
+                      size="sm"
+                      stretch
+                      disabled={deciding !== null}
+                      accessibilityLabel={`Decline ${fullName(r.requester)}`}
+                      onPress={() => decide(r, 'decline')}
+                    />
+                    <Button
+                      label={deciding === r.id ? 'Approving…' : 'Approve'}
+                      variant="brand"
+                      size="sm"
+                      stretch
+                      disabled={deciding !== null}
+                      accessibilityLabel={`Approve ${fullName(r.requester)}`}
+                      onPress={() => decide(r, 'approve')}
+                    />
+                  </View>
+                </View>
+              ))}
+              {error && <ErrorText>{error}</ErrorText>}
+            </Card>
+          )}
+        </>
+      )}
     </Async>
   );
 }
@@ -194,7 +230,7 @@ export default function TeamScreen() {
       right={waiting > 0 && <Badge label={`${waiting} to approve`} variant="action" caps />}
     >
       <Gutter>
-        <Async state={roster.state}>
+        <Async state={roster.state} onRetry={roster.reload}>
           {(r) =>
             !r || !teamId ? (
               <NoTeam />
@@ -202,7 +238,11 @@ export default function TeamScreen() {
               <>
                 {r.canManage && <CoachTools />}
                 {r.canManage && (
-                  <Approvals key={r.pendingRequestCount} teamId={teamId} onChange={roster.reload} />
+                  <Approvals
+                    teamId={teamId}
+                    waiting={r.pendingRequestCount}
+                    onChange={roster.reload}
+                  />
                 )}
                 <Segmented
                   label="Roster"
