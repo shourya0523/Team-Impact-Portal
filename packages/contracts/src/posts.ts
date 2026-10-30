@@ -77,9 +77,11 @@ export const canPostIn = (role: Role, community: Pick<Community, 'kind' | 'myMem
 export const canCommentIn = (role: Role, kind: CommunityKind) =>
   role !== 'recruiter' && (role !== 'teen' || kind === 'team');
 
-/** Staff only, into a team community or Team Impact's. The API checks the kind. */
+/**
+ * Staff only. Always posted into Team Impact's community, which everyone belongs to (PRD §5), so
+ * there is no community to pick. `sendPush: false` sends the in-app notification only.
+ */
 export const CreateAnnouncementRequest = z.object({
-  communityId: Id,
   text: z.string().trim().min(10).max(2000),
   sendPush: z.boolean(),
 });

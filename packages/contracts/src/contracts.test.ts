@@ -420,8 +420,8 @@ describe('posts', () => {
     expect(accepts(CreatePostRequest, { ...post, text: '   ' })).toBe(false);
   });
 
-  it('sends announcements into a community', () => {
-    const announcement = { communityId: ID, text: 'Family night is on Oct 19', sendPush: true };
+  it('sends announcements with no community to pick', () => {
+    const announcement = { text: 'Family night is on Oct 19', sendPush: true };
     expect(accepts(CreateAnnouncementRequest, announcement)).toBe(true);
     expect(accepts(CreateAnnouncementRequest, { ...announcement, text: 'Too short' })).toBe(false);
   });
