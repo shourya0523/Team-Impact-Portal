@@ -326,7 +326,7 @@ describe('pilot completion query', () => {
 
   /** Its one row, with numbers as numbers and nulls kept. */
   const report = async (query: string) => {
-    const { rows } = await testDb.db.execute(sql.raw(query));
+    const rows = await testDb.rows(sql.raw(query));
     expect(rows).toHaveLength(1);
     return Object.fromEntries(
       Object.entries(rows[0] as Record<string, unknown>).map(([key, value]) => [

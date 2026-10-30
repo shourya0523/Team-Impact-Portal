@@ -1,7 +1,16 @@
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { ageBand, ageOn, type SelfSignupRole, type SignupRequest } from '@team-impact/contracts';
+import {
+  ageBand,
+  ageOn,
+  CURRENT_TERMS_VERSION,
+  LEGAL_DOCUMENT_IDS,
+  LEGAL_DOCUMENT_NAMES,
+  LEGAL_DOCUMENTS,
+  type SelfSignupRole,
+  type SignupRequest,
+} from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import {
@@ -30,7 +39,9 @@ type Step = 'birth' | 'role' | 'teen' | 'account';
  * "/sign-up": birth date first, because it decides everything else. Under 13 never gets an
  * account (a parent signs up and adds them); 13–17 signs up as a teammate and confirms a parent or
  * guardian agreed; adults pick their role. Coaches join from their invite email and recruiters on
- * the portal. `?qr=<code>` returns to the scanned team afterwards.
+ * the portal. `?qr=<code>` returns to the scanned team afterwards. The request names the version
+ * of the Terms, Privacy Policy and Acceptable Use Policy shown here, and the API stores it with the
+ * acceptance (TI-107).
  */
 export default function SignUp() {
   const { qr } = useLocalSearchParams<{ qr?: string }>();
@@ -83,6 +94,7 @@ export default function SignUp() {
       birthDate,
       role,
       acceptTerms: acceptTerms as true,
+      termsVersion: CURRENT_TERMS_VERSION,
       ...(isTeen ? { parentAgreed: true as const } : {}),
     };
     setSending(true);
@@ -193,8 +205,8 @@ export default function SignUp() {
                 Teen terms
               </Text>
               <Text variant="small" color="secondary">
-                A parent or guardian needs to know you’re joining and agree to the Team IMPACT Terms
-                and Privacy Policy with you.
+                A parent or guardian needs to know you’re joining and agree to the Team IMPACT{' '}
+                {LEGAL_DOCUMENT_NAMES} with you.
               </Text>
               <CheckRow
                 label="A parent or guardian agreed to me joining"
@@ -240,8 +252,24 @@ export default function SignUp() {
               autoComplete="new-password"
               secureTextEntry
             />
+            <Card>
+              <Text variant="eyebrow" color="secondary">
+                Before you join
+              </Text>
+              <View accessibilityRole="list" style={styles.list}>
+                {LEGAL_DOCUMENT_IDS.map((doc) => (
+                  <Text key={doc} variant="small" accessibilityRole="text">
+                    {LEGAL_DOCUMENTS[doc].title}
+                  </Text>
+                ))}
+              </View>
+              <Text variant="small" color="secondary">
+                Version {CURRENT_TERMS_VERSION}. They say what you can post, who sees your details,
+                and how to report, block or delete your account.
+              </Text>
+            </Card>
             <CheckRow
-              label="I agree to the Terms and Privacy Policy"
+              label={`I agree to the ${LEGAL_DOCUMENT_NAMES}`}
               checked={acceptTerms}
               onToggle={() => setAcceptTerms((v) => !v)}
             />

@@ -13,6 +13,22 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Throwaway Postgres for the API tests (TI-89). Each test file creates its own database on it,
+    # runs the migrations and drops it again; without DATABASE_URL tests fall back to PGlite.
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: team_impact_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,4 +49,12 @@ jobs:
         run: echo "TURBO_FILTER=--filter=...[origin/${{ github.base_ref }}]" >> "$GITHUB_ENV"
 
       - run: pnpm format:check
-      - run: pnpm turbo run typecheck lint test build $TURBO_FILTER
+      - run: pnpm turbo run typecheck lint build $TURBO_FILTER
+
+      # API tests against the Postgres service, portal tests, and the athlete app's web export.
+      # The 5-minute cap is TI-89's budget: a slower suite fails here instead of creeping up.
+      - name: Test
+        timeout-minutes: 5
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5432/team_impact_test
+        run: pnpm turbo run test $TURBO_FILTER

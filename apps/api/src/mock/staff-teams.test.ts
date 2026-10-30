@@ -2,6 +2,7 @@ import cookie from '@fastify/cookie';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  CURRENT_TERMS_VERSION,
   JoinRequest,
   TRACKED_EVENTS,
   type Role,
@@ -73,7 +74,13 @@ const setup = async () => {
   const acceptAsNewCoach = async (token: string, firstName = 'Alex', lastName = 'Moore') => {
     const c = client();
     const res = await c.post(`/invites/${token}/accept`, {
-      newAccount: { firstName, lastName, password: 'correct horse battery', acceptTerms: true },
+      newAccount: {
+        firstName,
+        lastName,
+        password: 'correct horse battery',
+        acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
+      },
     });
     return { ...c, res, id: res.body?.id as string };
   };

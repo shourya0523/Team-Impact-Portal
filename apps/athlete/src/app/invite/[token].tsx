@@ -1,7 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import type { CoachInvitePreview } from '@team-impact/contracts';
+import { type CoachInvitePreview, LEGAL_DOCUMENT_NAMES } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { shortDate } from '@/components/format';
@@ -126,7 +126,7 @@ function Accept({ token, invite }: { token: string; invite: CoachInvitePreview }
             secureTextEntry
           />
           <CheckRow
-            label="I agree to the Terms and Privacy Policy"
+            label={`I agree to the ${LEGAL_DOCUMENT_NAMES}`}
             checked={acceptTerms}
             onToggle={() => setAcceptTerms((v) => !v)}
           />
