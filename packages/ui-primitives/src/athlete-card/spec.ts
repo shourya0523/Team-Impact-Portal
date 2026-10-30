@@ -28,7 +28,7 @@ export const cardLayout = {
   radius: 22,
   padding: 22,
   gap: 12,
-  /** Baseball-card photo window: full width minus the patterned frame, top ~half of the card. */
+  /** Impact-card photo window: full width minus the patterned frame, top ~half of the card. */
   photoInset: 14,
   photoHeight: 280,
   photoRadius: 16,
@@ -161,6 +161,13 @@ export const cardMotion = {
   followDuration: duration.tap,
   /** Spring back to flat on release. */
   spring,
+  /** Gyro tilt on phones: tipping the phone this many degrees from how it's held reaches `tiltMax`. */
+  gyroRange: 20,
+  /**
+   * Share of the gap to the phone's current angle closed per sensor reading (about 60 a second),
+   * so a new holding angle reads as flat after a few seconds.
+   */
+  gyroRecenter: 0.02,
   /** Shine fade in and out, ms. */
   shineFade: duration.small,
 } as const;
