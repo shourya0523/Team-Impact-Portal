@@ -8,8 +8,8 @@ import { useApi } from '../../useApi';
 import { CommunitySelect, useCommunityChoice } from './CommunitySelect';
 
 /**
- * S1: a plain post from Team Impact, into a community staff belong to. Staff wrote it, so it
- * publishes at once; unlike an announcement, it notifies nobody.
+ * S1: a plain post into a community staff belong to, under the staff member's name with a Staff
+ * badge. Staff wrote it, so it publishes at once; unlike an announcement, it notifies nobody.
  */
 export const PostsPage = () => {
   const posted = useApi(() => api.staff.posts());
@@ -34,7 +34,10 @@ export const PostsPage = () => {
 
   return (
     <>
-      <PageHeader title="Posts" subtitle="Posted as Team IMPACT into a community you belong to." />
+      <PageHeader
+        title="Posts"
+        subtitle="Posted under your name, with a Staff badge, into a community you belong to. Nobody is notified."
+      />
       <Card style={{ padding: spacing.lg, marginBottom: spacing.xl }}>
         <Form onSubmit={publish}>
           <CommunitySelect {...community} />

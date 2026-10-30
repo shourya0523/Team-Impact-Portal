@@ -13,8 +13,9 @@ const EMPTY = { title: '', startsAt: '', endsAt: '', location: '', details: '' }
 const iso = (local: string) => new Date(local).toISOString();
 
 /**
- * S1: an event from Team Impact, into a community staff belong to. Staff wrote it, so it publishes
- * at once and tells the community's members, like any approved event. Staff are RSVP'd going.
+ * S1: an event in a community staff belong to, hosted under the staff member's name. Staff wrote it,
+ * so it publishes at once and tells the community's members, like any approved event. Staff are
+ * RSVP'd going.
  */
 export const EventsPage = () => {
   const hosted = useApi(() => api.staff.events());
@@ -50,7 +51,7 @@ export const EventsPage = () => {
     <>
       <PageHeader
         title="Events"
-        subtitle="Hosted by Team IMPACT in a community you belong to; its members are told."
+        subtitle="Hosted under your name in a community you belong to; its members are told."
       />
       <Card style={{ padding: spacing.lg, marginBottom: spacing.xl }}>
         <Form onSubmit={publish}>

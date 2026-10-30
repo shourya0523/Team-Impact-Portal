@@ -468,7 +468,8 @@ export const registerStaffAdminRoutes = (
     return !!c && item.moderation === 'approved' && world.canSeeCommunity(c, u) ? c : undefined;
   };
 
-  // Every staff member's plain posts and events, newest first: they all speak as Team Impact.
+  // Every staff member's plain posts and events, newest first, so staff see what the team has
+  // put out, not just their own.
   app.get('/staff/posts', { schema: { response: { 200: z.array(Post) } } }, async (request) => {
     const u = staffOnly(request);
     return world.posts

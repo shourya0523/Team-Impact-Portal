@@ -310,7 +310,7 @@ export const announce = (
   world: MockWorld,
   author: MockUser,
   c: MockCommunity,
-  body: { text: string; imageUrl?: string | null },
+  body: { text: string },
   options: NotifyOptions = {},
 ): MockPost => {
   const post: MockPost = {
@@ -319,7 +319,7 @@ export const announce = (
     authorId: author.id,
     communityId: c.id,
     text: body.text,
-    imageUrl: body.imageUrl ?? null,
+    imageUrl: null,
     official: true,
     likeCount: 0,
     commentCount: 0,
