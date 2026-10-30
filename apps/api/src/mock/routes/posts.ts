@@ -10,7 +10,7 @@ import {
   Post,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { announce, commentsFor, holdForReview, holdOrPublish, toComment } from '../activity';
+import { commentsFor, holdForReview, holdOrPublish, toComment } from '../activity';
 import type { MockCommunity, MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -58,12 +58,8 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       if (!canPostIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t post in this community');
       }
-      // Staff posts in Team Impact's community are its announcements (TI-146). The app always pushes
-      // them: it has no push switch, unlike the portal.
-      if (u.role === 'staff' && c.kind === 'team_impact') {
-        const created = announce(world, u, c, request.body, { push: true });
-        return reply.status(201).send(postView(c, u, created.id)!);
-      }
+      // Always a plain post, staff's in Team Impact too: announcements come only from the portal
+      // (`POST /staff/announcements`, TI-146).
       const created = {
         id: world.newId(),
         kind: 'post' as const,

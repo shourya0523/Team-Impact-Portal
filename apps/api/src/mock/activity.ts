@@ -303,9 +303,8 @@ export const holdOrPublish = (
 
 /**
  * Post a Team Impact announcement and publish it: official, past review, and notifying every reader
- * of the community. Both routes that make one (`POST /staff/announcements` from the portal, and a
- * staff post into Team Impact's community from the app) come through here, each with its own
- * request rules. Revisit once we settle whether the app route should make announcements at all.
+ * of the community. Only `POST /staff/announcements` (the portal) makes one; a staff post through
+ * `POST /communities/:id/posts` is a plain post, even in Team Impact's community (TI-146).
  */
 export const announce = (
   world: MockWorld,

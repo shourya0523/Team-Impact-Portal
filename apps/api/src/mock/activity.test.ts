@@ -164,21 +164,27 @@ describe('posts: held for moderation (P5)', () => {
     expect((await jordan.post(`/communities/${CAPTAINS}/posts`, { text: 'Hi' })).status).toBe(201);
   });
 
-  it('makes staff posts in Team Impact announcements, and notifies everyone at once', async () => {
+  it('publishes a staff post in Team Impact as a plain post, and tells nobody', async () => {
     const { as } = await world();
     const staff = await as('staff');
-    const teen = await as('teen');
     const created = await staff.post(`/communities/${TEAM_IMPACT}/posts`, {
       text: 'Applications for spring draft day are open.',
     });
-    expect(created.body.kind).toBe('announcement');
-    expect(created.body.official).toBe(true);
-    expect(created.body.moderation).toBe('approved');
-    const note = (await teen.get('/notifications')).body;
-    expect(note.unreadCount).toBe(1);
-    expect(note.items[0]).toMatchObject({ kind: 'announcement', actor: null });
-    const recruiter = await as('recruiter');
-    expect((await recruiter.get('/notifications')).body.unreadCount).toBe(1);
+    expect(created.body).toMatchObject({ kind: 'post', official: true, moderation: 'approved' });
+    for (const role of ['teen', 'recruiter'] as const) {
+      const reader = await as(role);
+      expect(ids((await reader.get('/feed')).body.items), role).toContain(created.body.id);
+      expect((await reader.get('/notifications')).body.items, role).toEqual([]);
+    }
+  });
+
+  it('never makes an announcement from anyone else’s post in Team Impact', async () => {
+    const { as } = await world();
+    const athlete = await as('athlete');
+    const created = await athlete.post(`/communities/${TEAM_IMPACT}/posts`, {
+      text: 'Who’s going to the gala?',
+    });
+    expect(created.body).toMatchObject({ kind: 'post', official: false, moderation: 'in_review' });
   });
 
   it('keeps an image link on the post', async () => {
@@ -761,7 +767,7 @@ describe('notifications', () => {
     const staff = await as('staff');
     const athlete = await as('athlete');
     for (const text of ['First announcement here', 'Second announcement here']) {
-      await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text });
+      await staff.post('/staff/announcements', { text, sendPush: false });
     }
     const list = (await athlete.get('/notifications')).body;
     expect(list.unreadCount).toBe(2);
