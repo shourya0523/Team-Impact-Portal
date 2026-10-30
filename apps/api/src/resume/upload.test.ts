@@ -1,8 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { USERS } from '../mock/fixtures';
 import { buildScan } from './test/build-pdf';
 import { CORPUS, longPdf } from './test/corpus';
+
+// pdf.js loads on first use (2–3 s alone, more on a busy CI runner).
+vi.setConfig({ testTimeout: 20_000 });
 
 /** POST /cards/me/resume with a real file: the route the athlete app's upload screen calls. */
 let close: (() => Promise<void>) | undefined;

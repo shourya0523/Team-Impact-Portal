@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { findDateRange, findGradYear, formatPeriod } from './dates';
 import { isSensitiveLine, stripContacts } from './guardrails';
 import { matchesType, readResume, readResumeText, resumeConfigFromEnv } from './index';
@@ -6,6 +6,9 @@ import { grounded } from './llm';
 import { scoreReading, summarize } from './score';
 import { buildScan } from './test/build-pdf';
 import { CORPUS, longPdf } from './test/corpus';
+
+// pdf.js loads on first use (2–3 s alone, more on a busy CI runner).
+vi.setConfig({ testTimeout: 20_000 });
 
 const NOW = new Date('2026-10-30T12:00:00Z');
 const pdf = (bytes: Uint8Array) => ({ bytes, mimeType: 'application/pdf', fileName: 'resume.pdf' });
