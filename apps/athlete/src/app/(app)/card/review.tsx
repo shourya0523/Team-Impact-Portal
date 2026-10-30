@@ -13,15 +13,27 @@ import { Badge, Button, Card, Icon, Text } from '@/ui';
 /** Switch key for one proposed experience entry. */
 const entryKey = (i: number) => `experience.${i}`;
 
+/** What to tell the athlete when the reader got nothing out of the file. */
+const FAILED_BECAUSE: Record<NonNullable<ResumeExtraction['failReason']>, string> = {
+  unreadable: 'The file looks damaged or password-protected.',
+  no_text: 'It looks like a scan, and we can’t read scans yet.',
+  ocr_unavailable: 'We can’t read photos yet.',
+  ocr_failed: 'Reading photos isn’t working right now.',
+  nothing_found: 'We didn’t find any card fields in it.',
+};
+
 /**
  * Every field the reader found, shown as plain text (never markup or links: it's untrusted), each
- * with its own accept switch. Experience comes as separate entries the athlete accepts one by one
- * (off until they do). Only accepted fields and entries go into the card's draft.
+ * with its own accept switch. Fields the reader is unsure of are flagged "Check" and start off,
+ * like experience entries, so the athlete has to look before accepting. Only accepted fields and
+ * entries go into the card's draft.
  */
 function Review({ extraction }: { extraction: ResumeExtraction }) {
   const entries = extraction.fields.experience ?? [];
   const fieldKeys = extraction.needsReview.filter((k) => k !== 'experience');
-  const [accepted, setAccepted] = useState<Set<string>>(() => new Set(fieldKeys));
+  const [accepted, setAccepted] = useState<Set<string>>(
+    () => new Set(fieldKeys.filter((k) => !extraction.check.includes(k))),
+  );
   const [error, setError] = useState<string | null>(null);
   const acceptedEntries = entries.filter((_, i) => accepted.has(entryKey(i)));
 
@@ -54,7 +66,8 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
         <Card>
           <Text weight="semibold">We couldn’t read {extraction.fileName}</Text>
           <Text variant="small" color="secondary">
-            Type your card in yourself. It only takes a few minutes.
+            {extraction.failReason ? `${FAILED_BECAUSE[extraction.failReason]} ` : ''}Type your card
+            in yourself. It only takes a few minutes.
           </Text>
           <Button
             label="Fill it in myself"
@@ -84,6 +97,12 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
         <Badge caps variant="warning" label="Unconfirmed" />
         <Badge label={extraction.fileName} />
       </View>
+      {(extraction.check.length > 0 || extraction.checkEntries.length > 0) && (
+        <Text variant="small" color="secondary">
+          We’re less sure of anything marked Check, so it starts off. Turn it on only if it’s right;
+          you can fix it on the next screen.
+        </Text>
+      )}
       {fieldKeys.length > 0 && (
         <Card>
           {fieldKeys.map((k) => (
@@ -91,6 +110,7 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
               key={k}
               label={FIELD_LABEL[k]}
               detail={fieldText(extraction.fields[k])}
+              flag={extraction.check.includes(k) ? 'Check' : undefined}
               value={accepted.has(k)}
               onChange={toggle(k)}
             />
@@ -110,6 +130,7 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
                 key={entryKey(i)}
                 label={e.role}
                 detail={entryText({ ...e, role: '' })}
+                flag={extraction.checkEntries.includes(i) ? 'Check' : undefined}
                 value={accepted.has(entryKey(i))}
                 onChange={toggle(entryKey(i))}
               />

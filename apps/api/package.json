@@ -11,6 +11,7 @@
     "typecheck": "tsc -p tsconfig.json",
     "test": "vitest run",
     "feed:tune": "tsx src/mock/tune.ts",
+    "resume:eval": "tsx --env-file-if-exists=../../.env src/resume/eval.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:rollback": "tsx --env-file-if-exists=../../.env src/db/rollback.ts",
@@ -25,6 +26,7 @@
     "@team-impact/ui-tokens": "workspace:*",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
+    "pdfjs-dist": "^5.7.284",
     "postgres": "^3.4.9",
     "zod": "^4.6.5"
   },
@@ -34,6 +36,7 @@
     "@types/node": "^22.0.0",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
+    "pdf-lib": "^1.17.1",
     "tsx": "^4.23.15",
     "vitest": "^5.0.3"
   }

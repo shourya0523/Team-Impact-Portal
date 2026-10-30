@@ -1,48 +1,44 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { RESUME_UPLOAD_LIMITS, type ResumeUploadRequest } from '@team-impact/contracts';
+import { RESUME_UPLOAD_LIMITS } from '@team-impact/contracts';
 import { colors, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
-import { Chip, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
-import { Button, Card, Icon, Input, Text } from '@/ui';
+import { pickResume, type PickedResume, type ResumeKind } from '@/components/resumeFile';
+import { ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
+import { Badge, Button, Card, Icon, Input, Text } from '@/ui';
 
-type Kind = 'pdf' | 'photo';
-const MIME: Record<Kind, ResumeUploadRequest['mimeType']> = {
-  pdf: 'application/pdf',
-  photo: 'image/jpeg',
-};
 const MB = 1024 * 1024;
 
 /**
- * "/card/upload": hand over a resume (PDF or photo). On the mock API there is no file picker yet:
- * name the file and, to try the reader, paste the resume's text. A name containing "fail" shows
- * the type-it-yourself path.
+ * "/card/upload": hand over a resume (PDF, or a photo of a printed one). The file is read on the
+ * server and deleted straight after; nothing it suggests reaches the card until the athlete
+ * checks it on the next screen. In development the reader can also be tried with pasted text.
  */
 export default function UploadResume() {
-  const [kind, setKind] = useState<Kind>('pdf');
-  const [fileName, setFileName] = useState('resume.pdf');
+  const [file, setFile] = useState<PickedResume | null>(null);
   const [text, setText] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const upload = () => {
+  const choose = (kind: ResumeKind) => {
+    setError(null);
+    pickResume(kind).then(
+      (picked) => picked && setFile(picked),
+      (e: Error) => setError(e.message),
+    );
+  };
+
+  const send = (body: Parameters<typeof api.uploadResume>[0]) => {
     setBusy(true);
     setError(null);
-    api
-      .uploadResume({
-        fileName,
-        mimeType: MIME[kind],
-        sizeBytes: 200_000,
-        ...(text.trim() ? { text } : {}),
-      })
-      .then(
-        () => router.replace('/card/review'),
-        (e: Error) => {
-          setBusy(false);
-          setError(e.message);
-        },
-      );
+    api.uploadResume(body).then(
+      () => router.replace('/card/review'),
+      (e: Error) => {
+        setBusy(false);
+        setError(e.message);
+      },
+    );
   };
 
   return (
@@ -59,33 +55,63 @@ export default function UploadResume() {
 
         <SectionLabel>File</SectionLabel>
         <View style={styles.row}>
-          <Chip label="PDF" selected={kind === 'pdf'} onPress={() => setKind('pdf')} />
-          <Chip label="Photo" selected={kind === 'photo'} onPress={() => setKind('photo')} />
+          <Button label="Choose PDF" variant="secondary" stretch onPress={() => choose('pdf')} />
+          <Button
+            label="Choose photo"
+            variant="secondary"
+            stretch
+            onPress={() => choose('photo')}
+          />
         </View>
-        <Input label="File name" value={fileName} onChangeText={setFileName} />
         <Text variant="caption" color="muted">
-          Up to {RESUME_UPLOAD_LIMITS.maxBytes / MB} MB and {RESUME_UPLOAD_LIMITS.maxPages} pages.
+          Up to {RESUME_UPLOAD_LIMITS.maxBytes / MB} MB and {RESUME_UPLOAD_LIMITS.maxPages} pages. A
+          clear, flat photo reads best.
         </Text>
-        <Input
-          label="Resume text (optional, for trying the reader)"
-          value={text}
-          onChangeText={setText}
-          multiline
-          placeholder={'Major: Economics\nClass: 2027\nSkills: Excel, Spanish'}
-        />
+        {file && (
+          <View style={styles.row}>
+            <Badge label={file.fileName} />
+            <Badge label={`${Math.max(1, Math.round(file.sizeBytes / 1024))} KB`} />
+          </View>
+        )}
 
         {error && <ErrorText>{error}</ErrorText>}
         <Button
-          label="Upload and read"
+          label={busy ? 'Reading…' : 'Upload and read'}
           icon="plus"
-          disabled={busy || !fileName.trim()}
-          onPress={upload}
+          disabled={busy || !file}
+          onPress={() => file && send(file)}
         />
         <Button
           label="Fill it in myself instead"
           variant="secondary"
           onPress={() => router.replace('/card/editor')}
         />
+
+        {__DEV__ && (
+          <>
+            <SectionLabel>Try the reader with text (development)</SectionLabel>
+            <Input
+              label="Resume text"
+              value={text}
+              onChangeText={setText}
+              multiline
+              placeholder={'Major: Economics\nClass: 2027\nSkills: Excel, Spanish'}
+            />
+            <Button
+              label="Read pasted text"
+              variant="secondary"
+              disabled={busy || !text.trim()}
+              onPress={() =>
+                send({
+                  fileName: 'pasted-resume.txt',
+                  mimeType: 'application/pdf',
+                  sizeBytes: text.length,
+                  text,
+                })
+              }
+            />
+          </>
+        )}
       </Gutter>
     </Screen>
   );
@@ -100,5 +126,5 @@ const styles = StyleSheet.create({
     borderColor: colors.brandTint,
   },
   grow: { flex: 1 },
-  row: { flexDirection: 'row', gap: spacing.sm },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
 });

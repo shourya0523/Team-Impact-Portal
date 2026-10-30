@@ -4,14 +4,17 @@ import {
   CardVersion,
   ConfirmResumeRequest,
   MyCardState,
+  RESUME_UPLOAD_LIMITS,
   ResumeExtraction,
   ResumeUploadRequest,
   UpdateCardRequest,
 } from '@team-impact/contracts';
 import type { FastifyRequest } from 'fastify';
+import { readResume, type ResumeReaderConfig } from '../../resume';
 import type { ZodApp } from '../../zod';
 import {
   cardOf,
+  extractionFromReading,
   extractResume,
   historyFor,
   myCardState,
@@ -26,7 +29,12 @@ import { httpError, type Guards } from './context';
  * Only card holders (current and alumni athletes) reach these, so parents can't make a card for
  * a child and teens never have one.
  */
-export const registerCardRoutes = (app: ZodApp, world: MockWorld, { requireRole }: Guards) => {
+export const registerCardRoutes = (
+  app: ZodApp,
+  world: MockWorld,
+  { requireRole }: Guards,
+  resume: ResumeReaderConfig = {},
+) => {
   const athlete = (request: FastifyRequest) => requireRole(request, 'athlete', 'alumni_athlete');
   const now = () => new Date().toISOString();
 
@@ -74,15 +82,41 @@ export const registerCardRoutes = (app: ZodApp, world: MockWorld, { requireRole 
   );
 
   /**
-   * Mock upload: the file name (and, for trying it out, the resume's text). The extraction waits
-   * for review and touches neither the draft nor the card.
+   * Resume upload (TI-113). With `fileBase64` the real reader runs (src/resume): the bytes stay in
+   * memory and are dropped when the request ends, so the raw file is never stored. Without a file,
+   * the mock reads the pasted text (or a sample) for trying the flow. Either way the extraction
+   * waits for review and touches neither the draft nor the card.
    */
   app.post(
     '/cards/me/resume',
-    { schema: { body: ResumeUploadRequest, response: { 200: ResumeExtraction } } },
+    {
+      // The JSON body carries the file as base64 (4/3 of 5 MB, plus the other fields).
+      bodyLimit: 8 * 1024 * 1024,
+      schema: { body: ResumeUploadRequest, response: { 200: ResumeExtraction } },
+    },
     async (request) => {
       const u = athlete(request);
-      const extraction = extractResume(world, request.body.fileName, request.body.text, now());
+      const { fileName, mimeType, fileBase64, text } = request.body;
+      let extraction: ResumeExtraction;
+      if (fileBase64) {
+        const bytes = Buffer.from(fileBase64, 'base64');
+        if (bytes.byteLength > RESUME_UPLOAD_LIMITS.maxBytes) {
+          throw httpError(
+            400,
+            `Resumes can be up to ${RESUME_UPLOAD_LIMITS.maxBytes / 2 ** 20} MB`,
+          );
+        }
+        const reading = await readResume({ bytes, mimeType, fileName }, resume);
+        if (reading.reason === 'wrong_file_type') {
+          throw httpError(400, 'That file doesn’t match its type. Upload a PDF or a photo.');
+        }
+        if (reading.reason === 'too_many_pages') {
+          throw httpError(400, `Resumes can be up to ${RESUME_UPLOAD_LIMITS.maxPages} pages`);
+        }
+        extraction = extractionFromReading(world, reading, fileName, now());
+      } else {
+        extraction = extractResume(world, fileName, text, now());
+      }
       world.profiles.resumes.set(u.id, extraction);
       return extraction;
     },

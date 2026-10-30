@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
-import { Text } from '@/ui';
+import { Badge, Text } from '@/ui';
 
 const SWITCH_W = 56;
 const SWITCH_H = 32;
@@ -16,9 +16,12 @@ export function SwitchRow({
   value,
   onChange,
   disabled,
+  flag,
 }: {
   label: string;
   detail?: string;
+  /** A short warning badge beside the label, e.g. "Check" on a low-confidence resume field. */
+  flag?: string;
   value: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
@@ -28,13 +31,16 @@ export function SwitchRow({
       onPress={() => onChange(!value)}
       disabled={disabled}
       accessibilityRole="switch"
-      accessibilityLabel={label}
+      accessibilityLabel={flag ? `${label}, ${flag}` : label}
       accessibilityHint={detail}
       accessibilityState={{ checked: value, disabled: !!disabled }}
       style={[styles.row, disabled && styles.disabled]}
     >
       <View style={styles.text}>
-        <Text weight="semibold">{label}</Text>
+        <View style={styles.label}>
+          <Text weight="semibold">{label}</Text>
+          {flag && <Badge caps variant="warning" label={flag} />}
+        </View>
         {detail && (
           <Text variant="small" color="secondary">
             {detail}
@@ -64,6 +70,7 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   text: { flex: 1, gap: spacing.xs },
+  label: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
   // Disabled controls are exempt from contrast rules; dimming marks them inactive.
   disabled: { opacity: 0.5 },
   switch: {

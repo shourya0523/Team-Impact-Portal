@@ -1,3 +1,4 @@
+import type { ResumeReaderConfig } from '../../resume';
 import type { ZodApp } from '../../zod';
 import type { MockWorld } from '../world';
 import { registerCommunityCreateRoutes } from './community-create';
@@ -26,7 +27,16 @@ import { registerTrackingRoutes } from './tracking';
  * the ones the real API will serve, so swapping mocks for the database changes no client code.
  * One file per product area.
  */
-export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
+export interface MockRouteOptions {
+  /** How uploaded resumes are read (OCR sidecar, optional LLM). */
+  resume?: ResumeReaderConfig;
+}
+
+export const registerMockRoutes = (
+  app: ZodApp,
+  world: MockWorld,
+  options: MockRouteOptions = {},
+) => {
   const g = guards(world);
   for (const register of [
     registerSessionRoutes,
@@ -44,7 +54,7 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerCommunityCreateRoutes,
     registerNotificationRoutes,
     registerProfileRoutes,
-    registerCardRoutes,
+    (a: ZodApp, w: MockWorld, gg: typeof g) => registerCardRoutes(a, w, gg, options.resume),
     registerCommunityMemberRoutes,
     registerStaffToolsRoutes,
     registerTrackingRoutes,

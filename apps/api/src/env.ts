@@ -20,10 +20,28 @@ const EnvSchema = z
       .transform((value) => value.split(',').map((origin) => origin.trim())),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
+    /**
+     * Resume reading (TI-113). The open-source layout reader always runs. `openai` adds a grounded
+     * LLM pass, which sends resume text (contacts stripped) to OpenAI: off unless Team Impact opts in.
+     */
+    RESUME_LLM: z.enum(['off', 'openai']).default('off'),
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    RESUME_LLM_MODEL: z.string().min(1).optional(),
+    OPENAI_BASE_URL: z.url().optional(),
+    /** docling-serve sidecar for photos and scans; without it they fall back to typing the card in. */
+    DOCLING_URL: z.url().optional(),
+    DOCLING_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (!env.MOCK_API && !env.DATABASE_URL) {
       ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required unless MOCK_API' });
+    }
+    if (env.RESUME_LLM === 'openai' && !env.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OPENAI_API_KEY'],
+        message: 'Required when RESUME_LLM=openai',
+      });
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });
