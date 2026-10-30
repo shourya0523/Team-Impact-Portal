@@ -20,6 +20,21 @@ export interface AthleteCardData {
   /** Badge text for the photo's position circle, e.g. "MF". Derived from `position` if omitted. */
   positionShort?: string;
   school?: string;
+  /**
+   * Rookie-card front (TI-114): team name, stripe colour, then class, major and division. All
+   * optional; the front leaves out what's missing. Without class/major/division the front falls
+   * back to the first `resume.stats`.
+   */
+  /** Team display name, e.g. "Women's Soccer". Falls back to `sport`. */
+  teamName?: string;
+  /** The team's colour for the stripe. Missing or not a 6-digit hex means brand navy. */
+  teamColor?: string | null;
+  classYear?: string | number;
+  major?: string;
+  /** NCAA division, e.g. "III". */
+  division?: string;
+  /** Card season, e.g. 2026. Printed on the exported back face. */
+  season?: string | number;
   resume: {
     stats: AthleteStat[];
     experience: ResumeEntry[];

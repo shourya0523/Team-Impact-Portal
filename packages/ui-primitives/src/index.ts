@@ -6,7 +6,36 @@
  */
 export * from './athlete-card/types';
 export * from './athlete-card/spec';
-export { CARD_LIMITS, prepareCard, sampleAthlete, type PreparedCard } from './athlete-card/model';
+export {
+  CARD_LIMITS,
+  NAME_MAX_WIDTH,
+  describeCard,
+  fitCardName,
+  prepareCard,
+  sampleAthlete,
+  type PreparedCard,
+} from './athlete-card/model';
+export {
+  ELLIPSIS,
+  ellipsize,
+  fitName,
+  textWidth,
+  type NameFit,
+  type NameFitOptions,
+} from './athlete-card/fit';
+export {
+  DEALT,
+  FLAT_POSE,
+  cssLinearEasing,
+  dealStart,
+  mix,
+  springCurve,
+  tiltFromPoint,
+  type DealPose,
+  type SpringCurve,
+  type SpringParams,
+  type TiltPose,
+} from './athlete-card/tilt';
 export { backArt, frontArt, type CardFaceArt, type PatternLayer } from './athlete-card/patterns';
 export {
   brandPalette,

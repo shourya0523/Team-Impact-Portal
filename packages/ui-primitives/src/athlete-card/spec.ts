@@ -1,4 +1,4 @@
-import { colors, duration, easing } from '@team-impact/ui-tokens';
+import { colors, duration, easing, spring, tilt } from '@team-impact/ui-tokens';
 
 /**
  * The card's visual spec, shared by the native and web renderers so both draw the same card.
@@ -30,7 +30,7 @@ export const cardLayout = {
   gap: 12,
   /** Baseball-card photo window: full width minus the patterned frame, top ~half of the card. */
   photoInset: 14,
-  photoHeight: 236,
+  photoHeight: 280,
   photoRadius: 16,
   photoBorder: 3,
   jerseyBadge: 42,
@@ -51,6 +51,22 @@ export const cardLayout = {
   chipPaddingX: 9,
   chipPaddingY: 4,
   tileRadius: 12,
+  /** Rookie card (TI-114): the team colour stripe across the top edge of both faces. */
+  stripe: 10,
+  /** Jersey number over the photo's top-left corner, from the photo window's edge. */
+  jerseyInsetX: 12,
+  jerseyInsetY: 2,
+  /** Nameplate under the photo: largest and smallest name size, see `fitName`. */
+  nameMaxSize: 34,
+  nameMinSize: 18,
+  /**
+   * Average caps width of the display face as a fraction of its size. Barlow Condensed 800 is
+   * about 0.47; the extra keeps the estimate safe while the font is still loading.
+   */
+  nameCharWidth: 0.52,
+  /** Gap between the name, the position/team line and the class/major/division row. */
+  rookieGap: 4,
+  rookieRowPadding: 9,
 } as const;
 
 /**
@@ -59,7 +75,7 @@ export const cardLayout = {
  */
 export const photoBleed = {
   /** The photo covers the card from the top edge down to here (base units). */
-  height: 300,
+  height: 330,
   /** Fade-in at the very top, so it melts into the frame border. */
   topFade: 0.07,
   /** Where the bottom dissolve starts; it reaches fully transparent at `height`. */
@@ -81,6 +97,8 @@ export interface CardTextStyle {
   fontWeight: '400' | '500' | '600' | '700' | '800';
   letterSpacing?: number;
   uppercase?: boolean;
+  /** Set in the display face (Barlow Condensed 800), see `displayFont`. */
+  display?: boolean;
 }
 
 export const cardText = {
@@ -112,9 +130,18 @@ export const cardText = {
   body: { fontSize: 12, lineHeight: 16, fontWeight: '400' },
   factValue: { fontSize: 12, lineHeight: 15, fontWeight: '700' },
   footer: { fontSize: 9, lineHeight: 12, fontWeight: '600', letterSpacing: 1.4, uppercase: true },
+  /** Rookie front: big jersey number over the photo, name, position/team line, stat values. */
+  jersey: { fontSize: 64, lineHeight: 64, fontWeight: '800', display: true },
+  /** `fontSize` is the largest; `fitName` picks the size actually used. Line height is 0.95em. */
+  rookieName: { fontSize: 34, lineHeight: 32, fontWeight: '800', uppercase: true, display: true },
+  rookieLine: { fontSize: 12.5, lineHeight: 16, fontWeight: '600' },
+  rookieValue: { fontSize: 15, lineHeight: 19, fontWeight: '700' },
 } as const satisfies Record<string, CardTextStyle>;
 
 export type CardTextVariant = keyof typeof cardText;
+
+/** Name-line height as a fraction of the fitted font size (display face, from ui-tokens). */
+export const NAME_LINE_HEIGHT = 0.95;
 
 export const cardMotion = {
   flipDuration: duration.cardReveal,
@@ -124,6 +151,74 @@ export const cardMotion = {
   /** Peak scale halfway through the flip, so the card "lifts" off the surface. */
   lift: 1.05,
   pressScale: 0.97,
+  /** Card reveal: the card deals in from below, slightly turned (fade only under Reduce Motion). */
+  dealDuration: duration.cardReveal,
+  dealEasing: easing.cardDeal,
+  deal: { offsetY: 36, rotate: -4, scale: 0.92 },
+  /** Tilt toward the pointer or finger, never past this. Off under Reduce Motion. */
+  tiltMax: tilt.maxDegrees,
+  /** How quickly the tilt catches up with a moving finger or pointer, ms. */
+  followDuration: duration.tap,
+  /** Spring back to flat on release. */
+  spring,
+  /** Shine fade in and out, ms. */
+  shineFade: duration.small,
+} as const;
+
+/** `#RRGGBB` + alpha → `rgba()`, so translucent shine colours still come from the tokens. */
+export const withAlpha = (hex: string, alpha: number) => {
+  const n = parseInt(hex.slice(1, 7), 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+};
+
+/**
+ * Holo shine: a white hotspot under the pointer or finger plus an iridescent band that slides
+ * with it. Drawn over the face while tilting only; the flat face (PNG export) never has it.
+ */
+export const cardShine = {
+  highlight: { color: colors.surface, opacity: 0.55 },
+  /** Hotspot radius as a fraction of the card's larger side. */
+  highlightRadius: 0.45,
+  holo: [
+    { color: cardColors.blueBright, opacity: 0.45 },
+    { color: colors.surface, opacity: 0.5 },
+    { color: cardColors.yellow, opacity: 0.4 },
+    { color: cardColors.red, opacity: 0.35 },
+  ],
+  /** Band angle in degrees (CSS convention: 0 = upward, 90 = left to right). */
+  holoAngle: 115,
+  /** Where the band starts and ends along that direction, as fractions. */
+  holoStart: 0.3,
+  holoEnd: 0.7,
+  /** The band's layer is this many card sizes big and slides across as the point moves. */
+  holoSpan: 2.5,
+  /** Peak opacity of the whole shine layer. */
+  opacity: 0.9,
+} as const;
+
+/** Evenly spaced offsets for the holo colours between `holoStart` and `holoEnd`. */
+export const holoStops = () =>
+  cardShine.holo.map((stop, i) => ({
+    ...stop,
+    offset:
+      cardShine.holoStart +
+      ((cardShine.holoEnd - cardShine.holoStart) * (i + 1)) / (cardShine.holo.length + 1),
+  }));
+
+/** A CSS gradient angle as SVG `x1 y1 x2 y2` fractions across the box. */
+export const gradientLine = (angleDeg: number) => {
+  const rad = (angleDeg * Math.PI) / 180;
+  const dx = Math.sin(rad) / 2;
+  const dy = -Math.cos(rad) / 2;
+  return { x1: 0.5 - dx, y1: 0.5 - dy, x2: 0.5 + dx, y2: 0.5 + dy };
+};
+
+/** The display face for the name and jersey number. */
+export const displayFont = {
+  /** Family the Expo app registers in apps/athlete/src/ui/fonts.ts (iOS, Android and RN Web). */
+  native: 'BarlowCondensed_800ExtraBold',
+  /** The portal loads Barlow Condensed 800 from Google Fonts (apps/portal/index.html). */
+  web: '"Barlow Condensed", "Arial Narrow", system-ui, sans-serif',
 } as const;
 
 export const cardShadow = '0px 18px 36px rgba(13, 34, 68, 0.32)';

@@ -1,4 +1,7 @@
 import { useCallback, useState } from 'react';
+import { resolveTeamColor } from '@team-impact/ui-tokens';
+import { fitName, type NameFit } from './fit';
+import { CARD_WIDTH, cardLayout } from './spec';
 import type { AthleteCardData, AthleteStat, ResumeEntry } from './types';
 
 /** The card has a fixed size, so lists are capped rather than allowed to overflow. */
@@ -6,9 +9,22 @@ export const CARD_LIMITS = {
   stats: 3,
   experience: 3,
   skills: 5,
-  facts: 4,
+  /** One row of tiles: the back also holds experience and skills since the rookie front. */
+  facts: 2,
   interests: 5,
 } as const;
+
+/** Room for the nameplate under the photo, in base units. */
+export const NAME_MAX_WIDTH = CARD_WIDTH - cardLayout.lowerPaddingX * 2;
+
+/** The rookie nameplate's fit for this name (see `fitName`). */
+export const fitCardName = (firstName: string, lastName: string): NameFit =>
+  fitName(firstName, lastName, {
+    maxWidth: NAME_MAX_WIDTH,
+    maxSize: cardLayout.nameMaxSize,
+    minSize: cardLayout.nameMinSize,
+    charWidth: cardLayout.nameCharWidth,
+  });
 
 export interface ContactLine {
   label: string;
@@ -36,6 +52,18 @@ export interface PreparedCard {
   facts: AthleteStat[];
   interests: string[];
   contact: ContactLine[];
+  /** Rookie front (TI-114). Stripe colour: the team's, else brand navy. */
+  teamColor: string;
+  /** Jersey number as printed over the photo, without "#": "07". */
+  jerseyDigits: string | null;
+  /** Name lines and size for the nameplate; long names shrink, wrap, then end in "…". */
+  nameFit: NameFit;
+  /** "Midfielder · Women's Soccer · Northeastern": position, team and school, blanks left out. */
+  rookieLine: string;
+  /** Class, major and division cells (missing ones left out); else the first resume stats. */
+  rookieStats: AthleteStat[];
+  /** "Season 2026", or null. */
+  seasonLine: string | null;
 }
 
 /** "Midfielder" -> "MI", "Point Guard" -> "PG". Prefer passing `positionShort`. */
@@ -50,20 +78,52 @@ const abbreviate = (position: string | undefined) => {
   return letters.slice(0, 2).toUpperCase();
 };
 
-const joinDefined = (parts: (string | undefined)[], separator: string) =>
-  parts.filter((part): part is string => Boolean(part?.trim())).join(separator);
+const joinDefined = (parts: (string | null | undefined)[], separator: string) =>
+  parts
+    .map((part) => part?.trim())
+    .filter((part): part is string => Boolean(part))
+    .join(separator);
+
+const clean = (value: string | number | null | undefined) =>
+  value === null || value === undefined ? '' : String(value).trim();
+
+/** "Northeastern University" -> "Northeastern", as on the Signing Day mockup. */
+const shortSchool = (school: string | undefined) => school?.replace(/\s+University$/i, '').trim();
+
+/** Class, major and division when given; otherwise the caller's first stats (older callers). */
+const rookieStatsFor = (athlete: AthleteCardData): AthleteStat[] => {
+  const classYear = clean(athlete.classYear);
+  // "Economics, Data Science minor" -> "Economics": the cell has room for one line.
+  const major = clean(athlete.major).split(',')[0]?.trim() ?? '';
+  const division = clean(athlete.division);
+  if (classYear || major || division) {
+    return [
+      { label: 'Class', value: classYear },
+      { label: 'Major', value: major },
+      { label: 'Division', value: division },
+    ].filter((stat) => stat.value !== '');
+  }
+  return athlete.resume.stats
+    .map((stat) => ({ label: stat.label.trim(), value: stat.value.trim() }))
+    .filter((stat) => stat.label !== '' && stat.value !== '')
+    .slice(0, CARD_LIMITS.stats);
+};
 
 export const prepareCard = (athlete: AthleteCardData): PreparedCard => {
   const { personal, resume } = athlete;
   const contact = personal.contact;
+  const firstName = athlete.firstName.trim();
+  const lastName = athlete.lastName.trim();
+  const jerseyDigits = clean(athlete.jerseyNumber).replace(/^#/, '') || null;
+  const season = clean(athlete.season);
   return {
     seed: athlete.id,
     photoUri: athlete.photoUri || null,
-    firstName: athlete.firstName,
-    lastName: athlete.lastName,
-    fullName: `${athlete.firstName} ${athlete.lastName}`,
-    initials: `${athlete.firstName.charAt(0)}${athlete.lastName.charAt(0)}`.toUpperCase(),
-    jerseyNumber: athlete.jerseyNumber ? `#${athlete.jerseyNumber.replace(/^#/, '')}` : null,
+    firstName,
+    lastName,
+    fullName: joinDefined([firstName, lastName], ' '),
+    initials: `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase(),
+    jerseyNumber: jerseyDigits ? `#${jerseyDigits}` : null,
     metaLine: joinDefined([athlete.sport, athlete.position], ' · '),
     teamLine: joinDefined([athlete.sport, athlete.school], ' · '),
     positionBadge: athlete.positionShort ?? abbreviate(athlete.position),
@@ -78,16 +138,33 @@ export const prepareCard = (athlete: AthleteCardData): PreparedCard => {
       }))
       .filter((e) => e.role !== '')
       .slice(0, CARD_LIMITS.experience),
-    skills: resume.skills.slice(0, CARD_LIMITS.skills),
+    skills: resume.skills
+      .map((skill) => skill.trim())
+      .filter(Boolean)
+      .slice(0, CARD_LIMITS.skills),
     personalLine: joinDefined([personal.hometown, personal.pronouns], ' · '),
     bio: personal.bio || null,
-    facts: personal.facts.slice(0, CARD_LIMITS.facts),
-    interests: personal.interests.slice(0, CARD_LIMITS.interests),
+    facts: personal.facts
+      .filter((fact) => fact.label.trim() !== '' && fact.value.trim() !== '')
+      .slice(0, CARD_LIMITS.facts),
+    interests: personal.interests
+      .map((interest) => interest.trim())
+      .filter(Boolean)
+      .slice(0, CARD_LIMITS.interests),
     contact: [
       { label: 'Email', value: contact?.email },
       { label: 'Phone', value: contact?.phone },
       { label: 'Social', value: contact?.social },
     ].filter((line): line is ContactLine => Boolean(line.value)),
+    teamColor: resolveTeamColor(athlete.teamColor),
+    jerseyDigits,
+    nameFit: fitCardName(firstName, lastName),
+    rookieLine: joinDefined(
+      [athlete.position, athlete.teamName || athlete.sport, shortSchool(athlete.school)],
+      ' · ',
+    ),
+    rookieStats: rookieStatsFor(athlete),
+    seasonLine: season ? `Season ${season}` : null,
   };
 };
 
@@ -111,10 +188,24 @@ export const useFlipState = (
   return [value, setFlipped] as const;
 };
 
+/** Screen reader label for the visible side. */
 export const describeCard = (card: PreparedCard, flipped: boolean) =>
   flipped
-    ? `${card.fullName}, personal info. ${joinDefined([card.personalLine, card.bio ?? undefined], '. ')}`
-    : `${card.fullName}, athlete resume. ${joinDefined([card.metaLine, card.school ?? undefined], ', ')}`;
+    ? `${card.fullName}, experience and personal info. ${joinDefined(
+        [
+          card.experience.map((e) => joinDefined([e.role, e.organization], ' at ')).join(', '),
+          card.personalLine,
+          card.bio,
+        ],
+        '. ',
+      )}`
+    : `${card.fullName}, athlete resume. ${joinDefined(
+        [
+          joinDefined([card.jerseyDigits && `Number ${card.jerseyDigits}`, card.rookieLine], ', '),
+          card.rookieStats.map((s) => `${s.label} ${s.value}`).join(', '),
+        ],
+        '. ',
+      )}`;
 
 /** Fictional athlete used by the card demos on both the app and the portal. */
 export const sampleAthlete: AthleteCardData = {
@@ -126,6 +217,11 @@ export const sampleAthlete: AthleteCardData = {
   position: 'Midfielder',
   positionShort: 'MF',
   school: 'Northeastern University',
+  teamName: "Women's Soccer",
+  classYear: 2027,
+  major: 'Business Analytics',
+  division: 'I',
+  season: 2026,
   resume: {
     stats: [
       { label: 'GPA', value: '3.7' },
@@ -144,8 +240,6 @@ export const sampleAthlete: AthleteCardData = {
     pronouns: 'she/her',
     bio: "Engine-room midfielder who lives for the build-up. Off the pitch I'm usually behind a film camera or hunting for Boston's best ramen.",
     facts: [
-      { label: 'Major', value: 'Business Analytics' },
-      { label: 'Class of', value: '2027' },
       { label: 'Walk-up song', value: 'Run the World' },
       { label: 'Pre-game', value: 'Banana + playlist' },
     ],

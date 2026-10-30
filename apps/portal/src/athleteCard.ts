@@ -8,40 +8,45 @@ export const regionName = (region: CardFace['region']) => (region ? REGION_NAMES
 /**
  * Contract card → the shared card component. Only what the viewer was sent goes in: contacts come
  * from the API's `SharedContact`, which already holds just the channels shared with this viewer.
- * Experience entries (up to 3 role / organisation / period rows, TI-150) fill the card's
- * experience rows directly; what the athlete is looking for goes on the back.
+ * The rookie front (TI-114) gets the team's name, colour and division plus class and major;
+ * experience entries (up to 3 role / organisation / period rows, TI-150) and what the athlete is
+ * looking for go on the back.
  */
-export const toCardData = (card: CardFace, contact?: SharedContact): AthleteCardData => ({
-  id: card.id,
-  firstName: card.firstName,
-  lastName: card.lastName,
-  photoUri: card.photoUrl,
-  jerseyNumber: card.jerseyNumber ?? undefined,
-  sport: card.team ? card.team.name : 'Alumni',
-  position: card.position ?? undefined,
-  school: card.team?.college.name,
-  resume: {
-    stats: [
-      { label: 'Class', value: String(card.classYear) },
-      ...(card.team ? [{ label: 'Div', value: card.team.division }] : []),
-      ...(card.region ? [{ label: 'Region', value: regionName(card.region)! }] : []),
-    ],
-    experience: card.experience,
-    skills: card.skills,
-  },
-  personal: {
-    hometown: card.hometown ?? undefined,
-    bio: card.lookingFor ? `Looking for: ${card.lookingFor}` : undefined,
-    facts: [
-      { label: 'Major', value: card.major },
-      { label: 'Class of', value: String(card.classYear) },
-      ...(card.city ? [{ label: 'City', value: card.city }] : []),
-    ],
-    interests: [],
-    contact: contact && {
-      email: contact.email,
-      phone: contact.phone,
-      social: contact.linkedinUrl,
+export const toCardData = (card: CardFace, contact?: SharedContact): AthleteCardData => {
+  const region = regionName(card.region);
+  return {
+    id: card.id,
+    firstName: card.firstName,
+    lastName: card.lastName,
+    photoUri: card.photoUrl,
+    jerseyNumber: card.jerseyNumber ?? undefined,
+    sport: card.team ? card.team.sport : 'Alumni',
+    position: card.position ?? undefined,
+    school: card.team?.college.name,
+    teamName: card.team?.name,
+    teamColor: card.team?.color,
+    classYear: card.classYear,
+    major: card.major,
+    division: card.team?.division,
+    season: card.season,
+    resume: {
+      stats: [],
+      experience: card.experience,
+      skills: card.skills,
     },
-  },
-});
+    personal: {
+      hometown: card.hometown ?? undefined,
+      bio: card.lookingFor ? `Looking for: ${card.lookingFor}` : undefined,
+      facts: [
+        ...(card.city ? [{ label: 'City', value: card.city }] : []),
+        ...(region ? [{ label: 'Region', value: region }] : []),
+      ],
+      interests: [],
+      contact: contact && {
+        email: contact.email,
+        phone: contact.phone,
+        social: contact.linkedinUrl,
+      },
+    },
+  };
+};
