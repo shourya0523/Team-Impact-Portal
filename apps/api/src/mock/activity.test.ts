@@ -259,6 +259,20 @@ describe('staff: published at once, no review queue', () => {
     );
   });
 
+  it('needs membership like everyone else: no posting or events outside staff’s communities', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const event = { title: 'Mixer', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    expect((await staff.post(`/communities/${FINANCE}/posts`, { text: 'Hi' })).status).toBe(403);
+    expect((await staff.post(`/communities/${TEAM}/posts`, { text: 'Hi' })).status).toBe(403);
+    expect((await staff.post(`/communities/${TEAM}/events`, event)).status).toBe(403);
+
+    expect((await staff.post(`/communities/${FINANCE}/join`)).status).toBe(200);
+    const hosted = await staff.post(`/communities/${FINANCE}/events`, event);
+    expect(hosted.status).toBe(201);
+    expect(hosted.body.moderation).toBe('approved');
+  });
+
   it('publishes a staff event and notifies the community', async () => {
     const { as } = await world();
     const staff = await as('staff');
