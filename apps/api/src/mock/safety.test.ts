@@ -247,6 +247,8 @@ describe('staff tools', () => {
       ['POST', `/staff/communities/${FINANCE}/merge`, { intoId: FIRST_GEN }],
       ['DELETE', `/staff/communities/${FINANCE}`],
       ['GET', '/staff/announcements'],
+      ['GET', '/staff/posts'],
+      ['GET', '/staff/events'],
       ['POST', '/staff/announcements', { text: 'Hello everyone!', sendPush: false }],
     ];
     for (const role of [

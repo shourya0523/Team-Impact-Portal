@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  CalendarEvent,
   CoachInvite,
   College,
   Company,
@@ -447,7 +448,7 @@ export const registerStaffAdminRoutes = (
     return reply.status(204).send();
   });
 
-  // Announcements (S1) ---------------------------------------------------------------------------
+  // Team Impact's voice (S1): announcements, posts and events -----------------------------------
 
   app.get(
     '/staff/announcements',
@@ -458,6 +459,36 @@ export const registerStaffAdminRoutes = (
         .filter((p) => p.kind === 'announcement')
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .flatMap((p) => toPost(world, p, u) ?? []);
+    },
+  );
+
+  /** Approved, in a community staff can still see (not removed, not medical while switched off). */
+  const listable = (item: { communityId: string; moderation: string }, u: MockUser) => {
+    const c = world.communities.find((x) => x.id === item.communityId);
+    return !!c && item.moderation === 'approved' && world.canSeeCommunity(c, u) ? c : undefined;
+  };
+
+  // Every staff member's plain posts and events, newest first: they all speak as Team Impact.
+  app.get('/staff/posts', { schema: { response: { 200: z.array(Post) } } }, async (request) => {
+    const u = staffOnly(request);
+    return world.posts
+      .filter((p) => p.kind === 'post' && world.user(p.authorId)?.role === 'staff')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .flatMap((p) => (listable(p, u) && toPost(world, p, u)) || []);
+  });
+
+  app.get(
+    '/staff/events',
+    { schema: { response: { 200: z.array(CalendarEvent) } } },
+    async (request) => {
+      const u = staffOnly(request);
+      return world.events
+        .filter((e) => world.user(e.hostId)?.role === 'staff')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .flatMap((e) => {
+          const c = listable(e, u);
+          return c ? [world.calendarEvent(e, c, u)] : [];
+        });
     },
   );
 

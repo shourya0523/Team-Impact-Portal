@@ -12,7 +12,9 @@ import { CollegesPage } from './pages/staff/Colleges';
 import { SignUpPage } from './pages/SignUp';
 import { CommunitiesPage } from './pages/staff/Communities';
 import { CompaniesPage } from './pages/staff/Companies';
+import { EventsPage } from './pages/staff/Events';
 import { ModerationPage } from './pages/staff/Moderation';
+import { PostsPage } from './pages/staff/Posts';
 import { RecruitersPage } from './pages/staff/Recruiters';
 import { TeamsPage } from './pages/staff/Teams';
 import { homeFor, isPortalRole, SessionProvider, useSession } from './session';
@@ -103,6 +105,22 @@ export const AppRoutes = () => (
         element={
           <Guard allow={['staff']}>
             <AnnouncementsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/staff/posts"
+        element={
+          <Guard allow={['staff']}>
+            <PostsPage />
+          </Guard>
+        }
+      />
+      <Route
+        path="/staff/events"
+        element={
+          <Guard allow={['staff']}>
+            <EventsPage />
           </Guard>
         }
       />

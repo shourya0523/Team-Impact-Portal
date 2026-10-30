@@ -45,7 +45,7 @@ const world = async (flags?: FeatureFlags) => {
         ...(payload ? { payload } : {}),
         cookies: { [cookie.name]: cookie.value },
       });
-      return { status: r.statusCode, body: r.json(), text: r.body };
+      return { status: r.statusCode, body: r.body ? r.json() : undefined, text: r.body };
     };
     return {
       get: (url: string) => call('GET', url),
@@ -271,6 +271,37 @@ describe('staff: published at once, no review queue', () => {
     const hosted = await staff.post(`/communities/${FINANCE}/events`, event);
     expect(hosted.status).toBe(201);
     expect(hosted.body.moderation).toBe('approved');
+  });
+
+  it('lists staff’s posts and events for the portal, not anyone else’s', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const athlete = await as('athlete');
+    const event = { title: 'Mixer', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    const mine = await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text: 'Welcome!' });
+    const hosted = await staff.post(`/communities/${TEAM_IMPACT}/events`, event);
+    const theirs = await athlete.post(`/communities/${TEAM_IMPACT}/posts`, { text: 'Hi all' });
+    const announced = await staff.post('/staff/announcements', {
+      text: 'Not a plain post.',
+      sendPush: false,
+    });
+
+    const posts = ids((await staff.get('/staff/posts')).body);
+    expect(posts).toEqual([mine.body.id]);
+    expect(posts).not.toContain(theirs.body.id);
+    expect(posts).not.toContain(announced.body.id);
+    // Newest first, including the fixture's staff event (Family night).
+    expect(ids((await staff.get('/staff/events')).body)).toEqual([hosted.body.id, FAMILY_NIGHT]);
+  });
+
+  it('drops a staff post from the list when its community is removed', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    await staff.post(`/communities/${FINANCE}/join`);
+    const created = await staff.post(`/communities/${FINANCE}/posts`, { text: 'Resume clinic' });
+    expect(ids((await staff.get('/staff/posts')).body)).toContain(created.body.id);
+    expect((await staff.del(`/staff/communities/${FINANCE}`)).status).toBe(204);
+    expect(ids((await staff.get('/staff/posts')).body)).not.toContain(created.body.id);
   });
 
   it('publishes a staff event and notifies the community', async () => {
