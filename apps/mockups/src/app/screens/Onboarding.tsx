@@ -64,7 +64,7 @@ export function Welcome() {
         <span style={{ color: 'var(--red)' }}>All together.</span>
       </h1>
       <p className="body" style={{ fontSize: 17, maxWidth: 300 }}>
-        Your team, your families and your Baseball Card, in one place.
+        Your team, your families and your Impact Card, in one place.
       </p>
       <div
         aria-hidden="true"
@@ -488,7 +488,7 @@ export function Details() {
         title={titles[role]}
         sub={
           role === 'athlete'
-            ? 'That’s all you need to join. Your Baseball Card comes later.'
+            ? 'That’s all you need to join. Your Impact Card comes later.'
             : undefined
         }
       />
@@ -1214,7 +1214,7 @@ export function RequestJoin() {
       )}
       {role === 'athlete' && (
         <p className="small" style={{ margin: 0 }}>
-          That’s all the coach needs. No resume yet; you’ll build your Baseball Card after you’re
+          That’s all the coach needs. No resume yet; you’ll build your Impact Card after you’re
           signed.
         </p>
       )}
@@ -1570,13 +1570,13 @@ export function Signed() {
                   ? `You and ${child} are on the team. Say hi to the roster and see what’s coming up.`
                   : r === 'teen'
                     ? `You’re on the team, ${first}. Post to your team and say hi.`
-                    : `You’re on the roster, ${first}. Next up: build your Baseball Card.`,
+                    : `You’re on the roster, ${first}. Next up: build your Impact Card.`,
               cta: 'Go to my team',
               alt:
                 r === 'parent'
                   ? { label: 'Finish ' + child + '’s profile', screen: 'child' as const }
                   : r === 'athlete'
-                    ? { label: 'Build my Baseball Card', screen: 'card' as const }
+                    ? { label: 'Build my Impact Card', screen: 'card' as const }
                     : null,
             };
   return (

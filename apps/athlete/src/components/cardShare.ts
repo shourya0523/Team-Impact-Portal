@@ -21,6 +21,6 @@ export async function shareCardFace(face: RefObject<View | null>, fileName: stri
   await Sharing.shareAsync(named.uri, {
     mimeType: 'image/png',
     UTI: 'public.png',
-    dialogTitle: 'Share your Baseball Card',
+    dialogTitle: 'Share your Impact Card',
   });
 }

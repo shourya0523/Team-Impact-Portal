@@ -560,7 +560,7 @@ export function AlumniProfile() {
           className="lrow panel"
           onClick={() => toast(first + ' hasn’t published a card yet')}
         >
-          <span className="grow">View {first}’s Baseball Card</span>
+          <span className="grow">View {first}’s Impact Card</span>
           <Icon name="next" />
         </button>
         <div className="tiny">

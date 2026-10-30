@@ -23,7 +23,7 @@ export const ExperienceEntry = z.strictObject({
 export type ExperienceEntry = z.infer<typeof ExperienceEntry>;
 
 /**
- * What the athlete writes on their Baseball Card, which replaces the resume. Only athletes,
+ * What the athlete writes on their Impact Card, which replaces the resume. Only athletes,
  * current or alumni, have one. No health details, addresses or birthdates.
  */
 const cardFieldShape = {

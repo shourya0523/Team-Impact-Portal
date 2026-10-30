@@ -1,6 +1,6 @@
 # Athlete card
 
-A flippable, baseball-card-style athlete card. The **front** is the rookie card from the Signing
+A flippable, impact-card-style athlete card. The **front** is the rookie card from the Signing
 Day mockups (TI-114): team colour stripe, jersey number over the photo, name, position and team,
 then class, major and division. The **back** has the experience rows, skills and personal info.
 Swipe sideways or tap to turn it. It deals in on mount and tilts with a holo shine under the

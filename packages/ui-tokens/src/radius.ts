@@ -1,4 +1,4 @@
-/** Corner radii. `card` is the Baseball Card. */
+/** Corner radii. `card` is the Impact Card. */
 export const radius = {
   sm: 10,
   md: 12,

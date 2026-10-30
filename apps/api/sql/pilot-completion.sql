@@ -1,7 +1,7 @@
 -- Pilot completion rate and time to first card, from events_log.
 --
 -- Cohort: everyone whose account was created as an athlete (current or alumni), the roles that
--- have a Baseball Card. Completed: they published a card at least once. Time to first card runs
+-- have an Impact Card. Completed: they published a card at least once. Time to first card runs
 -- from sign-up to their first card.published. Set the window in `pilot` to the pilot's dates; as
 -- written it covers all time. Paste into psql or a Metabase native query.
 with pilot as (

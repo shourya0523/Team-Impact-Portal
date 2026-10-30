@@ -22,7 +22,7 @@ Text in [square brackets] is a placeholder for Team IMPACT and its counsel to fi
 
 **Account details.** Name, email, a password (stored only as a one-way hash), your role, and your birth date. We use your birth date only to check your age (13 or older; 13 to 17 means a teen account) and to know when a teen becomes an adult. It is never shown to anyone.
 
-**Profile and Baseball Card.** What you add: photo, college, team, position, major, graduation year, hometown, experience, interests, and for alumni where you work and whether you're mentoring or hiring.
+**Profile and Impact Card.** What you add: photo, college, team, position, major, graduation year, hometown, experience, interests, and for alumni where you work and whether you're mentoring or hiring.
 
 **Contact details.** Phone number, email and LinkedIn, and your choices about who sees each one.
 
@@ -49,7 +49,7 @@ Text in [square brackets] is a placeholder for Team IMPACT and its counsel to fi
 | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | An athlete's contact details for families      | Approved parents on the athlete's team. The athlete picks which of phone, email and LinkedIn.                                                                         |
 | An athlete's contact details for recruiters    | Recruiters at partner companies, only while the athlete has a published card and open-to-recruiting turned on. The athlete picks a separate set from the family one.  |
-| An athlete's Baseball Card                     | Their team and families; recruiters only with open-to-recruiting on and a published card. Without open-to-recruiting, an athlete doesn't appear on the portal at all. |
+| An athlete's Impact Card                       | Their team and families; recruiters only with open-to-recruiting on and a published card. Without open-to-recruiting, an athlete doesn't appear on the portal at all. |
 | A child's profile (under 13) and a teen's      | Only their own team and family. Never in search, to recruiters, in card exports or in any community outside their team.                                               |
 | Athletes' contact details, for teens           | Nobody: teens never see athletes' contact details.                                                                                                                    |
 | Alumni profiles and contact details            | Athletes, and only while the alumnus has flagged mentoring or hiring.                                                                                                 |
@@ -96,7 +96,7 @@ Before any post, comment or event appears, its text is sent to an automated mode
 
 ## 7. Resumes
 
-If you upload a resume to fill your Baseball Card:
+If you upload a resume to fill your Impact Card:
 
 - We read it automatically. Anything read from it is treated as data, checked against fixed fields, and **shown to no one until you review and confirm it**.
 - Home addresses and birth dates are removed and never kept.

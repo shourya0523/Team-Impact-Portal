@@ -48,7 +48,7 @@ export type ParentRelationship = z.infer<typeof ParentRelationship>;
 /**
  * Former athletes, and former Team Impact kids back as mentors. Athletes find alumni; alumni never
  * browse athletes. Turning on mentoring or hiring makes the profile and contact details visible to
- * athletes. Alumni athletes also have a Baseball Card.
+ * athletes. Alumni athletes also have an Impact Card.
  */
 export const AlumniProfile = z.object({
   user: UserSummary,

@@ -172,7 +172,7 @@ const TeamFields = ({
         <Tile text="Aa" teamColor={colorError ? null : typedColor || null} size="md" />
       </div>
       <Text variant="caption" color="muted">
-        The team’s avatar and Baseball Card stripe. Leave it blank for Team Impact navy. The logo
+        The team’s avatar and Impact Card stripe. Leave it blank for Team Impact navy. The logo
         comes with uploads.
       </Text>
     </>

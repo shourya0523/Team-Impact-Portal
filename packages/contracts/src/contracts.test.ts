@@ -25,7 +25,7 @@ import {
   ExperienceEntry,
   emailOnDomain,
   FindAlumniQuery,
-  hasBaseballCard,
+  hasImpactCard,
   LinkedInUrl,
   MergeCommunityRequest,
   MergeCollegeRequest,
@@ -80,11 +80,11 @@ const issuePaths = (result: { error?: { issues: { path: PropertyKey[] }[] } }) =
   result.error?.issues.map((issue) => issue.path.join('.'));
 
 describe('roles', () => {
-  it('only athletes have a Baseball Card', () => {
-    expect(hasBaseballCard('athlete')).toBe(true);
-    expect(hasBaseballCard('alumni_athlete')).toBe(true);
-    expect(hasBaseballCard('parent')).toBe(false);
-    expect(hasBaseballCard('recruiter')).toBe(false);
+  it('only athletes have an Impact Card', () => {
+    expect(hasImpactCard('athlete')).toBe(true);
+    expect(hasImpactCard('alumni_athlete')).toBe(true);
+    expect(hasImpactCard('parent')).toBe(false);
+    expect(hasImpactCard('recruiter')).toBe(false);
   });
 
   it('turns 13 on the birthday, not the day before', () => {

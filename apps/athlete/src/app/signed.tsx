@@ -121,7 +121,7 @@ export default function Signed() {
           <View style={styles.actions}>
             {role === 'athlete' && (
               <Button
-                label="Make your Baseball Card"
+                label="Make your Impact Card"
                 variant="onBrand"
                 size="lg"
                 onPress={() => router.replace('/card')}

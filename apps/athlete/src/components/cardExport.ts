@@ -8,6 +8,6 @@ import { toCardData } from '@/components/cardData';
  */
 export const exportCardData = (face: CardFace): AthleteCardData => toCardData(face);
 
-/** "jordan-lee-baseball-card-2026.png" → "…-back.png" for the back face. */
+/** "jordan-lee-impact-card-2026.png" → "…-back.png" for the back face. */
 export const fileNameFor = (fileName: string, side: 'front' | 'back') =>
   side === 'front' ? fileName : `${fileName.replace(/\.png$/i, '')}-back.png`;

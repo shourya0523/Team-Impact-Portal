@@ -112,7 +112,7 @@ export default function Recruiting() {
             return (
               <Gutter>
                 <Card>
-                  <Text weight="semibold">Your Baseball Card comes first</Text>
+                  <Text weight="semibold">Your Impact Card comes first</Text>
                   <Text variant="small" color="secondary">
                     Families and recruiters reach you through the details on your card. Build it,
                     then choose who sees what here.

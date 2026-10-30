@@ -11,7 +11,7 @@ import { Badge, Card, Text } from '@/ui';
 export default function CardHistory() {
   const { state } = useApi(() => api.cardHistory());
   return (
-    <Screen eyebrow="Baseball Card" title="Earlier seasons" back>
+    <Screen eyebrow="Impact Card" title="Earlier seasons" back>
       <Async state={state}>
         {(versions) =>
           versions.length === 0 ? (

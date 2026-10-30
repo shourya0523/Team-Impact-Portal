@@ -6,7 +6,7 @@ import {
   type ChildProfile,
   EXTRACTABLE_CARD_FIELDS,
   ExperienceEntry,
-  hasBaseballCard,
+  hasImpactCard,
   MAX_EXPERIENCE_ENTRIES,
   type MyCardState,
   type MySettings,
@@ -180,7 +180,7 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     )
     .map(world.teamSummary);
 
-  const withContact = hasBaseballCard(t.role) ? world.cardFor(t.id, u) : null;
+  const withContact = hasImpactCard(t.role) ? world.cardFor(t.id, u) : null;
   let card = null;
   let contact: SharedContact = {};
   if (withContact) {
@@ -205,7 +205,7 @@ export const cardOf = (world: MockWorld, athleteId: string) =>
   world.cards.find((c) => c.face.athleteId === athleteId);
 
 export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
-  const holder = hasBaseballCard(u.role);
+  const holder = hasImpactCard(u.role);
   const card = holder ? cardOf(world, u.id) : undefined;
   const published = !!card?.visibility.published;
   const reason = !canBeOpenToRecruiting(u.role)
@@ -213,7 +213,7 @@ export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
       ? 'Teens can’t be open to recruiting.'
       : 'Only athletes can be open to recruiting.'
     : !published
-      ? 'Publish your Baseball Card first.'
+      ? 'Publish your Impact Card first.'
       : null;
   return {
     contact: card ? card.contact : null,
@@ -262,7 +262,7 @@ export const myCardState = (world: MockWorld, u: MockUser): MyCardState => {
  * Returns an error message, or null.
  */
 export const publishCard = (world: MockWorld, u: MockUser, now: string): string | null => {
-  if (!hasBaseballCard(u.role)) return 'Only athletes have a Baseball Card.';
+  if (!hasImpactCard(u.role)) return 'Only athletes have an Impact Card.';
   const existing = cardOf(world, u.id);
   const draft = world.profiles.drafts.get(u.id) ?? {};
   const face = existing?.face as Record<string, unknown> | undefined;
@@ -333,7 +333,7 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
  */
 export const unpublishCard = (world: MockWorld, u: MockUser, now: string): string | null => {
   const card = cardOf(world, u.id);
-  if (!card) return 'You have no Baseball Card yet.';
+  if (!card) return 'You have no Impact Card yet.';
   card.visibility.published = false;
   card.visibility.openToRecruiting = false;
   world.profiles.updatedAt.set(u.id, now);

@@ -24,7 +24,7 @@ export default function Welcome() {
         </Text>
         <Text color="onBrandSecondary">
           The Team IMPACT app keeps teams, families and coaches together, and gives every athlete a
-          Baseball Card.
+          Impact Card.
         </Text>
       </View>
       <View style={styles.actions}>

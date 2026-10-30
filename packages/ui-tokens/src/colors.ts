@@ -71,7 +71,7 @@ export const colors = {
     surface: '#111418',
     textMuted: '#B9BDC4',
     label: '#8D939C',
-    /** The Baseball Card's generated art (ui-primitives athlete-card). */
+    /** The Impact Card's generated art (ui-primitives athlete-card). */
     art: {
       navyDeep: '#0D2244',
       blue: '#0F407F',

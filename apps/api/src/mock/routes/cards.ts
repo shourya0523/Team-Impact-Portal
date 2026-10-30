@@ -25,7 +25,7 @@ import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
 /**
- * The athlete's own Baseball Card: draft, resume upload and review, publish, history, export.
+ * The athlete's own Impact Card: draft, resume upload and review, publish, history, export.
  * Only card holders (current and alumni athletes) reach these, so parents can't make a card for
  * a child and teens never have one.
  */
@@ -158,9 +158,9 @@ export const registerCardRoutes = (
   app.post('/cards/me/export', { schema: { response: { 200: CardExport } } }, async (request) => {
     const u = athlete(request);
     const card = cardOf(world, u.id);
-    if (!card?.visibility.published) throw httpError(400, 'Publish your Baseball Card first');
+    if (!card?.visibility.published) throw httpError(400, 'Publish your Impact Card first');
     const face = world.cardFace(card);
     const slug = `${face.firstName}-${face.lastName}`.toLowerCase().replace(/[^a-z0-9-]/g, '');
-    return { face, fileName: `${slug}-baseball-card-${face.season}.png` };
+    return { face, fileName: `${slug}-impact-card-${face.season}.png` };
   });
 };

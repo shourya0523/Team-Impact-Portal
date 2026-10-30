@@ -39,7 +39,7 @@ function Row({
 }
 
 /**
- * "/card": the athlete's Baseball Card. Start screen (upload or build by hand) before the first
+ * "/card": the athlete's Impact Card. Start screen (upload or build by hand) before the first
  * publish; afterwards the card itself, its status and what to do next.
  */
 export default function CardHome() {
@@ -59,7 +59,7 @@ export default function CardHome() {
   const unpublish = () => api.unpublishCard().then(done.ok, done.fail);
 
   return (
-    <Screen eyebrow="Baseball Card" title="My card">
+    <Screen eyebrow="Impact Card" title="My card">
       <Async state={state}>
         {({ card, draft, pendingResume }) => (
           <Gutter>
@@ -107,8 +107,8 @@ export default function CardHome() {
                   Build your card
                 </Text>
                 <Text color="secondary">
-                  Your Baseball Card is your resume here. Upload one and we’ll fill in what we can,
-                  or type it in yourself. You check everything before anyone sees it.
+                  Your Impact Card is your resume here. Upload one and we’ll fill in what we can, or
+                  type it in yourself. You check everything before anyone sees it.
                 </Text>
                 <Button
                   label="Upload resume"

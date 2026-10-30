@@ -42,7 +42,7 @@ export default function UploadResume() {
   };
 
   return (
-    <Screen eyebrow="Baseball Card" title="Upload resume" back>
+    <Screen eyebrow="Impact Card" title="Upload resume" back>
       <Gutter>
         <Card style={styles.note}>
           <Icon name="lock" size={18} color={colors.brand} />

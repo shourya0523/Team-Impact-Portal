@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { visibleToRecruiters, useWorld } from '../../shared/store';
-import { BaseballCard, Back, Empty, Icon } from '../../shared/ui';
+import { ImpactCard, Back, Empty, Icon } from '../../shared/ui';
 import { addNote, addToList, companyLists } from '../actions';
 import { Blocked } from '../chrome';
 import type { PortalProps } from '../ctx';
@@ -77,7 +77,7 @@ export default function Athlete(p: PortalProps) {
           style={{ flex: '999 1 560px', minWidth: 0, gap: 18, alignItems: 'flex-start' }}
         >
           <div className="stack g8 deal" style={{ flex: '0 1 280px', alignItems: 'center' }}>
-            <BaseballCard a={a} team={team} />
+            <ImpactCard a={a} team={team} />
             <div className="tiny">Tap the card to flip it.</div>
           </div>
           <div

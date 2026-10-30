@@ -78,4 +78,4 @@ Flags: `FLAG_IDENTITY_SEARCH` and `FLAG_MEDICAL_COMMUNITIES` (both default on). 
 
 - Communities replace affinity groups and feed scopes. Kinds: team (private), Team Impact, medical (anyone who can join one can create one, private membership, not teens or recruiters), interest (staff can mark official).
 - Only official interest communities are recruiter filters, behind one feature flag, with every search logged.
-- Week 4 tickets on the Sprint board: Access layer, Teams and join requests, Staff portal, Uploads, Baseball Card editor, Join flow screens, Staff colleges and teams.
+- Week 4 tickets on the Sprint board: Access layer, Teams and join requests, Staff portal, Uploads, Impact Card editor, Join flow screens, Staff colleges and teams.

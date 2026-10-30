@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Platform, StyleSheet, View, useWindowDimensions } from 'react-native';
-import { hasBaseballCard, type CardFace } from '@team-impact/contracts';
+import { hasImpactCard, type CardFace } from '@team-impact/contracts';
 import {
   AthleteCardFace,
   CARD_HEIGHT,
@@ -32,15 +32,15 @@ const SIDE_LABEL: Record<CardSide, string> = { front: 'Front', back: 'Back' };
 export default function ExportCard() {
   const { role } = useRole();
   return (
-    <Screen eyebrow="Baseball Card" title="Export as image" back>
-      {role && hasBaseballCard(role) ? (
+    <Screen eyebrow="Impact Card" title="Export as image" back>
+      {role && hasImpactCard(role) ? (
         <ExportSides />
       ) : (
         <Gutter>
           <Card style={styles.note}>
             <Icon name="card" size={20} color={colors.brand} />
             <Text variant="small" color="secondary" style={styles.grow}>
-              Only athletes and alumni athletes have a Baseball Card to export.
+              Only athletes and alumni athletes have an Impact Card to export.
             </Text>
           </Card>
         </Gutter>
@@ -143,7 +143,7 @@ function WebSide({ face, side, fileName, width }: SideProps & { face: CardFace }
         {png ? (
           <Image
             source={{ uri: png }}
-            accessibilityLabel={`The ${side} of your Baseball Card as an image`}
+            accessibilityLabel={`The ${side} of your Impact Card as an image`}
             style={[styles.preview, { width, height: (width * CARD_HEIGHT) / CARD_WIDTH }]}
           />
         ) : (

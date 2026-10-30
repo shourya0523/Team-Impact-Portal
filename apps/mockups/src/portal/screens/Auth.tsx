@@ -113,7 +113,7 @@ export function Signup({
             maxWidth: 480,
           }}
         >
-          Search Baseball Cards from Team IMPACT athletes who chose to be found, save them to shared
+          Search Impact Cards from Team IMPACT athletes who chose to be found, save them to shared
           lists, and reach out directly.
         </p>
         <div className="row g6">

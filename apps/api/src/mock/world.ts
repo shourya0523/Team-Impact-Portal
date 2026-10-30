@@ -432,7 +432,7 @@ export class MockWorld {
       return 'Only official communities can make you findable';
     if (!member) return 'Join the community first';
     const card = this.cards.find((k) => k.face.athleteId === u.id);
-    if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    if (findable && !card?.visibility.published) return 'Publish your Impact Card first';
     member.recruiterSearchOptIn = findable;
     return null;
   };

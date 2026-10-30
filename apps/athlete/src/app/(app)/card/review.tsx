@@ -159,7 +159,7 @@ function Review({ extraction }: { extraction: ResumeExtraction }) {
 export default function CardReview() {
   const { state } = useApi(() => api.myCard());
   return (
-    <Screen eyebrow="Baseball Card" title="Check your resume" back>
+    <Screen eyebrow="Impact Card" title="Check your resume" back>
       <Async state={state}>
         {({ pendingResume }) =>
           pendingResume ? (

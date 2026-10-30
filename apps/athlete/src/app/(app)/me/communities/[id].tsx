@@ -47,8 +47,8 @@ function Findable({
         <View style={styles.findableText}>
           <Text weight="semibold">Recruiters can find me through this community</Text>
           <Text variant="small" color="secondary">
-            Separate from joining. Only your published Baseball Card shows, and every search like
-            this is logged. Turn it off anytime.
+            Separate from joining. Only your published Impact Card shows, and every search like this
+            is logged. Turn it off anytime.
           </Text>
         </View>
         <Pressable
