@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import {
+  announce,
   canReceive,
   commentsFor,
   DEFAULT_PREFS,
@@ -44,7 +45,7 @@ const world = async (flags?: FeatureFlags) => {
         ...(payload ? { payload } : {}),
         cookies: { [cookie.name]: cookie.value },
       });
-      return { status: r.statusCode, body: r.json(), text: r.body };
+      return { status: r.statusCode, body: r.body ? r.json() : undefined, text: r.body };
     };
     return {
       get: (url: string) => call('GET', url),
@@ -163,22 +164,27 @@ describe('posts: held for moderation (P5)', () => {
     expect((await jordan.post(`/communities/${CAPTAINS}/posts`, { text: 'Hi' })).status).toBe(201);
   });
 
-  it('makes staff posts in Team Impact announcements, and notifies everyone once approved', async () => {
+  it('publishes a staff post in Team Impact as a plain post, and tells nobody', async () => {
     const { as } = await world();
     const staff = await as('staff');
-    const teen = await as('teen');
     const created = await staff.post(`/communities/${TEAM_IMPACT}/posts`, {
       text: 'Applications for spring draft day are open.',
     });
-    expect(created.body.kind).toBe('announcement');
-    expect(created.body.official).toBe(true);
-    expect((await teen.get('/notifications')).body.items).toHaveLength(0);
-    await approve(staff, created.body.id);
-    const note = (await teen.get('/notifications')).body;
-    expect(note.unreadCount).toBe(1);
-    expect(note.items[0]).toMatchObject({ kind: 'announcement', actor: null });
-    const recruiter = await as('recruiter');
-    expect((await recruiter.get('/notifications')).body.unreadCount).toBe(1);
+    expect(created.body).toMatchObject({ kind: 'post', official: true, moderation: 'approved' });
+    for (const role of ['teen', 'recruiter'] as const) {
+      const reader = await as(role);
+      expect(ids((await reader.get('/feed')).body.items), role).toContain(created.body.id);
+      expect((await reader.get('/notifications')).body.items, role).toEqual([]);
+    }
+  });
+
+  it('never makes an announcement from anyone else’s post in Team Impact', async () => {
+    const { as } = await world();
+    const athlete = await as('athlete');
+    const created = await athlete.post(`/communities/${TEAM_IMPACT}/posts`, {
+      text: 'Who’s going to the gala?',
+    });
+    expect(created.body).toMatchObject({ kind: 'post', official: false, moderation: 'in_review' });
   });
 
   it('keeps an image link on the post', async () => {
@@ -192,6 +198,160 @@ describe('posts: held for moderation (P5)', () => {
       imageUrl: 'javascript:alert(1)',
     });
     expect(bad.status).toBe(400);
+  });
+});
+
+describe('staff: published at once, no review queue', () => {
+  const READERS: Role[] = [
+    'coach',
+    'athlete',
+    'parent',
+    'teen',
+    'recruiter',
+    'alumni_athlete',
+    'alumni_mentor',
+  ];
+  const openTickets = async (staff: Client, targetId: string) =>
+    (await staff.get('/staff/moderation/tickets')).body.filter(
+      (t: { target: { id: string }; status: string }) =>
+        t.target.id === targetId && t.status === 'open',
+    );
+
+  it('puts a portal announcement in every role’s feed and notifications', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const res = await staff.post('/staff/announcements', {
+      text: 'Draft day applications are open.',
+      sendPush: false,
+    });
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      kind: 'announcement',
+      official: true,
+      moderation: 'approved',
+    });
+    expect(await openTickets(staff, res.body.id)).toEqual([]);
+    for (const role of READERS) {
+      const reader = await as(role);
+      expect(ids((await reader.get('/feed')).body.items), role).toContain(res.body.id);
+      const notes = (await reader.get('/notifications')).body.items;
+      expect(notes[0], role).toMatchObject({
+        kind: 'announcement',
+        actor: null,
+        target: { kind: 'post', id: res.body.id },
+      });
+    }
+    // The author isn't told about their own announcement.
+    expect((await staff.get('/notifications')).body.items).toEqual([]);
+  });
+
+  it('publishes a staff post outside Team Impact as a plain post', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const athlete = await as('athlete');
+    expect((await staff.post(`/communities/${FINANCE}/join`)).status).toBe(200);
+    expect((await athlete.post(`/communities/${FINANCE}/join`)).status).toBe(200);
+    const created = await staff.post(`/communities/${FINANCE}/posts`, { text: 'Resume clinic' });
+    expect(created.body).toMatchObject({ kind: 'post', official: true, moderation: 'approved' });
+    expect(await openTickets(staff, created.body.id)).toEqual([]);
+    expect(ids((await athlete.get(`/communities/${FINANCE}/posts`)).body.items)).toContain(
+      created.body.id,
+    );
+  });
+
+  it('needs membership like everyone else: no posting or events outside staff’s communities', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const event = { title: 'Mixer', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    expect((await staff.post(`/communities/${FINANCE}/posts`, { text: 'Hi' })).status).toBe(403);
+    expect((await staff.post(`/communities/${TEAM}/posts`, { text: 'Hi' })).status).toBe(403);
+    expect((await staff.post(`/communities/${TEAM}/events`, event)).status).toBe(403);
+
+    expect((await staff.post(`/communities/${FINANCE}/join`)).status).toBe(200);
+    const hosted = await staff.post(`/communities/${FINANCE}/events`, event);
+    expect(hosted.status).toBe(201);
+    expect(hosted.body.moderation).toBe('approved');
+  });
+
+  it('lists staff’s posts and events for the portal, not anyone else’s', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const athlete = await as('athlete');
+    const event = { title: 'Mixer', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    const mine = await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text: 'Welcome!' });
+    const hosted = await staff.post(`/communities/${TEAM_IMPACT}/events`, event);
+    const theirs = await athlete.post(`/communities/${TEAM_IMPACT}/posts`, { text: 'Hi all' });
+    const announced = await staff.post('/staff/announcements', {
+      text: 'Not a plain post.',
+      sendPush: false,
+    });
+
+    const posts = ids((await staff.get('/staff/posts')).body);
+    expect(posts).toEqual([mine.body.id]);
+    expect(posts).not.toContain(theirs.body.id);
+    expect(posts).not.toContain(announced.body.id);
+    // Newest first, including the fixture's staff event (Family night).
+    expect(ids((await staff.get('/staff/events')).body)).toEqual([hosted.body.id, FAMILY_NIGHT]);
+  });
+
+  it('drops a staff post from the list when its community is removed', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    await staff.post(`/communities/${FINANCE}/join`);
+    const created = await staff.post(`/communities/${FINANCE}/posts`, { text: 'Resume clinic' });
+    expect(ids((await staff.get('/staff/posts')).body)).toContain(created.body.id);
+    expect((await staff.del(`/staff/communities/${FINANCE}`)).status).toBe(204);
+    expect(ids((await staff.get('/staff/posts')).body)).not.toContain(created.body.id);
+  });
+
+  it('publishes a staff event and notifies the community', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const parent = await as('parent');
+    const created = await staff.post(`/communities/${TEAM_IMPACT}/events`, {
+      title: 'Gala',
+      startsAt: '2026-12-05T23:00:00.000Z',
+      location: 'Boston',
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.moderation).toBe('approved');
+    expect(await openTickets(staff, created.body.id)).toEqual([]);
+    expect(ids((await parent.get('/events')).body)).toContain(created.body.id);
+    const notes = (await parent.get('/notifications')).body.items;
+    expect(notes[0]).toMatchObject({ kind: 'event', target: { id: created.body.id } });
+  });
+
+  /** A world where Jordan has one phone. */
+  const withPhone = () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    w.devices.push({
+      userId: USERS.jordan.id,
+      token: 'jordan-phone',
+      platform: 'ios',
+      createdAt: new Date().toISOString(),
+    });
+    return w;
+  };
+  const teamImpact = (w: MockWorld) => w.communities.find((c) => c.id === TEAM_IMPACT)!;
+  const toJordan = (w: MockWorld) => w.notifications.filter((n) => n.userId === USERS.jordan.id);
+
+  it('pushes an announcement only when staff leave push on', () => {
+    const on = withPhone();
+    announce(on, USERS.staff, teamImpact(on), { text: 'Gala tickets' }, { push: true });
+    expect(on.pushOutbox.map((p) => p.token)).toEqual(['jordan-phone']);
+
+    const off = withPhone();
+    announce(off, USERS.staff, teamImpact(off), { text: 'Gala tickets' }, { push: false });
+    expect(toJordan(off)).toHaveLength(1);
+    expect(off.pushOutbox).toEqual([]);
+  });
+
+  it('sends neither when the reader turned announcements off', () => {
+    const w = withPhone();
+    w.notificationPrefs.set(USERS.jordan.id, { ...DEFAULT_PREFS, announcements: false });
+    announce(w, USERS.staff, teamImpact(w), { text: 'Gala tickets' }, { push: true });
+    expect(toJordan(w)).toEqual([]);
+    expect(w.pushOutbox).toEqual([]);
   });
 });
 
@@ -652,8 +812,7 @@ describe('notifications', () => {
     const staff = await as('staff');
     const athlete = await as('athlete');
     for (const text of ['First announcement here', 'Second announcement here']) {
-      const p = await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text });
-      await approve(staff, p.body.id);
+      await staff.post('/staff/announcements', { text, sendPush: false });
     }
     const list = (await athlete.get('/notifications')).body;
     expect(list.unreadCount).toBe(2);

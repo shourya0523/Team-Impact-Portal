@@ -9,7 +9,7 @@ import type {
 } from '@team-impact/contracts';
 import { NOTIFICATION_PREF } from '@team-impact/contracts';
 import { id, summaryOf, USERS } from './fixtures';
-import type { MockCommunity, MockUser } from './fixtures';
+import type { MockCommunity, MockPost, MockUser } from './fixtures';
 import { hiddenFor } from './safety';
 import { isSuspended } from './staff-tools';
 import type { MockWorld } from './world';
@@ -19,7 +19,8 @@ import type { MockWorld } from './world';
  *
  * Every new post, comment, event and community starts `in_review` and is queued for staff as a
  * moderation ticket with no reports. Nothing reaches anyone but its author until staff keep it
- * (`dismiss`), and notifications fire only then, so held content never leaks through them.
+ * (`dismiss`), and notifications fire only then, so held content never leaks through them. Staff's
+ * own posts and events are the exception: they publish at once (`holdOrPublish`).
  */
 
 export interface MockComment {
@@ -146,6 +147,11 @@ const isDiscreet = (world: MockWorld, communityId: string) => {
   return !c || c.kind === 'medical' || ('private' in c && c.private);
 };
 
+/** `push: false` stores the in-app notification only, as when staff untick push on an announcement. */
+export interface NotifyOptions {
+  push?: boolean;
+}
+
 /**
  * Store one notification and push it to each of the reader's phones, unless the reader turned that
  * kind off (warnings can't be). The in-app text is kept whole; the push may be generic.
@@ -153,6 +159,7 @@ const isDiscreet = (world: MockWorld, communityId: string) => {
 export const notify = (
   world: MockWorld,
   n: Omit<MockNotification, 'id' | 'read' | 'createdAt'>,
+  { push = true }: NotifyOptions = {},
 ) => {
   // Staff warnings always arrive; every other kind follows the reader's switch.
   if (n.kind !== 'warning' && !prefsOf(world, n.userId)[NOTIFICATION_PREF[n.kind]]) return;
@@ -165,7 +172,7 @@ export const notify = (
   world.notifications.push(stored);
   // The in-app list re-checks `canReceive` each time it's read; a push can't be taken back, so
   // it's checked once, now.
-  if (!canReceive(world, n.userId, n.communityId)) return;
+  if (!push || !canReceive(world, n.userId, n.communityId)) return;
   const pushText = isDiscreet(world, n.communityId) ? DISCREET_PUSH_TEXT : n.text;
   for (const d of world.devices.filter((x) => x.userId === n.userId)) {
     world.pushOutbox.push({
@@ -200,22 +207,26 @@ const membersOf = (world: MockWorld, c: MockCommunity, exceptId: string) =>
     (u) => u.id !== exceptId && world.canSeeCommunity(c, u) && world.community(c, u).myMembership,
   );
 
-/** Notifications that follow from an item passing review. */
-const onApproved = (world: MockWorld, target: Target) => {
+/** Notifications that follow from an item passing review, or from staff publishing it. */
+const onApproved = (world: MockWorld, target: Target, options: NotifyOptions) => {
   if (target.kind === 'post') {
     const p = world.posts.find((x) => x.id === target.id)!;
     const c = world.communities.find((x) => x.id === p.communityId);
     if (p.kind !== 'announcement' || !c) return;
     // Announcements reach every role, recruiters included (TI-146).
     for (const u of world.users.filter((x) => x.id !== p.authorId && world.readsCommunity(c, x))) {
-      notify(world, {
-        userId: u.id,
-        kind: 'announcement',
-        actorId: null,
-        text: `Team Impact: ${p.text.slice(0, 120)}`,
-        target: { kind: 'post', id: p.id },
-        communityId: c.id,
-      });
+      notify(
+        world,
+        {
+          userId: u.id,
+          kind: 'announcement',
+          actorId: null,
+          text: `Team Impact: ${p.text.slice(0, 120)}`,
+          target: { kind: 'post', id: p.id },
+          communityId: c.id,
+        },
+        options,
+      );
     }
   } else if (target.kind === 'comment') {
     const k = world.comments.find((x) => x.id === target.id)!;
@@ -236,16 +247,92 @@ const onApproved = (world: MockWorld, target: Target) => {
     const host = world.user(e.hostId)!;
     if (!c) return;
     for (const u of membersOf(world, c, host.id)) {
-      notify(world, {
-        userId: u.id,
-        kind: 'event',
-        actorId: host.id,
-        text: `${name(host)} added ${e.title} in ${c.name}`,
-        target: { kind: 'event', id: e.id },
-        communityId: c.id,
-      });
+      notify(
+        world,
+        {
+          userId: u.id,
+          kind: 'event',
+          actorId: host.id,
+          text: `${name(host)} added ${e.title} in ${c.name}`,
+          target: { kind: 'event', id: e.id },
+          communityId: c.id,
+        },
+        options,
+      );
     }
   }
+};
+
+const itemOf = (world: MockWorld, target: Target) =>
+  target.kind === 'post'
+    ? world.posts.find((p) => p.id === target.id)
+    : target.kind === 'comment'
+      ? world.comments.find((k) => k.id === target.id)
+      : target.kind === 'event'
+        ? world.events.find((e) => e.id === target.id)
+        : target.kind === 'community'
+          ? world.communities.find((c) => c.id === target.id)
+          : undefined;
+
+/**
+ * Approve an item and send what follows from that. Staff keeping a held item and staff publishing
+ * their own both come through here, so the two can't notify differently.
+ */
+export const publish = (world: MockWorld, target: Target, options: NotifyOptions = {}) => {
+  const item = itemOf(world, target);
+  if (!item) return;
+  item.moderation = 'approved';
+  onApproved(world, target, options);
+};
+
+/**
+ * Hold a new post or event for review, or publish it at once when staff wrote it: Team Impact's own
+ * voice is exempt from the review queue (ticket: Team Impact announcements and staff posting from
+ * the portal). PRD §5 and §9 still expect the automated OpenAI screen on every post and event;
+ * revisit this when that screen exists.
+ */
+export const holdOrPublish = (
+  world: MockWorld,
+  author: MockUser,
+  target: Target,
+  preview: string,
+) => {
+  if (author.role === 'staff') publish(world, target);
+  else holdForReview(world, target, preview);
+};
+
+/**
+ * Post a Team Impact announcement and publish it: official, past review, and notifying every reader
+ * of the community. Only `POST /staff/announcements` (the portal) makes one; a staff post through
+ * `POST /communities/:id/posts` is a plain post, even in Team Impact's community (TI-146).
+ */
+export const announce = (
+  world: MockWorld,
+  author: MockUser,
+  c: MockCommunity,
+  body: { text: string },
+  options: NotifyOptions = {},
+): MockPost => {
+  const post: MockPost = {
+    id: world.newId(),
+    kind: 'announcement',
+    authorId: author.id,
+    communityId: c.id,
+    text: body.text,
+    imageUrl: null,
+    official: true,
+    likeCount: 0,
+    commentCount: 0,
+    moderation: 'in_review',
+    createdAt: new Date().toISOString(),
+  };
+  world.posts.push(post);
+  world.track(author.id, {
+    name: 'post.created',
+    properties: { postId: post.id, kind: 'announcement' },
+  });
+  publish(world, { kind: 'post', id: post.id }, options);
+  return post;
 };
 
 /**
@@ -257,22 +344,12 @@ export const applyResolution = (
   target: Target,
   resolution: 'remove' | 'dismiss',
 ) => {
-  const item =
-    target.kind === 'post'
-      ? world.posts.find((p) => p.id === target.id)
-      : target.kind === 'comment'
-        ? world.comments.find((k) => k.id === target.id)
-        : target.kind === 'event'
-          ? world.events.find((e) => e.id === target.id)
-          : target.kind === 'community'
-            ? world.communities.find((c) => c.id === target.id)
-            : undefined;
+  const item = itemOf(world, target);
   if (!item) return;
   if (resolution === 'remove') {
     item.moderation = 'removed';
   } else if (item.moderation === 'in_review') {
-    item.moderation = 'approved';
-    onApproved(world, target);
+    publish(world, target);
   }
 };
 

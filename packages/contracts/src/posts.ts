@@ -60,8 +60,10 @@ export type NewPostRequest = z.infer<typeof NewPostRequest>;
 
 /**
  * Whether `role` may post into a community it sees (PRD §5 "Who can do what"): staff, coaches,
- * athletes and alumni post in any community they belong to; teens only in their team's; parents
- * and recruiters never (parents comment only). Staff posts in Team Impact's are announcements.
+ * athletes and alumni post in any community they belong to (staff get no bypass, so not in a team's
+ * community); teens only in their team's; parents and recruiters never (parents comment only).
+ * Posting here never makes an announcement: staff announce from the portal
+ * (`CreateAnnouncementRequest`).
  */
 export const canPostIn = (role: Role, community: Pick<Community, 'kind' | 'myMembership'>) => {
   if (role === 'parent' || role === 'recruiter') return false;
@@ -77,9 +79,11 @@ export const canPostIn = (role: Role, community: Pick<Community, 'kind' | 'myMem
 export const canCommentIn = (role: Role, kind: CommunityKind) =>
   role !== 'recruiter' && (role !== 'teen' || kind === 'team');
 
-/** Staff only, into a team community or Team Impact's. The API checks the kind. */
+/**
+ * Staff only. Always posted into Team Impact's community, which everyone belongs to (PRD §5), so
+ * there is no community to pick. `sendPush: false` sends the in-app notification only.
+ */
 export const CreateAnnouncementRequest = z.object({
-  communityId: Id,
   text: z.string().trim().min(10).max(2000),
   sendPush: z.boolean(),
 });

@@ -132,6 +132,13 @@ export class MockWorld {
 
   // Communities ----------------------------------------------------------------------------------
 
+  /**
+   * Team Impact's own community, where announcements go. There is exactly one: nobody can create,
+   * remove or merge one. The database doesn't enforce that yet (its unique index covers interest
+   * and medical names only), so the real route needs a partial unique index or a seeded id.
+   */
+  teamImpact = () => this.communities.find((c) => c.kind === 'team_impact')!;
+
   /** Membership as the member sees it; null if `u` isn't in it. */
   private membership = (c: MockCommunity, u: MockUser) => {
     if (c.kind === 'team') {

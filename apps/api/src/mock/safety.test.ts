@@ -247,11 +247,9 @@ describe('staff tools', () => {
       ['POST', `/staff/communities/${FINANCE}/merge`, { intoId: FIRST_GEN }],
       ['DELETE', `/staff/communities/${FINANCE}`],
       ['GET', '/staff/announcements'],
-      [
-        'POST',
-        '/staff/announcements',
-        { communityId: TEAM_IMPACT, text: 'Hello everyone!', sendPush: false },
-      ],
+      ['GET', '/staff/posts'],
+      ['GET', '/staff/events'],
+      ['POST', '/staff/announcements', { text: 'Hello everyone!', sendPush: false }],
     ];
     for (const role of [
       'coach',
@@ -347,7 +345,6 @@ describe('staff tools', () => {
     const w = await world();
     const staff = await w.as('staff');
     const res = await staff.call('POST', '/staff/announcements', {
-      communityId: TEAM_IMPACT,
       text: 'Pilot opens in December!',
       sendPush: true,
     });
@@ -356,15 +353,24 @@ describe('staff tools', () => {
       kind: 'announcement',
       official: true,
       moderation: 'approved',
+      community: { id: TEAM_IMPACT },
     });
     const parent = await w.as('parent');
     expect(postIds((await parent.get('/feed')).body)).toContain(res.body.id);
-    const medical = await staff.call('POST', '/staff/announcements', {
-      communityId: MEDICAL,
-      text: 'Not allowed here.',
-      sendPush: false,
-    });
-    expect(medical.status).toBe(400);
+  });
+
+  it('always announces into Team Impact, whatever community a caller names', async () => {
+    const w = await world();
+    const staff = await w.as('staff');
+    for (const communityId of [MEDICAL, TEAM_COMMUNITY]) {
+      const res = await staff.call('POST', '/staff/announcements', {
+        communityId,
+        text: 'Not going anywhere else.',
+        sendPush: false,
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.community.id).toBe(TEAM_IMPACT);
+    }
   });
 });
 

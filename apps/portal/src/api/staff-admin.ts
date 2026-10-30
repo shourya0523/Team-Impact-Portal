@@ -1,10 +1,13 @@
 import type {
+  CalendarEvent,
   CoachInvite,
   College,
   Company,
   CreateAnnouncementRequest,
   CreateCompanyRequest,
   CreateTeamRequest,
+  NewEventRequest,
+  NewPostRequest,
   Post,
   RemoveMemberResult,
   StaffCommunity,
@@ -14,7 +17,10 @@ import type {
 } from '@team-impact/contracts';
 import { post, request } from './client';
 
-/** Staff writes: colleges, teams and coaches, companies, communities, announcements (PRD §9). */
+/**
+ * Staff writes: colleges, teams and coaches, companies, communities, and Team Impact's
+ * announcements, posts and events (PRD §9).
+ */
 export const staffAdmin = {
   colleges: () => request<College[]>('/staff/colleges'),
   createCollege: (name: string) => post<College>('/staff/colleges', { name }),
@@ -47,4 +53,12 @@ export const staffAdmin = {
 
   announcements: () => request<Post[]>('/staff/announcements'),
   announce: (body: CreateAnnouncementRequest) => post<Post>('/staff/announcements', body),
+
+  /** Every staff member's plain posts and events; writing goes through the shared routes. */
+  posts: () => request<Post[]>('/staff/posts'),
+  createPost: (communityId: string, body: NewPostRequest) =>
+    post<Post>(`/communities/${communityId}/posts`, body),
+  events: () => request<CalendarEvent[]>('/staff/events'),
+  createEvent: (communityId: string, body: NewEventRequest) =>
+    post<CalendarEvent>(`/communities/${communityId}/events`, body),
 };
