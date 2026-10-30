@@ -1,4 +1,10 @@
-import type { CommunityKind, Role } from '@team-impact/contracts';
+import {
+  canCreateCommunity,
+  type CommunityKind,
+  CREATABLE_COMMUNITY_KINDS,
+  type FeatureFlags,
+  type Role,
+} from '@team-impact/contracts';
 
 export const ROLE_LABEL: Record<Role, string> = {
   staff: 'Team Impact',
@@ -17,6 +23,16 @@ export const KIND_LABEL: Record<CommunityKind, string> = {
   medical: 'Medical',
   interest: 'Interest',
 };
+
+/**
+ * The kinds `role` may create now: what PRD §5 allows the role, without medical while its switch
+ * is off (PRD §11). Flags not loaded count as off, so a failed load never offers a hidden kind.
+ */
+export const creatableKinds = (role: Role | null, flags: FeatureFlags | undefined) =>
+  CREATABLE_COMMUNITY_KINDS.filter(
+    (k) =>
+      !!role && canCreateCommunity(role, k) && (k !== 'medical' || !!flags?.medicalCommunities),
+  );
 
 /** A calendar date (`2026-11-30`) is read at local noon, so it never shifts a day by zone. */
 const toDate = (iso: string) => new Date(iso.length === 10 ? `${iso}T12:00:00` : iso);

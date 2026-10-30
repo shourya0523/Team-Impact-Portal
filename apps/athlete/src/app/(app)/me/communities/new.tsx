@@ -1,13 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  canCreateCommunity,
-  CREATABLE_COMMUNITY_KINDS,
-  type CreatableCommunityKind,
-} from '@team-impact/contracts';
+import type { CreatableCommunityKind } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { creatableKinds } from '@/components/format';
 import { Async, ErrorText, Gutter, Screen, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -46,12 +43,7 @@ export default function CreateCommunity() {
     <Screen eyebrow="Communities" title="Create community" back>
       <Async state={state}>
         {(flags) => {
-          const kinds = CREATABLE_COMMUNITY_KINDS.filter(
-            (k) =>
-              !!role &&
-              canCreateCommunity(role, k) &&
-              (k !== 'medical' || flags.medicalCommunities),
-          );
+          const kinds = creatableKinds(role, flags);
           const kind = picked && kinds.includes(picked) ? picked : (kinds[0] ?? null);
           if (!kind) {
             return (

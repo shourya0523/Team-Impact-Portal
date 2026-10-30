@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { canCreateCommunity, canJoinCommunity, type Community } from '@team-impact/contracts';
+import { canJoinCommunity, type Community } from '@team-impact/contracts';
 import { colors, layout, radius, spacing, typography } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { creatableKinds, KIND_LABEL } from '@/components/format';
 import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -72,12 +73,15 @@ function Tile({ x }: { x: Community }) {
 
 /**
  * "/me/communities": yours first, then ones to join; private ones take a request the creator
- * approves. Teens and recruiters never get medical
- * communities from the API; parents can create medical ones only (PRD §5).
+ * approves. Teens and recruiters never get medical communities from the API; parents can create
+ * medical ones only (PRD §5). With the medical switch off, the kind is offered to no one (PRD §11).
  */
 export default function Communities() {
   const { role } = useRole();
   const { state, reload } = useApi(() => api.communities());
+  const flags = useApi(() => api.flags());
+  // Until the flags load (or if they fail), medical counts as off.
+  const kinds = creatableKinds(role, flags.state.status === 'ready' ? flags.state.data : undefined);
   const [query, setQuery] = useState('');
   const [joining, setJoining] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -108,7 +112,10 @@ export default function Communities() {
       </Gutter>
       <Async state={state}>
         {(all) => {
-          const match = (x: Community) => x.name.toLowerCase().includes(query.trim().toLowerCase());
+          // Name or description, so a private community is findable by what it's for (PRD v2.3).
+          const q = query.trim().toLowerCase();
+          const match = (x: Community) =>
+            x.name.toLowerCase().includes(q) || x.about.toLowerCase().includes(q);
           const mine = all.filter((x) => x.myMembership && match(x));
           const others = all.filter((x) => !x.myMembership && match(x));
           return (
@@ -121,9 +128,7 @@ export default function Communities() {
                   ))}
                 </View>
               </Gutter>
-              {(others.length > 0 || (role && canCreateCommunity(role, 'medical'))) && (
-                <SectionLabel>Discover</SectionLabel>
-              )}
+              {(others.length > 0 || kinds.length > 0) && <SectionLabel>Discover</SectionLabel>}
               <Gutter>
                 {error && <ErrorText>{error}</ErrorText>}
                 {others.map((x) => (
@@ -175,7 +180,7 @@ export default function Communities() {
                       ))}
                   </Card>
                 ))}
-                {role && canCreateCommunity(role, 'medical') && (
+                {kinds.length > 0 && (
                   <Card
                     onPress={() => router.push('/me/communities/new')}
                     label="Start a community"
@@ -187,7 +192,7 @@ export default function Communities() {
                     <View style={styles.rowText}>
                       <Text weight="semibold">Start a community</Text>
                       <Text variant="caption" weight="medium" color="muted">
-                        {canCreateCommunity(role, 'interest') ? 'Interest or medical.' : 'Medical.'}{' '}
+                        {kinds.length > 1 ? 'Interest or medical.' : `${KIND_LABEL[kinds[0]!]}.`}{' '}
                         Names are checked first.
                       </Text>
                     </View>
