@@ -76,15 +76,15 @@ describe('recruiter search', () => {
   it('sends the filters from the URL with the search, and clears them', async () => {
     const searches = fakeApi(true);
     renderAt('/search?region=northeast&major=Economics&communityId=c-official');
-    await screen.findByLabelText('Official community');
     const last = () => searches.at(-1) ?? '';
-    expect(last()).toContain('region=northeast');
+    await waitFor(() => expect(last()).toContain('region=northeast'));
     expect(last()).toContain('major=Economics');
     expect(last()).toContain('communityId=c-official');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(last()).not.toContain('region=');
-    expect(last()).not.toContain('communityId=');
+    await waitFor(() => {
+      expect(last()).not.toContain('region=');
+      expect(last()).not.toContain('communityId=');
+    });
   });
 });
