@@ -9,6 +9,7 @@ import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
+import { PostCard } from '@/components/post-card';
 import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -304,38 +305,12 @@ export default function CommunityDetail() {
                     {(page) =>
                       page.items.length ? (
                         page.items.map((p) => (
-                          <Card key={p.id}>
-                            <View style={styles.person}>
-                              <Avatar
-                                name={`${p.author.firstName} ${p.author.lastName}`}
-                                role={p.author.role}
-                              />
-                              <View style={styles.grow}>
-                                <Text weight="semibold">
-                                  {p.author.firstName} {p.author.lastName}
-                                </Text>
-                                <Text variant="caption" weight="medium" color="muted">
-                                  {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
-                                </Text>
-                              </View>
-                              {p.author.id !== me?.id && !p.official && (
-                                <ReportButton
-                                  target={{ kind: 'post', id: p.id }}
-                                  author={
-                                    p.author.role === 'staff'
-                                      ? undefined
-                                      : { id: p.author.id, name: p.author.firstName }
-                                  }
-                                  onDone={posts.reload}
-                                />
-                              )}
-                            </View>
-                            <Text>
-                              {p.kind === 'opportunity'
-                                ? `${p.opportunity.title} at ${p.opportunity.company.name}`
-                                : p.text}
-                            </Text>
-                          </Card>
+                          <PostCard
+                            key={p.id}
+                            post={p}
+                            showCommunity={false}
+                            onChanged={posts.reload}
+                          />
                         ))
                       ) : (
                         <Text variant="small" color="secondary">
