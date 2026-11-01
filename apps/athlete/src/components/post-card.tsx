@@ -4,12 +4,23 @@ import type { Post } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton } from '@/components/Report';
+import { ReportButton, type ReportAction } from '@/components/Report';
 import { useRole } from '@/navigation/role';
 import { monogram } from '@/theme';
 import { Avatar, Badge, Card, Icon, Text } from '@/ui';
 
 const TILE = 40;
+
+/**
+ * The posts a report or block takes out of a list: a report hides that one post for you, a block
+ * everything its author wrote (the API hides both from then on, so a reload agrees).
+ */
+const removedBy =
+  (post: Post, action: ReportAction) =>
+  (p: Post): boolean =>
+    action === 'block' ? p.author.id === post.author.id : p.id === post.id;
+
+type Remove = (drop: (p: Post) => boolean) => void;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -33,7 +44,7 @@ function CommentsButton({ post }: { post: Post }) {
  * From Team Impact, not the staff member who wrote it. Reportable like any post, but its author
  * can't be blocked (official posts, `Post.official`).
  */
-function Announcement({ post, onChanged }: { post: Post; onChanged?: () => void }) {
+function Announcement({ post, onRemove }: { post: Post; onRemove?: Remove }) {
   const { me } = useRole();
   return (
     <View style={styles.announcement}>
@@ -50,7 +61,10 @@ function Announcement({ post, onChanged }: { post: Post; onChanged?: () => void 
           </Text>
         </View>
         {me?.id !== post.author.id && (
-          <ReportButton target={{ kind: 'post', id: post.id }} onDone={onChanged} />
+          <ReportButton
+            target={{ kind: 'post', id: post.id }}
+            onDone={(action) => onRemove?.(removedBy(post, action))}
+          />
         )}
       </View>
       <Text
@@ -73,19 +87,20 @@ function Announcement({ post, onChanged }: { post: Post; onChanged?: () => void 
 /**
  * One post as the home feed and community pages show it: author, where and when, report and
  * block, rally and comments. `showCommunity` is off on a community's own page, where naming the
- * community again is noise. `onChanged` reloads the list after a report or block.
+ * community again is noise. After a report or block, `onRemove` gets which posts to drop from the
+ * list, so it updates on the device instead of loading again.
  */
 export function PostCard({
   post,
   showCommunity = true,
-  onChanged,
+  onRemove,
 }: {
   post: Post;
   showCommunity?: boolean;
-  onChanged?: () => void;
+  onRemove?: Remove;
 }) {
   const { me } = useRole();
-  if (post.kind === 'announcement') return <Announcement post={post} onChanged={onChanged} />;
+  if (post.kind === 'announcement') return <Announcement post={post} onRemove={onRemove} />;
   const where = !showCommunity
     ? null
     : post.community.kind === 'team'
@@ -136,7 +151,7 @@ export function PostCard({
                 ? undefined
                 : { id: post.author.id, name: post.author.firstName }
             }
-            onDone={onChanged}
+            onDone={(action) => onRemove?.(removedBy(post, action))}
           />
         )}
       </View>

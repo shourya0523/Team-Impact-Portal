@@ -61,8 +61,8 @@ export const usePaged = <T extends { id: string }>(
     hasMore: s.nextCursor !== null,
     loadingMore: s.loadingMore,
     refreshing: s.refreshing,
-    /** A next page or refresh that failed; the items already shown stay. */
-    moreError: s.failure?.error ?? null,
+    /** A next page or refresh that failed, and which; the items already shown stay. */
+    failure: s.failure,
     loadMore: () => more(false),
     /** Tries again whatever failed last: the next page, or the refresh. */
     retry: () => (s.failure?.during === 'refresh' ? fromFirst('refresh') : more(true)),

@@ -7,7 +7,7 @@ import { api } from '@/api';
 import { HeldNote, Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
-import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
+import { Async, EmptyState, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { Avatar, Badge, Button, Card, Input, Text } from '@/ui';
@@ -84,7 +84,17 @@ export default function PostDetail() {
 
   return (
     <Screen eyebrow="Post" title="Conversation" back>
-      <Async state={post.state}>
+      <Async
+        state={post.state}
+        onRetry={post.reload}
+        notFound={
+          <Gutter>
+            <EmptyState title="Post not available">
+              It may have been removed, or you blocked or reported it.
+            </EmptyState>
+          </Gutter>
+        }
+      >
         {(p) => {
           const held = p.moderation !== 'approved';
           const canComment = !!role && !held && canCommentIn(role, p.community.kind);
@@ -128,14 +138,14 @@ export default function PostDetail() {
               </Gutter>
               <SectionLabel>Comments</SectionLabel>
               <Gutter>
-                <Async state={comments.state}>
+                <Async state={comments.state} onRetry={comments.reload}>
                   {(list) =>
                     list.length ? (
                       list.map((c) => <CommentRow key={c.id} c={c} onChanged={comments.reload} />)
                     ) : (
-                      <Text variant="small" color="secondary">
-                        No comments yet.
-                      </Text>
+                      <EmptyState title="No comments yet">
+                        {canComment ? 'Be the first to say something.' : undefined}
+                      </EmptyState>
                     )
                   }
                 </Async>

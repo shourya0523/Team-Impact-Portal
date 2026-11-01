@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { canJoinCommunity, type Community } from '@team-impact/contracts';
@@ -10,8 +10,18 @@ import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
 import { PostCard } from '@/components/post-card';
-import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
+import { FeedSkeleton } from '@/components/post-skeleton';
+import {
+  Async,
+  EmptyState,
+  ErrorText,
+  IconButton,
+  PageFooter,
+  SCROLL_END,
+  Segmented,
+} from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { usePaged } from '@/hooks/usePaged';
 import { useRole } from '@/navigation/role';
 import { KIND_STYLE, monogram } from '@/theme';
 import { Avatar, Badge, Button, Card, Icon, Text } from '@/ui';
@@ -125,7 +135,7 @@ export default function CommunityDetail() {
   const { role, me } = useRole();
   const insets = useSafeAreaInsets();
   const community = useApi(() => api.community(id), [id]);
-  const posts = useApi(() => api.communityPosts(id), [id]);
+  const posts = usePaged((cursor) => api.communityPosts(id, cursor), [id]);
   const [override, setOverride] = useState<Community | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('posts');
@@ -134,7 +144,7 @@ export default function CommunityDetail() {
     api.leaveCommunity(id).then(
       (x) => {
         setOverride(x);
-        posts.reload();
+        posts.refresh();
       },
       (e: Error) => setError(e.message),
     );
@@ -143,15 +153,28 @@ export default function CommunityDetail() {
     api.joinCommunity(id).then(
       (x) => {
         setOverride(x);
-        posts.reload();
+        posts.refresh();
       },
       (e: Error) => setError(e.message),
     );
 
+  /** Pull to refresh: the community (membership, counts) and its posts from page 1. */
+  const refresh = () => {
+    setOverride(null);
+    community.reload();
+    posts.refresh();
+  };
+
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
-      <Async state={community.state}>
+      {/* The back button lives on the cover, which needs the community: until then, a bare one. */}
+      {community.state.status !== 'ready' && (
+        <View style={[styles.bare, { paddingTop: insets.top + spacing.md }]}>
+          <IconButton icon="back" label="Back" onPress={() => router.back()} />
+        </View>
+      )}
+      <Async state={community.state} onRetry={community.reload}>
         {(loaded) => {
           const x = override ?? loaded;
           const k = KIND_STYLE[x.kind];
@@ -164,8 +187,10 @@ export default function CommunityDetail() {
             role !== 'parent' &&
             role !== 'recruiter' &&
             !(role === 'teen' && x.kind !== 'team');
-          return (
-            <ScrollView contentContainerStyle={styles.scroll}>
+          // Passed as an element, not a component made here, so a re-render doesn't remount it
+          // (and reset the Events tab).
+          const header = (
+            <View>
               <View style={[styles.cover, { backgroundColor: k.band, paddingTop: insets.top }]}>
                 {isPrivate ? (
                   <View style={styles.coverLock}>
@@ -300,30 +325,57 @@ export default function CommunityDetail() {
                 </View>
                 {tab === 'events' && <CommunityEvents key={tabKey(x)} community={x} />}
                 {tab === 'members' && <CommunityMembers key={tabKey(x)} community={x} />}
-                {tab === 'posts' && (
-                  <Async state={posts.state}>
-                    {(page) =>
-                      page.items.length ? (
-                        page.items.map((p) => (
-                          <PostCard
-                            key={p.id}
-                            post={p}
-                            showCommunity={false}
-                            onChanged={posts.reload}
-                          />
-                        ))
-                      ) : (
-                        <Text variant="small" color="secondary">
-                          {x.myMembership
-                            ? 'No posts yet. Start the conversation.'
-                            : 'Join to see posts here.'}
-                        </Text>
-                      )
-                    }
-                  </Async>
-                )}
               </View>
-            </ScrollView>
+            </View>
+          );
+          const onPosts = tab === 'posts';
+          // Posts are the list's rows, loaded a page at a time; the Events and Members tabs live in
+          // the header, so on those the list has no rows and asks for no pages.
+          return (
+            <FlatList
+              data={onPosts && posts.state.status === 'ready' ? posts.state.data : []}
+              keyExtractor={(p) => p.id}
+              renderItem={({ item }) => (
+                <View style={styles.gutter}>
+                  <PostCard post={item} showCommunity={false} onRemove={posts.remove} />
+                </View>
+              )}
+              ListHeaderComponent={header}
+              ListEmptyComponent={
+                onPosts ? (
+                  <Async state={posts.state} loading={<FeedSkeleton />} onRetry={posts.refresh}>
+                    {() => (
+                      <View style={styles.gutter}>
+                        {x.myMembership ? (
+                          <EmptyState title="No posts yet">
+                            {canPost ? 'Start the conversation.' : undefined}
+                          </EmptyState>
+                        ) : (
+                          <EmptyState title="No posts to show">
+                            {isPrivate
+                              ? 'Posts show once you’re a member.'
+                              : 'Join to see posts here.'}
+                          </EmptyState>
+                        )}
+                      </View>
+                    )}
+                  </Async>
+                ) : null
+              }
+              ListFooterComponent={
+                onPosts ? (
+                  <PageFooter
+                    loading={posts.loadingMore}
+                    failure={posts.failure}
+                    onRetry={posts.retry}
+                  />
+                ) : null
+              }
+              onEndReached={onPosts ? posts.loadMore : undefined}
+              refreshing={posts.refreshing}
+              onRefresh={refresh}
+              contentContainerStyle={styles.scroll}
+            />
           );
         }}
       </Async>
@@ -333,7 +385,9 @@ export default function CommunityDetail() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ground },
-  scroll: { paddingBottom: SCROLL_END },
+  scroll: { paddingBottom: SCROLL_END, gap: spacing.md },
+  gutter: { paddingHorizontal: spacing.md },
+  bare: { paddingHorizontal: spacing.md, paddingBottom: spacing.md },
   cover: {
     height: COVER,
     overflow: 'hidden',
@@ -352,7 +406,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  body: { padding: spacing.md, gap: spacing.md },
+  // No bottom padding: the list's gap spaces the first post (or the tab's content) from the tabs.
+  body: { paddingHorizontal: spacing.md, paddingTop: spacing.md, gap: spacing.md },
   titleBlock: { gap: spacing.xs },
   between: {
     flexDirection: 'row',

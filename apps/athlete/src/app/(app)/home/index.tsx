@@ -1,12 +1,22 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import type { Community, Post } from '@team-impact/contracts';
+import type { Community, FeedScope } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { PostCard } from '@/components/post-card';
-import { Async, Chip, Gutter, IconButton, Screen } from '@/components/ui';
+import { FeedSkeleton } from '@/components/post-skeleton';
+import {
+  Async,
+  Chip,
+  EmptyState,
+  Gutter,
+  IconButton,
+  PageFooter,
+  ScreenList,
+} from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { usePaged } from '@/hooks/usePaged';
 import { useRole } from '@/navigation/role';
 import { KIND_STYLE, monogram } from '@/theme';
 import { Avatar, Icon, Text, withAlpha } from '@/ui';
@@ -14,8 +24,24 @@ import { Avatar, Icon, Text, withAlpha } from '@/ui';
 const BUBBLE = 64;
 const LOCK = 22;
 const FAB = 60;
-type Filter = 'all' | 'team' | 'communities';
-
+/** What each chip says when it has no posts; `find` offers a way to join communities. */
+const EMPTY: Record<FeedScope, { title: string; body: string; find: boolean }> = {
+  all: {
+    title: 'Nothing here yet',
+    body: 'Posts from your team and the communities you join show up here.',
+    find: true,
+  },
+  team: {
+    title: 'Nothing from your team yet',
+    body: 'When your team posts, it shows up here.',
+    find: false,
+  },
+  communities: {
+    title: 'No community posts yet',
+    body: 'Posts from communities you join show up here.',
+    find: true,
+  },
+};
 const isPrivate = (x: Community) =>
   x.kind === 'team' || ((x.kind === 'interest' || x.kind === 'medical') && x.private);
 
@@ -85,17 +111,14 @@ function CommunityBubbles({ communities }: { communities: Community[] }) {
  */
 export default function Home() {
   const { role, me } = useRole();
-  const [filter, setFilter] = useState<Filter>('all');
-  const feed = useApi(() => api.feed());
+  const [filter, setFilter] = useState<FeedScope>('all');
+  // A new list from page 1 per chip: the server filters, so every page is full (step 3a, `scope`).
+  const feed = usePaged((cursor) => api.feed(cursor, filter), [filter]);
   const communities = useApi(() => api.communities());
   const canPost = role !== 'parent' && role !== 'recruiter';
 
-  const keep = (p: Post) =>
-    filter === 'all' ||
-    (filter === 'team' ? p.community.kind === 'team' : p.community.kind !== 'team');
-
   return (
-    <Screen
+    <ScreenList
       eyebrow="Team IMPACT"
       title="Home"
       right={
@@ -129,39 +152,47 @@ export default function Home() {
           </Pressable>
         )
       }
-    >
-      {communities.state.status === 'ready' && role !== 'recruiter' && (
-        <CommunityBubbles communities={communities.state.data} />
-      )}
-      <View style={styles.chips}>
-        <Chip label="All" selected={filter === 'all'} onPress={() => setFilter('all')} />
-        <Chip label="My team" selected={filter === 'team'} onPress={() => setFilter('team')} />
-        <Chip
-          label="Communities"
-          selected={filter === 'communities'}
-          onPress={() => setFilter('communities')}
-        />
-      </View>
-      <Gutter>
-        <Async state={feed.state}>
-          {(page) => {
-            const posts = page.items.filter(keep);
-            return posts.length ? (
-              posts.map((p) => <PostCard key={p.id} post={p} onChanged={feed.reload} />)
-            ) : (
-              <View style={styles.empty}>
-                <Text variant="display" size="xs" color="brand">
-                  Nothing here yet
-                </Text>
-                <Text variant="small" color="secondary" style={styles.center}>
-                  Posts from your team and the communities you join show up here.
-                </Text>
-              </View>
-            );
-          }}
+      top={
+        <>
+          {communities.state.status === 'ready' && role !== 'recruiter' && (
+            <CommunityBubbles communities={communities.state.data} />
+          )}
+          <View style={styles.chips}>
+            <Chip label="All" selected={filter === 'all'} onPress={() => setFilter('all')} />
+            <Chip label="My team" selected={filter === 'team'} onPress={() => setFilter('team')} />
+            <Chip
+              label="Communities"
+              selected={filter === 'communities'}
+              onPress={() => setFilter('communities')}
+            />
+          </View>
+        </>
+      }
+      data={feed.state.status === 'ready' ? feed.state.data : []}
+      renderItem={(p) => <PostCard post={p} onRemove={feed.remove} />}
+      onEndReached={feed.loadMore}
+      refreshing={feed.refreshing}
+      onRefresh={feed.refresh}
+      empty={
+        <Async state={feed.state} loading={<FeedSkeleton />} onRetry={feed.refresh}>
+          {() => (
+            <Gutter>
+              <EmptyState
+                title={EMPTY[filter].title}
+                action={
+                  EMPTY[filter].find && role !== 'recruiter'
+                    ? { label: 'Find communities', onPress: () => router.push('/me/communities') }
+                    : undefined
+                }
+              >
+                {EMPTY[filter].body}
+              </EmptyState>
+            </Gutter>
+          )}
         </Async>
-      </Gutter>
-    </Screen>
+      }
+      footer={<PageFooter loading={feed.loadingMore} failure={feed.failure} onRetry={feed.retry} />}
+    />
   );
 }
 
@@ -203,7 +234,6 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: 'row', gap: spacing.sm, paddingHorizontal: spacing.md },
   actions: { flexDirection: 'row', gap: spacing.sm },
-  center: { textAlign: 'center' },
   fab: {
     position: 'absolute',
     right: spacing.md,
@@ -222,14 +252,5 @@ const styles = StyleSheet.create({
         color: withAlpha(colors.action, 0.35),
       },
     ],
-  },
-  empty: {
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: colors.line,
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.sm,
   },
 });
