@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { canPostIn } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { CommunityPicker } from '@/components/activity';
 import { Async, ErrorText, Gutter, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
@@ -47,7 +48,7 @@ export default function Compose() {
               })
               .then(
                 (p) => router.replace({ pathname: '/home/posts/[id]', params: { id: p.id } }),
-                (e: Error) => setError(e.message),
+                (e: Error) => setError(describeError(e)),
               )
               .finally(() => setBusy(false));
           };

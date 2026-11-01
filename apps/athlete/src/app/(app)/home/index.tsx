@@ -172,7 +172,11 @@ export default function Home() {
       renderItem={(p) => <PostCard post={p} onRemove={feed.remove} />}
       onEndReached={feed.loadMore}
       refreshing={feed.refreshing}
-      onRefresh={feed.refresh}
+      onRefresh={() => {
+        // A community joined elsewhere shows in the bubbles too.
+        communities.reload();
+        feed.refresh();
+      }}
       empty={
         <Async state={feed.state} loading={<FeedSkeleton />} onRetry={feed.refresh}>
           {() => (

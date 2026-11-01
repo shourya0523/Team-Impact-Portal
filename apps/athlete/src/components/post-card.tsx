@@ -45,7 +45,7 @@ function CommentsButton({ post }: { post: Post }) {
  * can't be blocked (official posts, `Post.official`).
  */
 function Announcement({ post, onRemove }: { post: Post; onRemove?: Remove }) {
-  const { me } = useRole();
+  const { role, me } = useRole();
   return (
     <View style={styles.announcement}>
       <View style={styles.byline}>
@@ -77,8 +77,8 @@ function Announcement({ post, onRemove }: { post: Post; onRemove?: Remove }) {
         {post.text}
       </Text>
       <View style={styles.actions}>
-        <Rally post={post} />
-        <CommentsButton post={post} />
+        {role !== 'recruiter' && <Rally post={post} />}
+        {role !== 'recruiter' && <CommentsButton post={post} />}
       </View>
     </View>
   );
@@ -99,7 +99,7 @@ export function PostCard({
   showCommunity?: boolean;
   onRemove?: Remove;
 }) {
-  const { me } = useRole();
+  const { role, me } = useRole();
   if (post.kind === 'announcement') return <Announcement post={post} onRemove={onRemove} />;
   const where = !showCommunity
     ? null
@@ -187,8 +187,10 @@ export function PostCard({
         <Text>{post.text}</Text>
       )}
       <View style={styles.actions}>
-        <Rally post={post} />
-        <CommentsButton post={post} />
+        {/* Recruiters only read: the API refuses their Rally, and the post page sits under the Home
+            tab, which they don't have. */}
+        {role !== 'recruiter' && <Rally post={post} />}
+        {role !== 'recruiter' && <CommentsButton post={post} />}
       </View>
     </Card>
   );

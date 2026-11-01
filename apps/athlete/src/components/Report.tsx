@@ -7,6 +7,7 @@ import {
 } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { ErrorText, IconButton } from '@/components/ui';
 import { Button, Input, Sheet, Text } from '@/ui';
 
@@ -66,7 +67,7 @@ export function ReportForm({
         setDone(message);
         onDone?.(kind);
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => setError(describeError(e)))
       .finally(() => setBusy(false));
   };
 

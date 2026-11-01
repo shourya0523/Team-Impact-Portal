@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { canJoinCommunity, type Community } from '@team-impact/contracts';
+import { canJoinCommunity, canPostIn, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
@@ -51,7 +52,7 @@ function Findable({
   const on = community.myMembership?.recruiterSearchOptIn ?? false;
   const [error, setError] = useState<string | null>(null);
   const toggle = () =>
-    api.setFindable(community.id, !on).then(onChange, (e: Error) => setError(e.message));
+    api.setFindable(community.id, !on).then(onChange, (e: Error) => setError(describeError(e)));
   return (
     <Card>
       <View style={styles.findable}>
@@ -146,7 +147,7 @@ export default function CommunityDetail() {
         setOverride(x);
         posts.refresh();
       },
-      (e: Error) => setError(e.message),
+      (e: Error) => setError(describeError(e)),
     );
 
   const join = () =>
@@ -155,7 +156,7 @@ export default function CommunityDetail() {
         setOverride(x);
         posts.refresh();
       },
-      (e: Error) => setError(e.message),
+      (e: Error) => setError(describeError(e)),
     );
 
   /** Pull to refresh: the community (membership, counts) and its posts from page 1. */
@@ -182,11 +183,7 @@ export default function CommunityDetail() {
           const userMade = x.kind === 'interest' || x.kind === 'medical' ? x : null;
           const isPrivate = userMade?.private ?? false;
           const isCreator = !!me && userMade?.createdBy.id === me.id;
-          const canPost =
-            x.myMembership &&
-            role !== 'parent' &&
-            role !== 'recruiter' &&
-            !(role === 'teen' && x.kind !== 'team');
+          const canPost = !!role && canPostIn(role, x);
           // Passed as an element, not a component made here, so a re-render doesn't remount it
           // (and reset the Events tab).
           const header = (

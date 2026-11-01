@@ -4,6 +4,7 @@ import { Image, StyleSheet, View } from 'react-native';
 import { canCommentIn, type Comment, type Post } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { HeldNote, Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
 import { ReportButton } from '@/components/Report';
@@ -77,7 +78,7 @@ export default function PostDetail() {
           setDraft('');
           comments.reload();
         },
-        (e: Error) => setError(e.message),
+        (e: Error) => setError(describeError(e)),
       )
       .finally(() => setBusy(false));
   };
