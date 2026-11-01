@@ -209,12 +209,13 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
-  removeWhere(world.lists, (l) => gone(l.ownerId));
   for (const l of world.lists) {
-    l.sharedWithIds = l.sharedWithIds.filter((id) => !gone(id));
+    // Lists are the company's: a departed owner's stay, for anyone there to manage.
+    if (l.ownerId !== null && gone(l.ownerId)) l.ownerId = null;
     l.entries = l.entries.filter((e) => !gone(e.athleteId));
     // A departed colleague's saves stay on the list, credited to its owner.
-    for (const e of l.entries) if (gone(e.addedById)) e.addedById = l.ownerId;
+    for (const e of l.entries)
+      if (e.addedById !== null && gone(e.addedById)) e.addedById = l.ownerId;
   }
 
   for (const c of [...world.communities]) {
