@@ -18,4 +18,13 @@ describe('env', () => {
     expect(env.FLAG_MEDICAL_COMMUNITIES).toBe(false);
     expect(env.FLAG_IDENTITY_SEARCH).toBe(true);
   });
+
+  it('screens only with an OpenAI key, and keeps the hold threshold at or under the block one', () => {
+    const env = loadEnv({ MOCK_API: '1' });
+    expect(env.OPENAI_API_KEY).toBeUndefined();
+    expect(env.MODERATION_HOLD_AT).toBeLessThan(env.MODERATION_BLOCK_AT);
+    expect(() =>
+      loadEnv({ MOCK_API: '1', MODERATION_HOLD_AT: '0.9', MODERATION_BLOCK_AT: '0.5' }),
+    ).toThrow(/MODERATION_HOLD_AT/);
+  });
 });

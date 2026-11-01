@@ -5,7 +5,7 @@ import {
   IdParams,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { holdForReview } from '../activity';
+import { BLOCKED_MESSAGE, screenNew, settleScreen, statusOf } from '../activity';
 import type { MockCommunity } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -37,14 +37,15 @@ export const registerCommunityCreateRoutes = (
         (c) => c.kind === kind && c.moderation !== 'removed' && sameName(c.name, name),
       );
       if (taken) throw httpError(409, 'A community with that name already exists');
+      const verdict = await screenNew(world, u, { text: `${name}\n${about}` });
       const now = new Date().toISOString();
       const userMade = {
         id: world.newId(),
         name,
         about,
-        // Name and description pass moderation like posts; until then only staff and the
+        // Name and description are screened like posts; while held, only staff and the
         // creator see it.
-        moderation: 'in_review' as const,
+        moderation: statusOf(verdict),
         createdAt: now,
         createdById: u.id,
         private: request.body.private,
@@ -56,7 +57,8 @@ export const registerCommunityCreateRoutes = (
           ? { ...userMade, kind: 'interest', official: false }
           : { ...userMade, kind: 'medical' };
       world.communities.push(created);
-      holdForReview(world, { kind: 'community', id: created.id }, `${name}: ${about}`);
+      settleScreen(world, { kind: 'community', id: created.id }, `${name}: ${about}`, verdict);
+      if (verdict.outcome === 'block') throw httpError(422, BLOCKED_MESSAGE);
       return reply.status(201).send(world.community(created, u));
     },
   );

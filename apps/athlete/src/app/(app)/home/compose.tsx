@@ -85,8 +85,8 @@ export default function Compose() {
                 placeholder="https://"
               />
               <Text variant="small" color="secondary">
-                Team Impact reviews every post before others see it. Yours shows as “Waiting for
-                review” until then.
+                Every post is checked before others see it. If yours needs a closer look, it shows
+                as “Waiting for review” until Team Impact checks it.
               </Text>
               {error && <ErrorText>{error}</ErrorText>}
               <View style={styles.row}>
