@@ -10,7 +10,14 @@ import {
   Post,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { commentsFor, holdForReview, toComment } from '../activity';
+import {
+  BLOCKED_MESSAGE,
+  commentsFor,
+  screenNew,
+  settleScreen,
+  statusOf,
+  toComment,
+} from '../activity';
 import type { MockCommunity, MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -22,7 +29,7 @@ export const seenCommunity = (world: MockWorld, u: MockUser, id: string) => {
   return c;
 };
 
-/** Posts, comments and rallies. Everything new is held for moderation (P5). */
+/** Posts, comments and rallies. Everything new is screened before it appears (P5). */
 export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   const postView = (c: MockCommunity, u: MockUser, postId: string) => {
     const p = world.posts.find((x) => x.id === postId);
@@ -60,21 +67,24 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       }
       // Staff posts in Team Impact's community are its announcements (TI-146).
       const announcement = u.role === 'staff' && c.kind === 'team_impact';
+      const { text, imageUrl = null } = request.body;
+      const verdict = await screenNew(world, u, { text, imageUrl });
       const created = {
         id: world.newId(),
         kind: announcement ? ('announcement' as const) : ('post' as const),
         authorId: u.id,
         communityId: c.id,
-        text: request.body.text,
-        imageUrl: request.body.imageUrl ?? null,
+        text,
+        imageUrl,
         official: u.role === 'staff',
         likeCount: 0,
         commentCount: 0,
-        moderation: 'in_review' as const,
+        moderation: statusOf(verdict),
         createdAt: new Date().toISOString(),
       };
       world.posts.push(created);
-      holdForReview(world, { kind: 'post', id: created.id }, created.text);
+      settleScreen(world, { kind: 'post', id: created.id }, text, verdict);
+      if (verdict.outcome === 'block') throw httpError(422, BLOCKED_MESSAGE);
       world.track(u.id, {
         name: 'post.created',
         properties: { postId: created.id, kind: created.kind },
@@ -104,16 +114,19 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request, reply) => {
       const { u, p, c } = approvedPost(request, request.params.id);
       if (!canCommentIn(u.role, c.kind)) throw httpError(403, 'You can’t comment here');
+      const { text } = request.body;
+      const verdict = await screenNew(world, u, { text });
       const created = {
         id: world.newId(),
         postId: p.id,
         authorId: u.id,
-        text: request.body.text,
-        moderation: 'in_review' as const,
+        text,
+        moderation: statusOf(verdict),
         createdAt: new Date().toISOString(),
       };
       world.comments.push(created);
-      holdForReview(world, { kind: 'comment', id: created.id }, created.text);
+      settleScreen(world, { kind: 'comment', id: created.id }, text, verdict);
+      if (verdict.outcome === 'block') throw httpError(422, BLOCKED_MESSAGE);
       return reply.status(201).send(toComment(world, created));
     },
   );

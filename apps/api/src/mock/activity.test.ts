@@ -163,17 +163,24 @@ describe('posts: held for moderation (P5)', () => {
     expect((await jordan.post(`/communities/${CAPTAINS}/posts`, { text: 'Hi' })).status).toBe(201);
   });
 
-  it('makes staff posts in Team Impact announcements, and notifies everyone once approved', async () => {
+  it('publishes staff posts in Team Impact at once, as announcements to everyone', async () => {
     const { as } = await world();
     const staff = await as('staff');
     const teen = await as('teen');
     const created = await staff.post(`/communities/${TEAM_IMPACT}/posts`, {
       text: 'Applications for spring draft day are open.',
     });
-    expect(created.body.kind).toBe('announcement');
-    expect(created.body.official).toBe(true);
-    expect((await teen.get('/notifications')).body.items).toHaveLength(0);
-    await approve(staff, created.body.id);
+    expect(created.body).toMatchObject({
+      kind: 'announcement',
+      official: true,
+      moderation: 'approved',
+    });
+    // Staff content is exempt from screening: no ticket, and it's in feeds straight away.
+    const tickets = (await staff.get('/staff/moderation/tickets')).body;
+    expect(ids(tickets.map((t: { target: { id: string } }) => t.target))).not.toContain(
+      created.body.id,
+    );
+    expect(ids((await teen.get('/feed')).body.items)).toContain(created.body.id);
     const note = (await teen.get('/notifications')).body;
     expect(note.unreadCount).toBe(1);
     expect(note.items[0]).toMatchObject({ kind: 'announcement', actor: null });
@@ -652,8 +659,7 @@ describe('notifications', () => {
     const staff = await as('staff');
     const athlete = await as('athlete');
     for (const text of ['First announcement here', 'Second announcement here']) {
-      const p = await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text });
-      await approve(staff, p.body.id);
+      expect((await staff.post(`/communities/${TEAM_IMPACT}/posts`, { text })).status).toBe(201);
     }
     const list = (await athlete.get('/notifications')).body;
     expect(list.unreadCount).toBe(2);

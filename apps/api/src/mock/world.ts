@@ -20,6 +20,7 @@ import {
   type TrackedEvent,
 } from '@team-impact/contracts';
 import { eventRow } from '../events-log';
+import { holdEverything, type Screen } from '../moderation';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
@@ -100,7 +101,14 @@ export class MockWorld {
   readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
-  constructor(readonly flags: FeatureFlags) {}
+  /**
+   * @param screen screens each new post, comment, event and community (`../moderation.ts`). By
+   *   default nothing is screened and everything waits for staff.
+   */
+  constructor(
+    readonly flags: FeatureFlags,
+    readonly screen: Screen = holdEverything,
+  ) {}
 
   newId = () => fx.id(this.nextId++);
 

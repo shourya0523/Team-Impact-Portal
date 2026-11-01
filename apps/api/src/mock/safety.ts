@@ -115,6 +115,7 @@ export const fileReport = (
       preview,
       reasons: [body.reason],
       reportCount: 1,
+      flags: [],
       status: 'open',
       resolution: null,
       createdAt: now,

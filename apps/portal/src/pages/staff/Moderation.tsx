@@ -41,6 +41,24 @@ const REASON_LABEL: Record<ModerationTicket['reasons'][number], string> = {
   other: 'Other',
 };
 
+/** An OpenAI moderation category for people: `harassment/threatening` → "Harassment: threatening". */
+const flagLabel = (flag: string) => {
+  const text = flag.replaceAll('/', ': ').replaceAll('-', ' ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+};
+
+/** Stopped by the screen before anyone saw it: already removed, but its author can be acted on. */
+const isBlocked = (t: ModerationTicket) =>
+  t.reportCount === 0 && t.status === 'resolved' && t.resolution === 'remove' && t.flags.length > 0;
+
+/** Why a ticket is here: what reporters said, else what the automated screen flagged. */
+const whyOf = (t: ModerationTicket) => {
+  if (t.reasons.length) return t.reasons.map((r) => REASON_LABEL[r]).join(', ');
+  const flagged = t.flags.map(flagLabel).join(', ');
+  if (isBlocked(t)) return `Blocked by the screen: ${flagged}`;
+  return flagged ? `Held by the screen: ${flagged}` : 'New, waiting for review';
+};
+
 const ACTION: Record<ModerationAction, { label: string; tone: BadgeProps['variant'] }> = {
   remove: { label: 'Removed', tone: 'danger' },
   keep: { label: 'Kept', tone: 'neutral' },
@@ -107,14 +125,17 @@ const ResolveSheet = ({
         <Text variant="small" color="secondary">
           {ticket?.preview}
         </Text>
-        <Select
-          label="The item"
-          value={resolution}
-          onChange={(e) => setResolution(e.target.value as ResolveTicketRequest['resolution'])}
-        >
-          <option value="remove">Remove it</option>
-          <option value="dismiss">Keep it</option>
-        </Select>
+        {/* What the screen blocked is already removed; only its author is left to decide. */}
+        {ticket && isBlocked(ticket) ? null : (
+          <Select
+            label="The item"
+            value={resolution}
+            onChange={(e) => setResolution(e.target.value as ResolveTicketRequest['resolution'])}
+          >
+            <option value="remove">Remove it</option>
+            <option value="dismiss">Keep it</option>
+          </Select>
+        )}
         <Select
           label="Its author"
           value={authorAction}
@@ -168,7 +189,7 @@ export const ModerationPage = () => {
     <>
       <PageHeader
         title="Moderation"
-        subtitle="Reports from users and new content waiting for review. Keep approves it."
+        subtitle="Reports from users, and new content the screen held or blocked. Keep approves held content."
       />
       <FormError>{quick.error}</FormError>
       <Async state={tickets.state}>
@@ -180,14 +201,9 @@ export const ModerationPage = () => {
             columns={[
               { header: 'Reported', cell: (t) => KIND_LABEL[t.target.kind], width: 110 },
               { header: 'What', cell: (t) => t.preview, width: '30%' },
-              {
-                header: 'Why',
-                // New posts, comments, events and communities wait here with no reports.
-                cell: (t) =>
-                  t.reasons.length
-                    ? t.reasons.map((r) => REASON_LABEL[r]).join(', ')
-                    : 'New, waiting for review',
-              },
+              // New posts, comments, events and communities the screen held wait here with no
+              // reports; what it blocked shows too, already removed.
+              { header: 'Why', cell: whyOf },
               { header: 'Reports', cell: (t) => t.reportCount, align: 'right' },
               { header: 'Opened', cell: (t) => formatDate(t.createdAt) },
               {
@@ -209,6 +225,17 @@ export const ModerationPage = () => {
                         disabled={quick.busy}
                         onClick={() => resolve(t, 'remove')}
                       />
+                      <Button
+                        label="Warn or suspend…"
+                        variant="quiet"
+                        size="sm"
+                        disabled={quick.busy}
+                        onClick={() => setDeciding(t)}
+                      />
+                    </Actions>
+                  ) : isBlocked(t) ? (
+                    <Actions>
+                      <Badge variant="danger" label="Blocked" />
                       <Button
                         label="Warn or suspend…"
                         variant="quiet"

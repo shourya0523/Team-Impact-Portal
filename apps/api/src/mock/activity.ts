@@ -8,6 +8,7 @@ import type {
   RsvpStatus,
 } from '@team-impact/contracts';
 import { NOTIFICATION_PREF } from '@team-impact/contracts';
+import { ALLOWED, type ScreenInput, type Verdict } from '../moderation';
 import { id, summaryOf, USERS } from './fixtures';
 import type { MockCommunity, MockUser } from './fixtures';
 import { hiddenFor } from './safety';
@@ -17,9 +18,11 @@ import type { MockWorld } from './world';
 /**
  * Posting, comments, rallies, RSVPs and notifications for the mock API (PRD §5, P1, P5).
  *
- * Every new post, comment, event and community starts `in_review` and is queued for staff as a
- * moderation ticket with no reports. Nothing reaches anyone but its author until staff keep it
- * (`dismiss`), and notifications fire only then, so held content never leaks through them.
+ * Every new post, comment, event and community is screened before it's stored (`screenNew`).
+ * Allowed items publish at once; held ones start `in_review`, queued for staff as a moderation
+ * ticket with no reports, and reach nobody but their author until staff keep it (`dismiss`);
+ * blocked ones are `removed` at once. Notifications fire only on publishing, so held content
+ * never leaks through them. Team Impact staff content is exempt and always publishes at once.
  */
 
 export interface MockComment {
@@ -105,16 +108,44 @@ export const prefsOf = (world: MockWorld, userId: string): NotificationPrefs =>
 
 type Target = CreateReportRequest['target'];
 
-/** Queue a new item for staff. It stays `in_review` until a ticket on it is resolved. */
-export const holdForReview = (world: MockWorld, target: Target, preview: string) => {
+/**
+ * The screen's verdict on a new item, before it's stored. Team Impact staff content is exempt: it
+ * is never sent out and always publishes at once.
+ */
+export const screenNew = (world: MockWorld, author: MockUser, input: ScreenInput) =>
+  author.role === 'staff' ? Promise.resolve(ALLOWED) : world.screen(input);
+
+const STATUS_OF = { allow: 'approved', hold: 'in_review', block: 'removed' } as const;
+
+/** The moderation status a new item is stored with. */
+export const statusOf = (verdict: Verdict) => STATUS_OF[verdict.outcome];
+
+/** What the author is told when the screen blocks what they wrote (422). */
+export const BLOCKED_MESSAGE =
+  'This goes against the community guidelines, so it wasn’t posted. Team Impact has been told.';
+
+/**
+ * Act on a verdict once the item is stored with `statusOf(verdict)`. Allowed items publish (and
+ * notify); held ones queue an open ticket for staff; blocked ones leave a ticket already resolved
+ * as removed, so staff see what was stopped and can still warn or suspend its author.
+ */
+export const settleScreen = (
+  world: MockWorld,
+  target: Target,
+  preview: string,
+  verdict: Verdict,
+) => {
+  if (verdict.outcome === 'allow') return onApproved(world, target);
+  const blocked = verdict.outcome === 'block';
   world.tickets.push({
     id: world.newId(),
     target,
     preview: preview.slice(0, 280),
     reasons: [],
     reportCount: 0,
-    status: 'open',
-    resolution: null,
+    flags: verdict.flags,
+    status: blocked ? 'resolved' : 'open',
+    resolution: blocked ? 'remove' : null,
     createdAt: new Date().toISOString(),
   });
 };
