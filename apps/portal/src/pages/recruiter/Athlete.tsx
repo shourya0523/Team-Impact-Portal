@@ -9,7 +9,7 @@ import { Form, FormError, useAction } from '../../forms';
 import { Async, Button, Card, PageHeader, Select, Text } from '../../ui';
 import { useApi } from '../../useApi';
 
-/** R6: save the athlete to one of your lists (or one a colleague shared with you). */
+/** R6: save the athlete to any of your company's lists. */
 const SaveToList = ({ athleteId }: { athleteId: string }) => {
   const { state } = useApi(() => api.lists());
   const { busy, error, run } = useAction();
