@@ -1,8 +1,12 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router';
 import {
+  CURRENT_TERMS_VERSION,
   emailDomain,
   isPersonalEmailDomain,
+  LEGAL_DOCUMENT_IDS,
+  LEGAL_DOCUMENT_NAMES,
+  LEGAL_DOCUMENTS,
   type RecruiterSignupResult,
 } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
@@ -20,7 +24,8 @@ const messageOf = (e: unknown) => {
 /**
  * "/sign-up": recruiters at partner companies sign up with their work email. The domain names the
  * company, which must be a partner and not suspended. They wait in `pending`, with no access to
- * athletes, until Team Impact staff approve them.
+ * athletes, until Team Impact staff approve them. The request names the version of the legal text
+ * shown here, which the API stores with the acceptance (TI-107).
  */
 export const SignUpPage = () => {
   const [firstName, setFirstName] = useState('');
@@ -54,6 +59,7 @@ export const SignUpPage = () => {
         email,
         password,
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
         ...(title.trim() ? { title: title.trim() } : {}),
       })
       .then(setDone, (err: unknown) => setError(messageOf(err)))
@@ -173,6 +179,19 @@ export const SignUpPage = () => {
                 minLength={12}
                 required
               />
+              <section aria-label="Legal terms">
+                <Text variant="small" color="secondary">
+                  Before you request access, read the{' '}
+                  {LEGAL_DOCUMENT_IDS.map((doc, i) => (
+                    <span key={doc}>
+                      {i > 0 && (i === LEGAL_DOCUMENT_IDS.length - 1 ? ' and ' : ', ')}
+                      <strong>{LEGAL_DOCUMENTS[doc].title}</strong>
+                    </span>
+                  ))}{' '}
+                  (version {CURRENT_TERMS_VERSION}). They cover how you may use athletes’ contact
+                  details and identity search, and that every identity search is logged.
+                </Text>
+              </section>
               <label
                 style={{
                   display: 'flex',
@@ -188,7 +207,7 @@ export const SignUpPage = () => {
                   onChange={(e) => setAcceptTerms(e.target.checked)}
                   style={{ accentColor: colors.brand, width: spacing.lg, height: spacing.lg }}
                 />
-                <Text as="span">I agree to the Terms and Privacy Policy</Text>
+                <Text as="span">I agree to the {LEGAL_DOCUMENT_NAMES}</Text>
               </label>
               <Button
                 type="submit"

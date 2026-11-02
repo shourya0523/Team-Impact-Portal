@@ -1,10 +1,11 @@
 import { z } from 'zod';
 import { CalendarDate, Email, PersonName, Token } from './common';
 import { emailDomain, isPersonalEmailDomain } from './companies';
+import { LEGAL_DOCUMENT_NAMES, TermsVersion } from './legal';
 import { ageBand, ageOn, SelfSignupRole } from './roles';
 
 const Password = z.string().min(12, 'Use at least 12 characters');
-const AcceptTerms = z.literal(true, { error: 'Agree to the Terms and Privacy Policy to continue' });
+const AcceptTerms = z.literal(true, { error: `Agree to the ${LEGAL_DOCUMENT_NAMES} to continue` });
 
 export const LoginRequest = z.object({
   email: Email,
@@ -14,7 +15,9 @@ export type LoginRequest = z.infer<typeof LoginRequest>;
 
 /**
  * Open sign-up in the athlete app. Birth date is used only to check age: the minimum is 13,
- * 13–17 year olds sign up as teens, and adults can't pick the teen role.
+ * 13–17 year olds sign up as teens, and adults can't pick the teen role. `termsVersion` is the
+ * legal text the user was shown (`./legal.ts`); it must be the current one and is stored with
+ * the acceptance (TI-107).
  */
 export const SignupRequest = z
   .object({
@@ -25,8 +28,9 @@ export const SignupRequest = z
     birthDate: CalendarDate,
     role: SelfSignupRole,
     acceptTerms: AcceptTerms,
+    termsVersion: TermsVersion,
     /**
-     * Teens only: the terms confirm a parent or guardian agreed. No parent link is required for
+     * Teens only: the terms confirm a parent or guardian agreed (Terms §3, PRD §11). No parent link is required for
      * the pilot; if counsel says otherwise, a parent email and one-tap confirmation get added.
      */
     parentAgreed: z.literal(true).optional(),
@@ -69,6 +73,7 @@ export const AcceptCoachInviteRequest = z.object({
       lastName: PersonName,
       password: Password,
       acceptTerms: AcceptTerms,
+      termsVersion: TermsVersion,
     })
     .optional(),
 });
@@ -85,5 +90,6 @@ export const RecruiterSignupRequest = z.object({
   lastName: PersonName,
   title: z.string().trim().max(80).optional(),
   acceptTerms: AcceptTerms,
+  termsVersion: TermsVersion,
 });
 export type RecruiterSignupRequest = z.infer<typeof RecruiterSignupRequest>;

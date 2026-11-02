@@ -20,6 +20,7 @@ import {
   CreatePostRequest,
   CreateReportRequest,
   CreateTeamRequest,
+  CURRENT_TERMS_VERSION,
   Email,
   ExperienceEntry,
   emailOnDomain,
@@ -70,6 +71,7 @@ const adultSignup = {
   birthDate: bornYearsAgo(20),
   role: 'athlete',
   acceptTerms: true,
+  termsVersion: CURRENT_TERMS_VERSION,
 };
 
 const accepts = (schema: ZodType, value: unknown) => schema.safeParse(value).success;
@@ -126,6 +128,7 @@ describe('sign-up', () => {
       lastName: 'Park',
       title: 'Campus Recruiter',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     };
     expect(accepts(RecruiterSignupRequest, recruiter)).toBe(false);
     const work = { ...recruiter, email: 'sam.park@northbeam.com' };
@@ -141,6 +144,7 @@ describe('sign-up', () => {
       lastName: 'Lopez',
       password: 'short',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     };
     expect(issuePaths(AcceptCoachInviteRequest.safeParse({ token: TOKEN, newAccount }))).toEqual([
       'newAccount.password',

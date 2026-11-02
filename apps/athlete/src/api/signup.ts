@@ -1,14 +1,25 @@
-import type {
-  AcceptCoachInviteBody,
-  CoachInvitePreview,
-  Me,
-  QrCodePreview,
-  QrJoinResult,
-  SignupRequest,
+import {
+  type AcceptCoachInviteBody,
+  type CoachInvitePreview,
+  CURRENT_TERMS_VERSION,
+  type Me,
+  type QrCodePreview,
+  type QrJoinResult,
+  type SignupRequest,
 } from '@team-impact/contracts';
 import { post, request } from './client';
 
 const enc = encodeURIComponent;
+
+type NewCoachAccount = NonNullable<AcceptCoachInviteBody['newAccount']>;
+
+/**
+ * Accepting an invite as a new coach also accepts the legal text this build shows; the version is
+ * filled in here so the invite screen only collects the tick (TI-107).
+ */
+export type CoachInviteAcceptance = {
+  newAccount?: Omit<NewCoachAccount, 'termsVersion'>;
+};
 
 export const signup = {
   /** Open sign-up; signs the new account in. Under-13s are refused (a parent signs up instead). */
@@ -18,6 +29,10 @@ export const signup = {
   /** The fast lane: a live code puts you on the team straight away. */
   joinWithQr: (code: string) => post<QrJoinResult>(`/qr/${enc(code)}/join`),
   coachInvite: (token: string) => request<CoachInvitePreview>(`/invites/${enc(token)}`),
-  acceptCoachInvite: (token: string, body: AcceptCoachInviteBody) =>
-    post<Me>(`/invites/${enc(token)}/accept`, body),
+  acceptCoachInvite: (token: string, { newAccount }: CoachInviteAcceptance) => {
+    const body: AcceptCoachInviteBody = newAccount
+      ? { newAccount: { ...newAccount, termsVersion: CURRENT_TERMS_VERSION } }
+      : {};
+    return post<Me>(`/invites/${enc(token)}/accept`, body);
+  },
 };

@@ -5,6 +5,8 @@ import {
   ageBand,
   ageOn,
   CoachInvitePreview,
+  CONSENT_FLAGS,
+  type CurrentTermsVersion,
   emailOnDomain,
   IdParams,
   InviteParams,
@@ -61,6 +63,21 @@ export const registerSignupRoutes = (
     return u;
   };
 
+  /**
+   * Stores what the new account agreed to, like the real API's `consent_records` rows: the terms
+   * version always, and for a teen their confirmation that a parent or guardian agreed (TI-107).
+   * The contract (`TermsVersion`) only lets the current version through, so it's typed as that.
+   */
+  const recordAcceptance = (
+    u: MockUser,
+    termsVersion: CurrentTermsVersion,
+    { parentAgreed = false } = {},
+  ) => {
+    const row = { userId: u.id, value: true, termsVersion, createdAt: u.createdAt };
+    world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.terms });
+    if (parentAgreed) world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.parentAgreed });
+  };
+
   // Open sign-up -----------------------------------------------------------------------------------
 
   app.post(
@@ -87,6 +104,7 @@ export const registerSignupRoutes = (
         role: body.role,
         email: body.email,
       });
+      recordAcceptance(u, body.termsVersion, { parentAgreed: band === 'teen' });
       world.track(u.id, { name: 'user.signed_up', properties: { role: u.role } });
       startSession(reply, u);
       return reply.status(201).send(world.me(u));
@@ -200,6 +218,7 @@ export const registerSignupRoutes = (
           role: 'coach',
           email: invite.email,
         });
+        recordAcceptance(coach, fresh.termsVersion);
         world.track(coach.id, { name: 'user.signed_up', properties: { role: 'coach' } });
       }
       // A team's first coach makes it live: it shows in the join search from now on.
@@ -243,6 +262,7 @@ export const registerSignupRoutes = (
         title: body.title ?? null,
         companyId: company.id,
         requestedAt: new Date().toISOString(),
+        termsVersion: body.termsVersion,
       });
       // No session: a pending recruiter can't see athletes until staff approve them.
       return reply.status(202).send({
@@ -263,9 +283,15 @@ export const registerSignupRoutes = (
     { schema: { response: { 200: z.array(PendingRecruiter) } } },
     async (request) => {
       requireRole(request, 'staff');
-      return world.signup.pendingRecruiters.map(({ companyId, ...r }) => ({
-        ...r,
-        company: companyRef(companyId),
+      // Field by field: the accepted terms version stays server-side.
+      return world.signup.pendingRecruiters.map((r) => ({
+        id: r.id,
+        firstName: r.firstName,
+        lastName: r.lastName,
+        email: r.email,
+        title: r.title,
+        requestedAt: r.requestedAt,
+        company: companyRef(r.companyId),
       }));
     },
   );
@@ -289,6 +315,15 @@ export const registerSignupRoutes = (
         email: pending.email,
         companyId: company.id,
         ...(pending.title ? { title: pending.title } : {}),
+      });
+      // They accepted when they asked, so the record names that version and time. If the terms
+      // changed while they waited, asking them to accept the new text is the real auth's job.
+      world.signup.consents.push({
+        userId: u.id,
+        flag: CONSENT_FLAGS.terms,
+        value: true,
+        termsVersion: pending.termsVersion,
+        createdAt: pending.requestedAt,
       });
       // The account exists once staff approve, so that's when the recruiter counts as signed up.
       world.track(u.id, { name: 'user.signed_up', properties: { role: 'recruiter' } });
