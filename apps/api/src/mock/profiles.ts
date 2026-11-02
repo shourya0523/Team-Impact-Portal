@@ -12,10 +12,12 @@ import {
   type MySettings,
   type Profile,
   type ProfileCommunity,
+  RESUME_FAIL_REASONS,
   type ResumeExtraction,
   type SharedContact,
   type UpdateCardRequest,
 } from '@team-impact/contracts';
+import type { ResumeReading } from '../resume';
 import * as fx from './fixtures';
 import type { MockCard, MockUser } from './fixtures';
 import { actorOf, cardFacts } from './policy';
@@ -441,8 +443,36 @@ export const extractResume = (
     status: 'unconfirmed',
     fileName: clean(fileName),
     failed: keys.length === 0,
+    failReason: keys.length === 0 ? 'nothing_found' : null,
     fields: fields as ResumeExtraction['fields'],
     needsReview: [...keys],
+    // Labelled lines are unambiguous, so nothing is flagged.
+    check: [],
+    checkEntries: [],
     createdAt: now,
   };
 };
+
+/**
+ * A real reading of an uploaded file (src/resume) as the pending extraction. The file itself was
+ * only ever in memory and is gone once this returns.
+ */
+export const extractionFromReading = (
+  world: MockWorld,
+  reading: ResumeReading,
+  fileName: string,
+  now: string,
+): ResumeExtraction => ({
+  id: world.newId(),
+  status: 'unconfirmed',
+  fileName: clean(fileName),
+  failed: reading.failed,
+  failReason: !reading.failed
+    ? null
+    : (RESUME_FAIL_REASONS.find((r) => r === reading.reason) ?? 'nothing_found'),
+  fields: reading.fields,
+  needsReview: reading.needsReview,
+  check: reading.check,
+  checkEntries: reading.checkEntries,
+  createdAt: now,
+});

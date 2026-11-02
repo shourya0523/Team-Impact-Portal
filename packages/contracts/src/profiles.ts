@@ -141,14 +141,31 @@ export type UpdateMySettingsRequest = z.infer<typeof UpdateMySettingsRequest>;
 
 // The athlete's own card: draft, resume, publish, history, export --------------------------------
 
+/** Base64 grows a file by 4/3; the decoded size is checked against `maxBytes` again on the server. */
+const MAX_BASE64_LENGTH = Math.ceil(RESUME_UPLOAD_LIMITS.maxBytes / 3) * 4;
+
 export const ResumeUploadRequest = z.strictObject({
   fileName: z.string().trim().min(1).max(200),
   mimeType: z.enum(RESUME_UPLOAD_LIMITS.mimeTypes),
   sizeBytes: z.number().int().positive().max(RESUME_UPLOAD_LIMITS.maxBytes),
+  /**
+   * The file itself. It is read in memory and dropped as soon as extraction ends; it is never
+   * stored (TI-113). Its first bytes must match `mimeType`.
+   */
+  fileBase64: z.base64().max(MAX_BASE64_LENGTH).optional(),
   /** Mock only: the resume's text, standing in for the parsed file. */
   text: z.string().max(20_000).optional(),
 });
 export type ResumeUploadRequest = z.infer<typeof ResumeUploadRequest>;
+
+/** Why a resume couldn't be read; the athlete types their card in instead. */
+export const RESUME_FAIL_REASONS = [
+  'unreadable',
+  'no_text',
+  'ocr_unavailable',
+  'ocr_failed',
+  'nothing_found',
+] as const;
 
 /**
  * What the extractor read, waiting on the athlete. `unconfirmed` until they accept fields, and
@@ -159,6 +176,14 @@ export const ResumeExtraction = ResumeDraft.extend({
   fileName: z.string(),
   /** Extraction found nothing usable: the athlete types the fields instead. */
   failed: z.boolean(),
+  failReason: z.enum(RESUME_FAIL_REASONS).nullable(),
+  /**
+   * Low-confidence fields, a subset of `needsReview`. The review screen flags them "Check" and
+   * leaves them unaccepted, so the athlete has to look before they reach the draft.
+   */
+  check: z.array(CardFields.keyof()),
+  /** Indexes into `fields.experience` of entries to check (usually unclear dates). */
+  checkEntries: z.array(z.number().int().min(0)),
 });
 export type ResumeExtraction = z.infer<typeof ResumeExtraction>;
 
@@ -195,14 +220,17 @@ export const CardExport = z.object({
 });
 export type CardExport = z.infer<typeof CardExport>;
 
-/** Card fields the mock extractor looks for, in review order. */
+/** Card fields the resume reader looks for, in review order. */
 export const EXTRACTABLE_CARD_FIELDS = [
+  'firstName',
+  'lastName',
   'position',
   'jerseyNumber',
   'classYear',
   'major',
   'hometown',
   'city',
+  'region',
   'experience',
   'skills',
   'lookingFor',
