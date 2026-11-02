@@ -19,7 +19,13 @@ const check = (overrides: Partial<SignupInput>) =>
 
 describe('sign-up rules: age gate', () => {
   it('lets adults sign up as athlete, parent, alumni or recruiter', () => {
-    for (const accountType of ['athlete', 'parent', 'alumni', 'recruiter']) {
+    for (const accountType of [
+      'athlete',
+      'parent',
+      'alumni_athlete',
+      'alumni_mentor',
+      'recruiter',
+    ]) {
       expect(check({ accountType, email: 'sam@northbeam.com' }), accountType).toBeNull();
     }
   });

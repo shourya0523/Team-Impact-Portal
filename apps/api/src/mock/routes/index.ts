@@ -19,6 +19,7 @@ import { registerSignupRoutes } from './signup';
 import { registerStaffRoutes } from './staff';
 import { registerStaffToolsRoutes } from './staff-tools';
 import { registerTeamRoutes } from './team';
+import { registerTrackingRoutes } from './tracking';
 
 /**
  * Every route the clients need for the shells, on fixture data (MOCK_API=1). Paths and shapes are
@@ -46,6 +47,7 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
     registerCardRoutes,
     registerCommunityMemberRoutes,
     registerStaffToolsRoutes,
+    registerTrackingRoutes,
   ]) {
     register(app, world, g);
   }

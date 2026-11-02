@@ -7,6 +7,8 @@ import {
   page,
   RecruiterList,
   RecruiterListDetail,
+  searchFilters,
+  type TrackedEvent,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { summaryOf } from '../fixtures';
@@ -26,6 +28,7 @@ export const registerRecruiterRoutes = (
       const u = requireRole(request, 'recruiter');
       const q = request.query;
       let cards = world.cards.filter(world.recruiterCanSee);
+      let identity: { communityId: string; companyId: string } | undefined;
 
       if (q.communityId) {
         if (!world.flags.identitySearch) throw httpError(400, 'The community filter is off');
@@ -46,6 +49,7 @@ export const registerRecruiterRoutes = (
           community: { id: c.id, name: c.name },
           searchedAt: new Date().toISOString(),
         });
+        identity = { communityId: c.id, companyId: company.id };
       }
 
       const has = (value: string | null | undefined, wanted?: string) =>
@@ -62,7 +66,23 @@ export const registerRecruiterRoutes = (
             (!q.division || f.team?.division === q.division) &&
             has(f.experience.map((e) => `${e.role} ${e.organization}`).join(' '), q.experience),
         );
-      return paginate(faces, q);
+      const results = paginate(faces, q);
+
+      // The search, then who it showed (PRD §12). An identity search is logged as one, not as both.
+      const searchId = world.newId();
+      const search = { searchId, filters: searchFilters(q), resultCount: faces.length };
+      const events: TrackedEvent[] = [
+        identity
+          ? { name: 'search.identity_filter', properties: { ...search, ...identity } }
+          : { name: 'search.run', properties: { ...search, surface: 'athletes' } },
+        ...results.items.map((face, position) => ({
+          name: 'search.result_shown' as const,
+          subjectId: face.athleteId,
+          properties: { searchId, position },
+        })),
+      ];
+      world.track(u.id, events);
+      return results;
     },
   );
 

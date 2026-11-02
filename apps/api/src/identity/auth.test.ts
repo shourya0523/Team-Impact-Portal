@@ -269,7 +269,7 @@ describe('email verification and sign-in', () => {
   });
 
   it('signs in accounts whose password came from the old users.password_hash (argon2)', async () => {
-    // What migration 0002 and the seed produce: a credential account holding an argon2 hash.
+    // What migration 0004 and the seed produce: a credential account holding an argon2 hash.
     const [user] = await db
       .insert(schema.users)
       .values({

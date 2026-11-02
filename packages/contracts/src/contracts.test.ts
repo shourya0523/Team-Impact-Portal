@@ -20,6 +20,7 @@ import {
   CreatePostRequest,
   CreateReportRequest,
   CreateTeamRequest,
+  Email,
   ExperienceEntry,
   emailOnDomain,
   FindAlumniQuery,
@@ -29,13 +30,19 @@ import {
   MergeCollegeRequest,
   type MyCard,
   PageQuery,
+  PersonName,
+  searchFilters,
   Phone,
   Post,
   RecruiterSignupRequest,
   SaveCollegeRequest,
   SignupRequest,
+  SPORTS,
   StaffUpdateTeamRequest,
   TeamQrCodeHistoryEntry,
+  TRACKED_EVENT_NAMES,
+  TRACKED_EVENTS,
+  TrackEventRequest,
   UpdateAlumniProfileRequest,
   UpdateCardVisibilityRequest,
   UpdateListRequest,
@@ -295,6 +302,46 @@ describe('teams', () => {
     const edit = { name: 'Jumbos', collegeId: ID, archived: true };
     expect(UpdateTeamRequest.parse(edit)).toEqual({ name: 'Jumbos' });
     expect(StaffUpdateTeamRequest.parse(edit)).toEqual(edit);
+  });
+
+  it('creates a team only for a sport on the fixed list', () => {
+    expect(accepts(CreateTeamRequest, { ...team, sport: 'Ice Hockey' })).toBe(true);
+    for (const sport of ['Hockey', 'soccer', 'SOCCER', 'Quidditch', '']) {
+      expect(issuePaths(CreateTeamRequest.safeParse({ ...team, sport })), sport).toEqual(['sport']);
+    }
+    expect(accepts(CreateTeamRequest, { ...team, sport: undefined })).toBe(false);
+  });
+
+  it('accepts every listed sport, and lists each one once whatever its case', () => {
+    expect(SPORTS.length).toBeGreaterThan(0);
+    for (const sport of SPORTS)
+      expect(accepts(CreateTeamRequest, { ...team, sport }), sport).toBe(true);
+    const folded = SPORTS.map((s) => s.trim().toLowerCase());
+    expect(new Set(folded).size).toBe(SPORTS.length);
+  });
+
+  it('keeps a staff edit’s sport on the list too', () => {
+    expect(accepts(StaffUpdateTeamRequest, { sport: 'Rowing' })).toBe(true);
+    expect(accepts(StaffUpdateTeamRequest, {})).toBe(true);
+    expect(issuePaths(StaffUpdateTeamRequest.safeParse({ sport: 'Hockey' }))).toEqual(['sport']);
+    expect(issuePaths(StaffUpdateTeamRequest.safeParse({ sport: 'rowing' }))).toEqual(['sport']);
+  });
+
+  it('never lets a coach change the team’s college, sport, gender, division or status', () => {
+    const edit = {
+      color: '#1E3F7B',
+      collegeId: ID,
+      sport: 'Rowing',
+      gender: 'men',
+      division: 'I',
+      archived: false,
+    };
+    expect(UpdateTeamRequest.parse(edit)).toEqual({ color: '#1E3F7B' });
+  });
+
+  it('lets staff and coaches clear the colour back to navy', () => {
+    expect(UpdateTeamRequest.parse({ color: null })).toEqual({ color: null });
+    expect(StaffUpdateTeamRequest.parse({ color: null })).toEqual({ color: null });
   });
 
   it('asks parents whether they’re a parent or guardian, and nothing about children', () => {
@@ -559,5 +606,186 @@ describe('common', () => {
     expect(PageQuery.parse({ limit: '50' }).limit).toBe(50);
     expect(PageQuery.parse({}).limit).toBe(20);
     expect(accepts(PageQuery, { limit: '500' })).toBe(false);
+  });
+});
+
+/** True when a schema only admits ids, enums, numbers and flags, so free text can't get in. */
+const isStructured = (schema: ZodType): boolean => {
+  const def = schema._zod.def as { type: string; format?: string };
+  switch (def.type) {
+    case 'string':
+      return def.format === 'uuid';
+    case 'enum':
+    case 'literal':
+    case 'number':
+    case 'boolean':
+      return true;
+    case 'array':
+      return isStructured((def as unknown as { element: ZodType }).element);
+    case 'optional':
+    case 'nullable':
+      return isStructured((def as unknown as { innerType: ZodType }).innerType);
+    default:
+      return false;
+  }
+};
+
+describe('tracked events', () => {
+  it('carries ids, enums, counts and flags only, never names, emails or free text', () => {
+    expect(isStructured(PersonName)).toBe(false);
+    expect(isStructured(Email)).toBe(false);
+    for (const name of TRACKED_EVENT_NAMES) {
+      for (const [key, schema] of Object.entries(TRACKED_EVENTS[name].properties.shape)) {
+        expect(isStructured(schema), `${name}.${key}`).toBe(true);
+      }
+    }
+  });
+
+  describe('team onboarding events', () => {
+    const OTHER = '7f1d6a2e-3b4c-4d5e-8f60-cba987654321';
+    /** One valid property set per event staff onboarding logs, and whether it names a person. */
+    const onboarding = {
+      'team.created': { subject: false, valid: { teamId: ID } },
+      'team.updated': { subject: false, valid: { teamId: ID, fields: ['sport', 'color'] } },
+      'team.archived': {
+        subject: false,
+        valid: { teamId: ID, declinedRequestCount: 1, revokedCodeCount: 2 },
+      },
+      'team.restored': { subject: false, valid: { teamId: ID } },
+      'coach.invited': { subject: false, valid: { teamId: ID, inviteId: OTHER } },
+      'coach.invite_revoked': { subject: false, valid: { teamId: ID, inviteId: OTHER } },
+      'coach.added': { subject: true, valid: { teamId: ID, via: 'invite' } },
+      'coach.removed': { subject: true, valid: { teamId: ID } },
+    } as const;
+
+    it('defines every event staff onboarding writes, logged by the API only', () => {
+      for (const [name, { subject }] of Object.entries(onboarding)) {
+        expect(TRACKED_EVENT_NAMES, name).toContain(name);
+        const definition = TRACKED_EVENTS[name as keyof typeof onboarding];
+        expect(definition.source, name).toBe('api');
+        // Removing or adding a coach is about that coach; the rest are about the team.
+        expect(definition.subject, name).toBe(subject);
+      }
+    });
+
+    it.each(Object.entries(onboarding))(
+      '%s takes its own properties and nothing else',
+      (name, { valid }) => {
+        const schema = TRACKED_EVENTS[name as keyof typeof onboarding].properties;
+        expect(accepts(schema, valid)).toBe(true);
+        for (const extra of [
+          { email: 'pat.nguyen@tufts.edu' },
+          { name: 'Pat Nguyen' },
+          { teamName: "Men's Lacrosse" },
+          { collegeName: 'Tufts University' },
+        ]) {
+          expect(accepts(schema, { ...valid, ...extra }), JSON.stringify(extra)).toBe(false);
+        }
+        const { teamId, ...withoutTeam } = valid;
+        void teamId;
+        expect(accepts(schema, withoutTeam)).toBe(false);
+        expect(accepts(schema, { ...valid, teamId: 'tufts-lacrosse' })).toBe(false);
+      },
+    );
+
+    it('records a resent invite against the one it replaces, by id', () => {
+      const schema = TRACKED_EVENTS['coach.invited'].properties;
+      expect(accepts(schema, { teamId: ID, inviteId: OTHER, replacesInviteId: ID })).toBe(true);
+      expect(
+        accepts(schema, { teamId: ID, inviteId: OTHER, replacesInviteId: 'pat.nguyen@tufts.edu' }),
+      ).toBe(false);
+    });
+
+    it('counts what archiving closed in whole, non-negative numbers', () => {
+      const schema = TRACKED_EVENTS['team.archived'].properties;
+      const ok = { teamId: ID, declinedRequestCount: 0, revokedCodeCount: 0 };
+      expect(accepts(schema, ok)).toBe(true);
+      expect(accepts(schema, { ...ok, declinedRequestCount: -1 })).toBe(false);
+      expect(accepts(schema, { ...ok, revokedCodeCount: 1.5 })).toBe(false);
+      expect(accepts(schema, { teamId: ID })).toBe(false);
+    });
+
+    it('logs the names of the fields a team edit changed, never their values', () => {
+      const schema = TRACKED_EVENTS['team.updated'].properties;
+      const fields = ['collegeId', 'sport', 'gender', 'name', 'division', 'color', 'about'];
+      expect(accepts(schema, { teamId: ID, fields })).toBe(true);
+      expect(accepts(schema, { teamId: ID, fields: ['Ice Hockey'] })).toBe(false);
+      expect(accepts(schema, { teamId: ID, fields: ['email'] })).toBe(false);
+      expect(accepts(schema, { teamId: ID, fields: [] })).toBe(false);
+    });
+
+    it('can’t be sent by the apps', () => {
+      for (const [name, { valid }] of Object.entries(onboarding)) {
+        expect(accepts(TrackEventRequest, { name, properties: valid, subjectId: ID }), name).toBe(
+          false,
+        );
+      }
+    });
+  });
+
+  it('refuses properties an event doesn’t define', () => {
+    const published = { cardId: ID };
+    expect(accepts(TRACKED_EVENTS['card.published'].properties, published)).toBe(true);
+    const withName = { ...published, firstName: 'Maya' };
+    expect(accepts(TRACKED_EVENTS['card.published'].properties, withName)).toBe(false);
+  });
+
+  it('records which search filters were set, never their values', () => {
+    const query = { sport: 'Soccer', major: '', classYear: 2027, limit: 20, cursor: '40' };
+    expect(searchFilters({ ...query, communityId: ID, region: undefined })).toEqual([
+      'sport',
+      'classYear',
+    ]);
+  });
+
+  it('lets clients send only client events, each about someone', () => {
+    const view = { name: 'card.viewed', properties: { cardId: ID }, subjectId: ID };
+    expect(accepts(TrackEventRequest, view)).toBe(true);
+    expect(accepts(TrackEventRequest, { ...view, subjectId: undefined })).toBe(false);
+    const search = {
+      name: 'search.identity_filter',
+      properties: { searchId: ID, communityId: ID, companyId: ID, filters: [], resultCount: 3 },
+    };
+    expect(accepts(TRACKED_EVENTS['search.identity_filter'].properties, search.properties)).toBe(
+      true,
+    );
+    expect(accepts(TrackEventRequest, search)).toBe(false);
+
+    // Written out, so marking another event `client` has to change this test too.
+    const allowed = ['card.viewed', 'contact.viewed'];
+    const requestNames = TrackEventRequest.options.map((option) => option.shape.name.value);
+    expect([...requestNames].sort()).toEqual(allowed);
+    const clientNames = TRACKED_EVENT_NAMES.filter(
+      (name) => TRACKED_EVENTS[name].source === 'client',
+    );
+    expect([...clientNames].sort()).toEqual(allowed);
+  });
+
+  it('refuses well-formed API events from clients, even with a subject', () => {
+    const forged = [
+      { name: 'search.result_shown', properties: { searchId: ID, position: 0 } },
+      {
+        name: 'search.identity_filter',
+        properties: { searchId: ID, communityId: ID, companyId: ID, filters: [], resultCount: 3 },
+      },
+      { name: 'list.athlete_saved', properties: { listId: ID } },
+      { name: 'coach.added', properties: { teamId: ID, via: 'invite' } },
+    ] as const;
+    for (const event of forged) {
+      expect(accepts(TRACKED_EVENTS[event.name].properties, event.properties), event.name).toBe(
+        true,
+      );
+      expect(accepts(TrackEventRequest, { ...event, subjectId: ID }), event.name).toBe(false);
+    }
+  });
+
+  it('leaves who and when to the server', () => {
+    const view = { name: 'card.viewed', properties: { cardId: ID }, subjectId: ID };
+    for (const forged of [{ userId: ID }, { occurredAt: NOW }]) {
+      const parsed = TrackEventRequest.safeParse({ ...view, ...forged });
+      // Refused, or parsed without the field: either way the client can't set it.
+      const kept = parsed.success && Object.keys(forged).some((key) => key in parsed.data);
+      expect(kept, Object.keys(forged)[0]).toBe(false);
+    }
   });
 });

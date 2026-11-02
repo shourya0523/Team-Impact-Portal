@@ -11,6 +11,8 @@ const EnvSchema = z
     MOCK_API: z.stringbool().default(false),
     DATABASE_URL: z.url().optional(),
     SESSION_SECRET: z.string().min(32).optional(),
+    /** How long product events are kept in events_log before the daily prune deletes them. */
+    EVENTS_LOG_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
     CORS_ORIGINS: z
       .string()
       // The portal (Vite) and the athlete app on web (Expo).

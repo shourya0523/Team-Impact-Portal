@@ -25,7 +25,8 @@ export const SELF_SIGNUP_TYPES = [
   'athlete',
   'parent',
   'teen',
-  'alumni',
+  'alumni_athlete',
+  'alumni_mentor',
   'recruiter',
 ] as const satisfies readonly AccountType[];
 

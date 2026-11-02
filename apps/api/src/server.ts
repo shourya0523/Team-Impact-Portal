@@ -1,14 +1,18 @@
 import { buildApp } from './app';
 import { createDb } from './db/client';
 import { loadEnv } from './env';
+import { scheduleEventsLogRetention } from './events-log';
 import { createSmtpMailer } from './identity/mailer';
 
 const env = loadEnv();
-// The real API runs on the database; the mock API on fixtures (and keeps its dev sign-in).
-const database = env.MOCK_API ? null : createDb(env.DATABASE_URL!);
+// env.ts requires DATABASE_URL unless MOCK_API is on. The real API runs on the database with real
+// sign-in; the mock API runs on fixtures and keeps its dev sign-in. One pool serves both.
+const database = env.MOCK_API || !env.DATABASE_URL ? null : createDb(env.DATABASE_URL);
+const db = database?.db;
 const app = await buildApp({
   sessionSecret: env.SESSION_SECRET,
   corsOrigins: env.CORS_ORIGINS,
+  db,
   logger: true,
   trustProxy: env.TRUST_PROXY,
   mock: env.MOCK_API,
@@ -30,6 +34,7 @@ const app = await buildApp({
 });
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');
+if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
 
 // App Platform sends SIGTERM before replacing an instance: finish requests, then close the pool.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

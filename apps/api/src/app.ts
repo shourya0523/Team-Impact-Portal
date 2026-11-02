@@ -1,18 +1,32 @@
 import cookie from '@fastify/cookie';
 import cors from '@fastify/cors';
-import Fastify from 'fastify';
-import { type FeatureFlags as Flags, FeatureFlags, HealthResponse } from '@team-impact/contracts';
+import Fastify, { type FastifyRequest } from 'fastify';
+import {
+  type FeatureFlags as Flags,
+  FeatureFlags,
+  HealthResponse,
+  TrackEventRequest,
+} from '@team-impact/contracts';
+import type { Db } from './db/client';
+import { isActiveUser, track } from './events-log';
 import { type AuthConfig, createAuth } from './identity/auth';
 import { createLogMailer } from './identity/mailer';
 import { registerAuthRoutes } from './identity/routes';
 import { type Authenticate, sessionAuth } from './identity/session';
 import { registerMockRoutes } from './mock/routes';
 import { MockWorld } from './mock/world';
-import { useZodContracts } from './zod';
+import { httpError, useZodContracts } from './zod';
 
 export interface AppOptions {
   sessionSecret: string;
   corsOrigins: string[];
+  /** Absent when `mock` is on, and in tests that don't need a database. */
+  db?: Db;
+  /**
+   * The signed-in user's id, or null. Defaults to the Better Auth session when `identity` is set,
+   * and to nobody otherwise, so database routes that need a user answer 401.
+   */
+  currentUserId?: (request: FastifyRequest) => Promise<string | null>;
   logger?: boolean;
   /** Proxy hops to trust for the caller's IP (TRUST_PROXY). 0 when the API is reached directly. */
   trustProxy?: number;
@@ -40,6 +54,8 @@ const DEFAULT_FLAGS: Flags = { identitySearch: true, medicalCommunities: true };
 export const buildApp = async ({
   sessionSecret,
   corsOrigins,
+  db,
+  currentUserId,
   logger = false,
   trustProxy = 0,
   flags = DEFAULT_FLAGS,
@@ -69,8 +85,7 @@ export const buildApp = async ({
 
   app.get('/config/flags', { schema: { response: { 200: FeatureFlags } } }, async () => flags);
 
-  if (mock) registerMockRoutes(app, new MockWorld(flags));
-
+  let authenticate: Authenticate | undefined;
   if (identity) {
     const auth = createAuth({
       ...identity,
@@ -79,7 +94,7 @@ export const buildApp = async ({
       onMailError: (error, message) =>
         app.log.error({ err: error, subject: message.subject }, 'Auth email failed'),
     });
-    const authenticate = sessionAuth(auth, identity.db);
+    authenticate = sessionAuth(auth, identity.db);
     app.decorate('authenticate', authenticate);
     registerAuthRoutes(app, auth, {
       authenticate,
@@ -90,6 +105,25 @@ export const buildApp = async ({
         identity.links.athleteAppUrl,
         ...corsOrigins,
       ],
+    });
+  }
+
+  const userIdOf =
+    currentUserId ??
+    (authenticate
+      ? async (request: FastifyRequest) => (await authenticate(request))?.id ?? null
+      : async () => null);
+
+  if (mock) {
+    registerMockRoutes(app, new MockWorld(flags));
+  } else if (db) {
+    /** Client-side events. Everything else is tracked by the route that does the action. */
+    app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {
+      const userId = await userIdOf(request);
+      if (!userId) throw httpError(401, 'Sign in first.');
+      if (!(await isActiveUser(db, request.body.subjectId))) throw httpError(404, 'No such user.');
+      await track(db, userId, request.body);
+      return reply.status(204).send();
     });
   }
 
