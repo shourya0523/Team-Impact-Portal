@@ -1,6 +1,6 @@
 # Resume reader (TI-113)
 
-Turns an uploaded resume (PDF or photo) into Baseball Card fields for the athlete to check. Nothing
+Turns an uploaded resume (PDF or photo) into Impact Card fields for the athlete to check. Nothing
 it reads reaches the card, or anyone, until the athlete accepts it on the review screen (PRD §4).
 
 ```

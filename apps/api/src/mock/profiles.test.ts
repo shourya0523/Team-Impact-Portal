@@ -361,7 +361,7 @@ describe('cards: editor, publish, history, export', () => {
     const jordan = await w.as('athlete');
     const res = await jordan.post('/cards/me/export');
     expect(res.status).toBe(200);
-    expect(res.body.fileName).toBe('jordan-lee-baseball-card-2026.png');
+    expect(res.body.fileName).toBe('jordan-lee-impact-card-2026.png');
     expect(res.text).not.toContain('@');
     expect((await (await w.as('teen')).post('/cards/me/export')).status).toBe(403);
     expect((await (await w.as('athlete', true)).post('/cards/me/export')).status).toBe(400);

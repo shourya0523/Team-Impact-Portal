@@ -28,7 +28,7 @@ export const spring = {
 } as const;
 
 export const tilt = {
-  /** Baseball Card maximum tilt, degrees. Disabled under reduced motion. */
+  /** Impact Card maximum tilt, degrees. Disabled under reduced motion. */
   maxDegrees: 9,
 } as const;
 

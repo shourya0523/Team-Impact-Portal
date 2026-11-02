@@ -14,7 +14,7 @@ import type {
 } from '@team-impact/contracts';
 import { post, put, request } from './client';
 
-/** Profiles, privacy settings and the athlete's own Baseball Card. */
+/** Profiles, privacy settings and the athlete's own Impact Card. */
 export const profiles = {
   /** A person's or a child's profile, shaped for the viewer; 404 if they may not see it. */
   profile: (id: string) => request<Profile>(`/profiles/${id}`),

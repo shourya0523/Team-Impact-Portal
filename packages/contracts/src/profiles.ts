@@ -14,12 +14,12 @@ import {
   SharedContact,
   UpdateContactDetailsRequest,
 } from './contacts';
-import { hasBaseballCard, type Role } from './roles';
+import { hasImpactCard, type Role } from './roles';
 import { TeamSummary } from './teams';
 import { UserSummary } from './users';
 
 /**
- * Profiles, privacy settings and the athlete's own Baseball Card workflow (PRD §2, §4, §6).
+ * Profiles, privacy settings and the athlete's own Impact Card workflow (PRD §2, §4, §6).
  *
  * A profile's shape depends on who it belongs to, and the API picks what the viewer may see:
  * - `person`: athletes, coaches, parents, alumni, staff, recruiters (plain profile, plus the card
@@ -98,7 +98,7 @@ export type UpdateChildRequest = z.infer<typeof UpdateChildRequest>;
 // Privacy and contact settings -------------------------------------------------------------------
 
 /** Only athletes (current or alumni) can be open to recruiting; never teens or children. */
-export const canBeOpenToRecruiting = (role: Role): boolean => hasBaseballCard(role);
+export const canBeOpenToRecruiting = (role: Role): boolean => hasImpactCard(role);
 
 export const RecruitingSetting = z.object({
   on: z.boolean(),

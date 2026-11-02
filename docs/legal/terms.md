@@ -53,7 +53,7 @@ What you see depends on your role and your team. In short:
 
 | Member    | Can                                                                                                                                                                                                            |
 | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Athlete   | Build a Baseball Card (your profile), post, comment, create events, choose which contact details families and recruiters see, turn open-to-recruiting on or off, join and create communities.                  |
+| Athlete   | Build an Impact Card (your profile), post, comment, create events, choose which contact details families and recruiters see, turn open-to-recruiting on or off, join and create communities.                   |
 | Parent    | See your team's roster and the contact details athletes chose to share with families, run your child's profile, comment, RSVP, join and create communities. Parents can't post or create events.               |
 | Teen      | See section 3.                                                                                                                                                                                                 |
 | Coach     | Approve and remove team members, add coaches, manage team QR codes, post and create events.                                                                                                                    |
@@ -65,7 +65,7 @@ There is no in-app messaging. People reach each other through contact details th
 
 ## 6. Your content
 
-- You own what you post: posts, comments, events, photos, your Baseball Card and your profile.
+- You own what you post: posts, comments, events, photos, your Impact Card and your profile.
 - You give Team IMPACT a licence to host, store, copy and show your content to the people you share it with in the app and portal, and to moderate it. The licence ends when your content is deleted, except for copies we must keep by law or that sit in backups until they expire (see the Privacy Policy).
 - **Every post, comment and event is checked by automated moderation before anyone else can see it.** Some content is held for a person at Team IMPACT to review. We may refuse, hide or remove content that breaks the Acceptable Use Policy.
 - Don't post anything you don't have the right to share, including photos of other people who haven't agreed.
@@ -84,7 +84,7 @@ If you can see someone's contact details, use them only for the reason they were
 - **Identity search** (filtering by an official Team IMPACT community) shows only athletes who chose to be searchable that way. Every such search is logged with your name, company and the time. It may be turned off at any time. Never use it, or anything else in Team IMPACT, to discriminate against anyone.
 - Team IMPACT can suspend you or your whole company at any time.
 
-## 9. Baseball Cards and resumes
+## 9. Impact Cards and resumes
 
 You can fill your card by uploading a resume. We read the fields from it automatically, but nothing read from your resume is shown to anyone until you check and confirm it. You are responsible for what your card says. See the Privacy Policy for how resumes are handled.
 
