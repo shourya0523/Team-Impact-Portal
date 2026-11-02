@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -8,30 +9,46 @@ import {
   type KeyboardEvent,
   type PointerEvent,
 } from 'react';
+import { easing } from '@team-impact/ui-tokens';
 import { degreesPerPixel, edgeAmount, isBackAt, settleAngle } from '../athlete-card/flip';
 import { describeCard, prepareCard, useFlipState, type PreparedCard } from '../athlete-card/model';
 import { useCardPalette, type CardPalette } from '../athlete-card/palette';
 import { backArt, frontArt } from '../athlete-card/patterns';
 import {
   CARD_WIDTH,
+  NAME_LINE_HEIGHT,
   cardColors as c,
   cardHeightFor,
   cardLayout as l,
   cardMotion,
   cardShadow,
+  cardShine,
   cardText,
+  displayFont,
+  holoStops,
   webFontFamily,
+  withAlpha,
   type CardTextStyle,
   type CardTextVariant,
 } from '../athlete-card/spec';
+import {
+  FLAT_POSE,
+  cssLinearEasing,
+  dealStart,
+  springCurve,
+  tiltFromPoint,
+  type TiltPose,
+} from '../athlete-card/tilt';
 import type { AthleteCardData } from '../athlete-card/types';
 import teamImpactLogo from '../../assets/team-impact-logo.png';
 import { CardArt, PhotoBleed } from './CardArt';
 import { samplePhoto } from './samplePhoto';
 
+export type CardSide = 'front' | 'back';
+
 export interface AthleteCardProps {
   athlete: AthleteCardData;
-  /** Card width in px; height follows the 5:7 aspect ratio. */
+  /** Card width in px; height follows CARD_HEIGHT / CARD_WIDTH. */
   width?: number;
   /** Controlled flip state. Omit to let the card manage it. */
   flipped?: boolean;
@@ -39,11 +56,32 @@ export interface AthleteCardProps {
   onFlippedChange?: (flipped: boolean) => void;
   /** Skip photo sampling, e.g. when the palette was computed once and stored with the profile. */
   palette?: CardPalette;
+  /** Tilt (up to `tilt.maxDegrees`) and holo shine under the pointer. Default on; off under Reduce Motion. */
+  tilt?: boolean;
+  /** Deal the card in on mount (card-reveal motion; a fade under Reduce Motion). Default on. */
+  dealIn?: boolean;
   className?: string;
   style?: CSSProperties;
 }
 
-const flipEasing = `cubic-bezier(${cardMotion.easing.join(', ')})`;
+export interface AthleteCardFaceProps {
+  athlete: AthleteCardData;
+  side?: CardSide;
+  width?: number;
+  palette?: CardPalette;
+  className?: string;
+  style?: CSSProperties;
+}
+
+const bezier = (b: readonly number[]) => `cubic-bezier(${b.join(', ')})`;
+const flipEasing = bezier(cardMotion.easing);
+const dealEasing = bezier(cardMotion.dealEasing);
+const SPRING = springCurve(cardMotion.spring);
+/** CSS `linear()` reproduces the spring token; older browsers get the spring-ish bezier instead. */
+const springEasing =
+  typeof CSS !== 'undefined' && CSS.supports?.('transition-timing-function', 'linear(0, 1)')
+    ? cssLinearEasing(SPRING)
+    : bezier(easing.spring);
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 /** Horizontal travel before a press becomes a swipe rather than a click. */
 const DRAG_SLOP = 8;
@@ -55,6 +93,18 @@ const subscribeReducedMotion = (onChange: () => void) => {
 };
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' && Boolean(window.matchMedia?.(REDUCED_MOTION).matches);
+const useReducedMotion = () =>
+  useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => false);
+
+const tiltTransform = (pose: TiltPose) =>
+  `perspective(${cardMotion.perspective}px) rotateX(${pose.rotateX}deg) rotateY(${pose.rotateY}deg)`;
+const percent = (fraction: number) => `${(fraction * 100).toFixed(2)}%`;
+/** CSS custom properties the shine layers read; written straight to the DOM while tilting. */
+const shineVars = {
+  x: '--ti-card-shine-x',
+  y: '--ti-card-shine-y',
+  opacity: '--ti-card-shine-o',
+} as const;
 
 interface Drag {
   pointerId: number;
@@ -67,10 +117,21 @@ interface Drag {
   active: boolean;
 }
 
+/** Shared by the interactive card and the flat face: display data, colours, art and styles. */
+const useCardModel = (athlete: AthleteCardData, width: number, paletteOverride?: CardPalette) => {
+  const card = useMemo(() => prepareCard(athlete), [athlete]);
+  const palette = useCardPalette(card.photoUri, paletteOverride, samplePhoto);
+  const front = useMemo(() => frontArt(card.seed, palette), [card.seed, palette]);
+  const back = useMemo(() => backArt(card.seed, palette), [card.seed, palette]);
+  const s = useMemo(() => createStyles(width / CARD_WIDTH), [width]);
+  return { card, palette, front, back, s };
+};
+
 /**
  * Web twin of the native AthleteCard: same art, spec, palette and flip geometry. Drag sideways to
- * turn it (mouse or touch), or click / Enter / Space to flip. While dragging, the rotation is
- * written straight to the DOM so React doesn't re-render every frame.
+ * turn it (mouse or touch), or click / Enter / Space to flip. It deals in on mount, and tilts with
+ * a holo shine under the pointer, springing back to flat when the pointer leaves. While dragging
+ * or tilting, transforms are written straight to the DOM so React doesn't re-render every frame.
  */
 export const AthleteCard = ({
   athlete,
@@ -79,20 +140,15 @@ export const AthleteCard = ({
   defaultFlipped,
   onFlippedChange,
   palette: paletteOverride,
+  tilt = true,
+  dealIn = true,
   className,
   style,
 }: AthleteCardProps) => {
-  const card = useMemo(() => prepareCard(athlete), [athlete]);
-  const palette = useCardPalette(card.photoUri, paletteOverride, samplePhoto);
-  const front = useMemo(() => frontArt(card.seed, palette), [card.seed, palette]);
-  const back = useMemo(() => backArt(card.seed, palette), [card.seed, palette]);
-  const s = useMemo(() => createStyles(width / CARD_WIDTH), [width]);
+  const { card, palette, front, back, s } = useCardModel(athlete, width, paletteOverride);
   const [isFlipped, setFlipped] = useFlipState(flipped, defaultFlipped, onFlippedChange);
-  const reduceMotion = useSyncExternalStore(
-    subscribeReducedMotion,
-    prefersReducedMotion,
-    () => false,
-  );
+  const reduceMotion = useReducedMotion();
+  const tiltOn = tilt && !reduceMotion;
   const transition = reduceMotion ? 'none' : `transform ${cardMotion.flipDuration}ms ${flipEasing}`;
 
   // Resting rotation. Clicks, buttons and controlled props turn it half a revolution forward;
@@ -100,11 +156,33 @@ export const AthleteCard = ({
   const [restAngle, setRestAngle] = useState(isFlipped ? 180 : 0);
   if (isBackAt(restAngle) !== isFlipped) setRestAngle(restAngle + 180);
 
+  const dealRef = useRef<HTMLDivElement>(null);
+  const tiltRef = useRef<HTMLDivElement>(null);
   const flipperRef = useRef<HTMLDivElement>(null);
   const liftRef = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const suppressClick = useRef(false);
   const settledBySwipe = useRef(false);
+
+  // Card reveal, once, before the first paint so the card never flashes in place first.
+  const dealt = useRef(false);
+  useLayoutEffect(() => {
+    if (dealt.current) return;
+    dealt.current = true;
+    if (!dealIn) return;
+    const from = dealStart(cardMotion.deal, reduceMotion);
+    const k = width / CARD_WIDTH;
+    dealRef.current?.animate?.(
+      [
+        {
+          opacity: from.opacity,
+          transform: `translateY(${from.translateY * k}px) rotate(${from.rotate}deg) scale(${from.scale})`,
+        },
+        { opacity: 1, transform: 'none' },
+      ],
+      { duration: cardMotion.dealDuration, easing: dealEasing, fill: 'backwards' },
+    );
+  }, [dealIn, reduceMotion, width]);
 
   // The mid-flip lift has no CSS-transition equivalent for click flips, so it runs on the Web
   // Animations API. Swipes already lifted the card while dragging.
@@ -127,6 +205,45 @@ export const AthleteCard = ({
     );
   }, [restAngle, reduceMotion]);
 
+  /** Follow the pointer (`settle` false) or spring back to flat and fade the shine (`settle`). */
+  const setPose = (pose: TiltPose, settle: boolean) => {
+    const el = tiltRef.current;
+    if (!el) return;
+    el.style.transition = settle
+      ? `transform ${SPRING.durationMs}ms ${springEasing}`
+      : `transform ${cardMotion.followDuration}ms linear`;
+    el.style.transform = tiltTransform(pose);
+    if (!settle) {
+      el.style.setProperty(shineVars.x, percent(pose.shineX));
+      el.style.setProperty(shineVars.y, percent(pose.shineY));
+    }
+    el.style.setProperty(shineVars.opacity, settle ? '0' : String(cardShine.opacity));
+  };
+  const follow = (event: PointerEvent<HTMLDivElement>) => {
+    const r = event.currentTarget.getBoundingClientRect();
+    const pose = tiltFromPoint(
+      event.clientX - r.left,
+      event.clientY - r.top,
+      r.width,
+      r.height,
+      cardMotion.tiltMax,
+    );
+    setPose(pose, false);
+  };
+  const release = () => {
+    if (tiltOn) setPose(FLAT_POSE, true);
+  };
+
+  // Reduce Motion switched on mid-tilt: drop straight back to flat, with no shine.
+  useEffect(() => {
+    if (tiltOn) return;
+    const el = tiltRef.current;
+    if (!el) return;
+    el.style.transition = 'none';
+    el.style.transform = tiltTransform(FLAT_POSE);
+    el.style.setProperty(shineVars.opacity, '0');
+  }, [tiltOn]);
+
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     suppressClick.current = false;
@@ -139,17 +256,28 @@ export const AthleteCard = ({
       angle: restAngle,
       active: false,
     };
+    if (tiltOn) follow(event);
   };
 
   const onPointerMove = (event: PointerEvent<HTMLDivElement>) => {
     const d = drag.current;
+    if (!d || d.pointerId !== event.pointerId) {
+      // Hovering with a mouse or pen: tilt toward it.
+      if (!d && tiltOn) follow(event);
+      return;
+    }
     const flipper = flipperRef.current;
     const lift = liftRef.current;
-    if (!d || d.pointerId !== event.pointerId || !flipper || !lift) return;
+    if (!flipper || !lift) return;
     const dx = event.clientX - d.startX;
     if (!d.active) {
-      if (Math.abs(dx) < DRAG_SLOP) return;
+      if (Math.abs(dx) < DRAG_SLOP) {
+        if (tiltOn) follow(event);
+        return;
+      }
+      // A swipe: the card turns instead, so let go of the tilt first.
       d.active = true;
+      release();
       event.currentTarget.setPointerCapture?.(event.pointerId);
       flipper.style.transition = 'none';
       lift.style.transition = 'none';
@@ -167,6 +295,8 @@ export const AthleteCard = ({
     const d = drag.current;
     if (!d || d.pointerId !== event.pointerId) return;
     drag.current = null;
+    // A mouse keeps hovering after a click, so it keeps the tilt; touch and pen let go.
+    if (event.pointerType !== 'mouse' || event.type === 'pointercancel') release();
     const flipper = flipperRef.current;
     const lift = liftRef.current;
     if (!d.active || !flipper || !lift) return;
@@ -183,6 +313,10 @@ export const AthleteCard = ({
     }
   };
 
+  const onPointerLeave = () => {
+    if (!drag.current?.active) release();
+  };
+
   const onClick = () => {
     if (suppressClick.current) {
       suppressClick.current = false;
@@ -197,6 +331,7 @@ export const AthleteCard = ({
     setFlipped(!isFlipped);
   };
 
+  const radius = l.radius * (width / CARD_WIDTH);
   return (
     <div
       role="button"
@@ -210,47 +345,138 @@ export const AthleteCard = ({
       onPointerMove={onPointerMove}
       onPointerUp={onPointerEnd}
       onPointerCancel={onPointerEnd}
+      onPointerLeave={onPointerLeave}
       className={className}
       style={{
         width,
         height: cardHeightFor(width),
-        perspective: cardMotion.perspective,
         cursor: 'grab',
         touchAction: 'pan-y',
-        borderRadius: l.radius * (width / CARD_WIDTH),
+        borderRadius: radius,
         fontFamily: webFontFamily,
         WebkitTapHighlightColor: 'transparent',
         userSelect: 'none',
         ...style,
       }}
     >
-      <div ref={liftRef} style={{ width: '100%', height: '100%' }}>
+      <div ref={dealRef} style={s.fill}>
         <div
-          ref={flipperRef}
+          ref={tiltRef}
           style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
+            ...s.fill,
             transformStyle: 'preserve-3d',
-            transform: `rotateY(${restAngle}deg)`,
-            transition,
+            transform: tiltTransform(FLAT_POSE),
+            ...({
+              [shineVars.x]: '50%',
+              [shineVars.y]: '50%',
+              [shineVars.opacity]: '0',
+            } as CSSProperties),
           }}
         >
-          <div style={s.face} aria-hidden={isFlipped} data-face="front">
-            <CardArt art={front} />
-            <FrontFace card={card} palette={palette} s={s} />
-          </div>
-          <div
-            style={{ ...s.face, transform: 'rotateY(180deg)' }}
-            aria-hidden={!isFlipped}
-            data-face="back"
-          >
-            <CardArt art={back} />
-            <BackFace card={card} palette={palette} s={s} />
+          <div ref={liftRef} style={{ ...s.fill, transformStyle: 'preserve-3d' }}>
+            <div
+              ref={flipperRef}
+              style={{
+                ...s.fill,
+                position: 'relative',
+                transformStyle: 'preserve-3d',
+                transform: `rotateY(${restAngle}deg)`,
+                transition,
+              }}
+            >
+              <div style={s.face} aria-hidden={isFlipped} data-face="front">
+                <CardArt art={front} />
+                <FrontFace card={card} palette={palette} s={s} />
+                {tiltOn && <Shine side="front" radius={radius} />}
+              </div>
+              <div
+                style={{ ...s.face, transform: 'rotateY(180deg)' }}
+                aria-hidden={!isFlipped}
+                data-face="back"
+              >
+                <CardArt art={back} />
+                <BackFace card={card} palette={palette} s={s} hint="Swipe or tap to flip ↻" />
+                {tiltOn && <Shine side="back" radius={radius} />}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
+  );
+};
+
+/**
+ * One side of the card, flat and still: no flip, tilt, shine, deal-in or shadow. For image
+ * export and print, so motion effects never bake into the picture.
+ */
+export const AthleteCardFace = ({
+  athlete,
+  side = 'front',
+  width = CARD_WIDTH,
+  palette: paletteOverride,
+  className,
+  style,
+}: AthleteCardFaceProps) => {
+  const { card, palette, front, back, s } = useCardModel(athlete, width, paletteOverride);
+  const isBack = side === 'back';
+  return (
+    <div
+      role="img"
+      aria-label={describeCard(card, isBack)}
+      data-face={side}
+      className={className}
+      style={{
+        ...s.flatFace,
+        width,
+        height: cardHeightFor(width),
+        fontFamily: webFontFamily,
+        ...style,
+      }}
+    >
+      <CardArt art={isBack ? back : front} />
+      {isBack ? (
+        <BackFace card={card} palette={palette} s={s} hint={card.seasonLine} />
+      ) : (
+        <FrontFace card={card} palette={palette} s={s} />
+      )}
+    </div>
+  );
+};
+
+/**
+ * Holo shine: a white hotspot plus an iridescent band, both centred on the pointer. The back face
+ * is mirrored (it's turned 180°), so its hotspot uses the mirrored x.
+ */
+const Shine = ({ side, radius }: { side: CardSide; radius: number }) => {
+  const x = side === 'front' ? `var(${shineVars.x}, 50%)` : `calc(100% - var(${shineVars.x}, 50%))`;
+  const y = `var(${shineVars.y}, 50%)`;
+  const span = `${cardShine.holoSpan * 100}%`;
+  const highlight = withAlpha(cardShine.highlight.color, cardShine.highlight.opacity);
+  const holo = holoStops()
+    .map((stop) => `${withAlpha(stop.color, stop.opacity)} ${(stop.offset * 100).toFixed(1)}%`)
+    .join(', ');
+  return (
+    <div
+      aria-hidden
+      data-shine={side}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        borderRadius: radius,
+        pointerEvents: 'none',
+        mixBlendMode: 'overlay',
+        opacity: `var(${shineVars.opacity}, 0)`,
+        transition: `opacity ${cardMotion.shineFade}ms linear`,
+        backgroundImage: [
+          `radial-gradient(circle at ${x} ${y}, ${highlight} 0%, transparent ${cardShine.highlightRadius * 100}%)`,
+          `linear-gradient(${cardShine.holoAngle}deg, transparent ${cardShine.holoStart * 100}%, ${holo}, transparent ${cardShine.holoEnd * 100}%)`,
+        ].join(', '),
+        backgroundSize: `100% 100%, ${span} ${span}`,
+        backgroundPosition: `0 0, ${x} ${y}`,
+        backgroundRepeat: 'no-repeat',
+      }}
+    />
   );
 };
 
@@ -261,147 +487,184 @@ interface FaceProps {
   s: Styles;
 }
 
-const FrontFace = ({ card, palette, s }: FaceProps) => (
-  <>
-    <PhotoBleed uri={card.photoUri} palette={palette} />
-    <div style={s.photoWindow}>
-      {!card.photoUri && (
-        <div style={s.placeholder}>
-          <span style={s.initials}>{card.initials}</span>
-        </div>
-      )}
-      <div style={s.photoTop}>
+/** Team colour stripe across the top edge (decorative). */
+const Stripe = ({ card, s }: { card: PreparedCard; s: Styles }) => (
+  <div aria-hidden style={{ ...s.stripe, backgroundColor: card.teamColor }} />
+);
+
+/**
+ * Rookie-card front from the Signing Day mockups: team stripe, jersey number over the photo,
+ * name, position and team, then class, major and division.
+ */
+const FrontFace = ({ card, palette, s }: FaceProps) => {
+  const k = s.k;
+  const fit = card.nameFit;
+  return (
+    <>
+      <PhotoBleed uri={card.photoUri} palette={palette} />
+      <div style={s.photoWindow}>
+        {!card.photoUri && (
+          <div style={s.placeholder}>
+            <span style={s.initials}>{card.initials}</span>
+          </div>
+        )}
+        {card.jerseyDigits && (
+          <div aria-hidden style={s.jersey}>
+            {card.jerseyDigits}
+          </div>
+        )}
         <img src={teamImpactLogo} alt="Team Impact" draggable={false} style={s.logo} />
-        {card.jerseyNumber && (
-          <div style={s.jerseyBadge}>
-            <span style={s.badgeNumber}>{card.jerseyNumber}</span>
+      </div>
+
+      <div style={s.lower}>
+        <div style={s.rookieTop}>
+          <div
+            style={{
+              ...s.rookieName,
+              fontSize: fit.fontSize * k,
+              lineHeight: `${fit.fontSize * NAME_LINE_HEIGHT * k}px`,
+            }}
+          >
+            {fit.lines.map((line, i) => (
+              <div key={i} style={s.ellipsis}>
+                {line}
+              </div>
+            ))}
+          </div>
+          {card.rookieLine && (
+            <div style={{ ...s.rookieLine, ...s.ellipsis }}>{card.rookieLine}</div>
+          )}
+        </div>
+
+        {card.rookieStats.length > 0 && (
+          <div style={s.rookieRow}>
+            {card.rookieStats.map((stat) => (
+              <div key={stat.label} style={s.rookieCell}>
+                <div style={{ ...s.statLabel, color: c.yellow, ...s.ellipsis }}>{stat.label}</div>
+                <div style={{ ...s.rookieValue, ...s.onDark, ...s.ellipsis }}>{stat.value}</div>
+              </div>
+            ))}
           </div>
         )}
       </div>
-      <div style={s.nameplate}>
-        <div style={{ ...s.firstName, ...s.onDark, ...s.ellipsis }}>{card.firstName}</div>
-        <div style={{ ...s.lastName, ...s.onDark, ...s.ellipsis }}>{card.lastName}</div>
-      </div>
-    </div>
+      <Stripe card={card} s={s} />
+    </>
+  );
+};
 
-    {card.positionBadge && (
-      <div style={{ ...s.positionBadge, borderColor: palette.deep }}>
-        <span style={s.badgeText}>{card.positionBadge}</span>
-      </div>
-    )}
-
-    <div style={s.lower}>
-      <div style={{ ...s.eyebrow, ...s.teamLine, ...s.ellipsis }}>{card.teamLine}</div>
-
-      {card.stats.length > 0 && (
-        <div style={s.stats}>
-          {card.stats.map((stat, i) => (
-            <div key={stat.label} style={{ ...s.stat, ...(i > 0 ? s.statDivider : null) }}>
-              <div style={{ ...s.statValue, ...s.onDark, ...s.ellipsis }}>{stat.value}</div>
-              <div style={{ ...s.statLabel, ...s.onDarkMuted, ...s.ellipsis }}>{stat.label}</div>
+/** Back: who they are, experience rows, skills, about, facts and (when shared) contact. */
+const BackFace = ({ card, palette, s, hint }: FaceProps & { hint: string | null }) => {
+  const chips = [...card.skills, ...card.interests];
+  return (
+    <>
+      <div style={s.content}>
+        <div style={s.backHeader}>
+          {card.photoUri ? (
+            <img
+              src={card.photoUri}
+              alt=""
+              draggable={false}
+              style={{ ...s.avatar, objectFit: 'cover' }}
+            />
+          ) : (
+            <div style={{ ...s.avatar, ...s.avatarPlaceholder, backgroundColor: palette.glow }}>
+              <span style={{ ...s.badgeNumber, ...s.onDark }}>{card.initials}</span>
             </div>
-          ))}
-        </div>
-      )}
-
-      <div style={s.section}>
-        <div style={{ ...s.eyebrow, color: c.yellow }}>Experience</div>
-        {card.experience.map((entry, i) => (
-          <div key={`${i}-${entry.role}`} style={s.entry}>
-            <div style={s.entryBar} />
-            <div style={{ ...s.entryTitle, ...s.onDark, ...s.flex, ...s.ellipsis }}>
-              {entry.role}
-              {entry.organization && (
-                <span style={{ ...s.entryMeta, ...s.onDarkMuted }}> · {entry.organization}</span>
-              )}
-            </div>
-            <div style={{ ...s.entryMeta, ...s.onDarkFaint, whiteSpace: 'nowrap' }}>
-              {entry.period}
-            </div>
+          )}
+          <div style={s.flex}>
+            <div style={{ ...s.eyebrow, color: c.yellow }}>Off the field</div>
+            <div style={{ ...s.name, ...s.onDark, ...s.ellipsis }}>{card.fullName}</div>
+            {card.personalLine.length > 0 && (
+              <div style={{ ...s.subtle, ...s.onDarkMuted, ...s.ellipsis }}>
+                {card.personalLine}
+              </div>
+            )}
           </div>
-        ))}
-      </div>
-
-      <div style={s.skills}>
-        {card.skills.map((skill) => (
-          <span key={skill} style={{ ...s.chip, ...s.chipOnDark }}>
-            {skill}
-          </span>
-        ))}
-      </div>
-    </div>
-  </>
-);
-
-const BackFace = ({ card, palette, s }: FaceProps) => (
-  <div style={s.content}>
-    <div style={s.backHeader}>
-      {card.photoUri ? (
-        <img
-          src={card.photoUri}
-          alt=""
-          draggable={false}
-          style={{ ...s.avatar, objectFit: 'cover' }}
-        />
-      ) : (
-        <div style={{ ...s.avatar, ...s.avatarPlaceholder, backgroundColor: palette.glow }}>
-          <span style={{ ...s.badgeNumber, ...s.onDark }}>{card.initials}</span>
         </div>
-      )}
-      <div style={s.flex}>
-        <div style={{ ...s.eyebrow, color: c.yellow }}>Off the field</div>
-        <div style={{ ...s.name, ...s.onDark, ...s.ellipsis }}>{card.fullName}</div>
-        {card.personalLine.length > 0 && (
-          <div style={{ ...s.subtle, ...s.onDarkMuted, ...s.ellipsis }}>{card.personalLine}</div>
+
+        {card.experience.length > 0 && (
+          <div style={s.section}>
+            <div style={{ ...s.eyebrow, color: palette.band }}>Experience</div>
+            {card.experience.map((entry, i) => (
+              <div key={`${i}-${entry.role}`} style={s.entry}>
+                <div style={{ ...s.entryBar, backgroundColor: palette.band }} />
+                <div style={{ ...s.entryTitle, color: c.ink, ...s.flex, ...s.ellipsis }}>
+                  {entry.role}
+                  {entry.organization && (
+                    <span style={{ ...s.entryMeta, color: c.inkMuted }}>
+                      {' '}
+                      · {entry.organization}
+                    </span>
+                  )}
+                </div>
+                {entry.period && (
+                  <div style={{ ...s.entryMeta, color: c.inkMuted, whiteSpace: 'nowrap' }}>
+                    {entry.period}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
-      </div>
-    </div>
 
-    {card.bio && (
-      <div style={s.section}>
-        <div style={{ ...s.eyebrow, color: palette.band }}>About</div>
-        <div style={{ ...s.body, color: c.ink, ...clamp(3) }}>{card.bio}</div>
-      </div>
-    )}
-
-    {card.facts.length > 0 && (
-      <div style={s.facts}>
-        {card.facts.map((fact) => (
-          <div key={fact.label} style={s.fact}>
-            <div style={{ ...s.statLabel, color: c.inkMuted, ...s.ellipsis }}>{fact.label}</div>
-            <div style={{ ...s.factValue, color: c.ink, ...s.ellipsis }}>{fact.value}</div>
+        {chips.length > 0 && (
+          <div style={s.chipRow}>
+            {chips.map((chip, i) => (
+              <span
+                key={`${i}-${chip}`}
+                style={{
+                  ...s.chip,
+                  ...s.chipOnLight,
+                  color: palette.band,
+                  borderColor: palette.band,
+                }}
+              >
+                {chip}
+              </span>
+            ))}
           </div>
-        ))}
-      </div>
-    )}
+        )}
 
-    <div style={s.chips}>
-      {card.interests.map((interest) => (
-        <span
-          key={interest}
-          style={{ ...s.chip, ...s.chipOnLight, color: palette.band, borderColor: palette.band }}
-        >
-          {interest}
-        </span>
-      ))}
-    </div>
-
-    {card.contact.length > 0 && (
-      <div style={{ ...s.contact, backgroundColor: palette.band }}>
-        {card.contact.map((line) => (
-          <div key={line.label} style={s.contactLine}>
-            <span style={{ ...s.statLabel, ...s.contactLabel, color: c.yellow }}>{line.label}</span>
-            <span style={{ ...s.entryMeta, ...s.onDark, ...s.flex, ...s.ellipsis }}>
-              {line.value}
-            </span>
+        {card.bio && (
+          <div style={s.section}>
+            <div style={{ ...s.eyebrow, color: palette.band }}>About</div>
+            <div style={{ ...s.body, color: c.ink, ...clamp(2) }}>{card.bio}</div>
           </div>
-        ))}
-      </div>
-    )}
+        )}
 
-    <div style={{ ...s.footer, color: c.inkMuted }}>Swipe or tap to flip ↻</div>
-  </div>
-);
+        {card.facts.length > 0 && (
+          <div style={s.facts}>
+            {card.facts.map((fact) => (
+              <div key={fact.label} style={s.fact}>
+                <div style={{ ...s.statLabel, color: c.inkMuted, ...s.ellipsis }}>{fact.label}</div>
+                <div style={{ ...s.factValue, color: c.ink, ...s.ellipsis }}>{fact.value}</div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {card.contact.length > 0 && (
+          <div style={{ ...s.contact, backgroundColor: palette.band }}>
+            {card.contact.map((line) => (
+              <div key={line.label} style={s.contactLine}>
+                <span style={{ ...s.statLabel, ...s.contactLabel, color: c.yellow }}>
+                  {line.label}
+                </span>
+                <span style={{ ...s.entryMeta, ...s.onDark, ...s.flex, ...s.ellipsis }}>
+                  {line.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={s.spacer} />
+        {hint && <div style={{ ...s.footer, color: c.inkMuted }}>{hint}</div>}
+      </div>
+      <Stripe card={card} s={s} />
+    </>
+  );
+};
 
 const clamp = (lines: number): CSSProperties => ({
   display: '-webkit-box',
@@ -419,8 +682,11 @@ const text = (variant: CardTextVariant, scale: number): CSSProperties => {
     fontWeight: Number(spec.fontWeight),
     letterSpacing: (spec.letterSpacing ?? 0) * scale,
     textTransform: spec.uppercase ? 'uppercase' : 'none',
+    ...(spec.display ? { fontFamily: displayFont.web } : null),
   };
 };
+
+const textShadow = `0 2px 8px ${withAlpha(c.ink, 0.45)}`;
 
 // Mirrors createStyles in ../native/AthleteCard.tsx; keep the two in step.
 const createStyles = (k: number) => {
@@ -428,7 +694,8 @@ const createStyles = (k: number) => {
   const row: CSSProperties = { display: 'flex', flexDirection: 'row' };
   const center: CSSProperties = { ...row, alignItems: 'center', justifyContent: 'center' };
   const photoBottom = (l.photoInset + l.photoHeight) * k;
-  return {
+  const styles = {
+    fill: { width: '100%', height: '100%' },
     face: {
       ...column,
       position: 'absolute',
@@ -439,6 +706,12 @@ const createStyles = (k: number) => {
       WebkitBackfaceVisibility: 'hidden',
       boxShadow: cardShadow,
     },
+    flatFace: {
+      ...column,
+      position: 'relative',
+      borderRadius: l.radius * k,
+      overflow: 'hidden',
+    },
     content: {
       ...column,
       position: 'relative',
@@ -446,14 +719,21 @@ const createStyles = (k: number) => {
       boxSizing: 'border-box',
       padding: l.padding * k,
       gap: l.gap * k,
-      justifyContent: 'space-between',
     },
+    spacer: { flex: 1, marginTop: -l.gap * k },
     flex: { flex: 1, minWidth: 0 },
     ellipsis: { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
     onDark: { color: c.white },
-    onDarkMuted: { color: 'rgba(255,255,255,0.75)' },
-    onDarkFaint: { color: 'rgba(255,255,255,0.55)' },
+    onDarkMuted: { color: withAlpha(c.white, 0.75) },
     eyebrow: text('eyebrow', k),
+    stripe: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      top: 0,
+      height: l.stripe * k,
+      pointerEvents: 'none',
+    },
 
     photoWindow: {
       position: 'absolute',
@@ -463,53 +743,25 @@ const createStyles = (k: number) => {
       height: l.photoHeight * k,
     },
     placeholder: { ...center, position: 'absolute', inset: 0 },
-    initials: { ...text('initials', k), color: 'rgba(255,255,255,0.92)' },
-    photoTop: {
-      ...row,
+    initials: { ...text('initials', k), color: withAlpha(c.white, 0.92) },
+    jersey: {
+      ...text('jersey', k),
       position: 'absolute',
-      left: 10 * k,
-      right: 10 * k,
-      top: 10 * k,
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
+      left: l.jerseyInsetX * k,
+      top: l.jerseyInsetY * k,
+      color: c.white,
+      textShadow,
     },
     logo: {
+      position: 'absolute',
+      right: 10 * k,
+      top: 10 * k,
       display: 'block',
       height: l.logoHeight * k,
       width: l.logoHeight * l.logoAspect * k,
-      filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))',
-    },
-    jerseyBadge: {
-      ...center,
-      width: l.jerseyBadge * k,
-      height: l.jerseyBadge * k,
-      borderRadius: '50%',
-      backgroundColor: c.yellow,
+      filter: `drop-shadow(0 2px 4px ${withAlpha(c.ink, 0.35)})`,
     },
     badgeNumber: { ...text('badgeNumber', k), color: c.navyDeep },
-    nameplate: {
-      ...column,
-      position: 'absolute',
-      left: 14 * k,
-      right: (l.positionBadge + 22) * k,
-      bottom: 12 * k,
-    },
-    firstName: text('firstName', k),
-    lastName: text('lastName', k),
-    positionBadge: {
-      ...center,
-      position: 'absolute',
-      right: (l.photoInset + 14) * k,
-      top: photoBottom - (l.positionBadge / 2) * k,
-      width: l.positionBadge * k,
-      height: l.positionBadge * k,
-      boxSizing: 'border-box',
-      borderRadius: '50%',
-      borderWidth: l.photoBorder * k,
-      borderStyle: 'solid',
-      backgroundColor: c.yellow,
-    },
-    badgeText: { ...text('badge', k), color: c.navyDeep },
 
     lower: {
       ...column,
@@ -517,44 +769,38 @@ const createStyles = (k: number) => {
       left: l.lowerPaddingX * k,
       right: l.lowerPaddingX * k,
       top: photoBottom + l.lowerPaddingY * k,
-      bottom: (l.lowerPaddingY + 2) * k,
+      bottom: (l.lowerPaddingY + 4) * k,
       justifyContent: 'space-between',
     },
-    teamLine: { color: c.yellow, paddingRight: (l.positionBadge + 4) * k },
-    subtle: text('subtle', k),
-    stats: {
+    rookieTop: { ...column, gap: l.rookieGap * k, minWidth: 0 },
+    rookieName: { ...text('rookieName', k), color: c.white, textShadow },
+    rookieLine: { ...text('rookieLine', k), color: c.white },
+    rookieRow: {
       ...row,
-      backgroundColor: 'rgba(255,255,255,0.08)',
-      border: '1px solid rgba(255,255,255,0.14)',
-      borderRadius: l.tileRadius * k,
-      padding: `${7 * k}px 0`,
+      gap: 10 * k,
+      paddingTop: l.rookieRowPadding * k,
+      borderTop: `1px solid ${withAlpha(c.white, 0.18)}`,
     },
-    stat: { ...column, flex: 1, minWidth: 0, alignItems: 'center' },
-    statDivider: { borderLeft: '1px solid rgba(255,255,255,0.14)' },
-    statValue: text('statValue', k),
+    rookieCell: { ...column, flexGrow: 1, flexShrink: 1, minWidth: 0, gap: 2 * k },
+    rookieValue: text('rookieValue', k),
+    subtle: text('subtle', k),
     statLabel: text('statLabel', k),
 
     section: { ...column, gap: 4 * k },
     entry: { ...row, gap: 8 * k, alignItems: 'center', minWidth: 0 },
-    entryBar: {
-      width: 3 * k,
-      height: 12 * k,
-      flexShrink: 0,
-      borderRadius: 2 * k,
-      backgroundColor: c.yellow,
-    },
+    entryBar: { width: 3 * k, height: 12 * k, flexShrink: 0, borderRadius: 2 * k },
     entryTitle: text('entryTitle', k),
     entryMeta: text('entryMeta', k),
 
     // One row of whole chips: extras wrap onto a clipped second row rather than squashing.
-    skills: {
+    chipRow: {
       ...row,
       flexWrap: 'wrap',
       gap: 6 * k,
+      flexShrink: 0,
       height: (cardText.chip.lineHeight + l.chipPaddingY * 2) * k + 2,
       overflow: 'hidden',
     },
-    chips: { ...row, flexWrap: 'wrap', gap: 6 * k },
     chip: {
       ...text('chip', k),
       padding: `${l.chipPaddingY * k}px ${l.chipPaddingX * k}px`,
@@ -563,8 +809,7 @@ const createStyles = (k: number) => {
       borderStyle: 'solid',
       whiteSpace: 'nowrap',
     },
-    chipOnDark: { color: c.white, borderColor: 'rgba(255,255,255,0.32)' },
-    chipOnLight: { backgroundColor: 'rgba(255,255,255,0.6)' },
+    chipOnLight: { backgroundColor: withAlpha(c.white, 0.6) },
     footer: { ...text('footer', k), textAlign: 'center' },
 
     backHeader: {
@@ -586,14 +831,13 @@ const createStyles = (k: number) => {
     avatarPlaceholder: center,
     name: text('name', k),
     body: text('body', k),
-    facts: { ...row, flexWrap: 'wrap', gap: 6 * k },
+    facts: { ...row, gap: 6 * k, flexShrink: 0 },
     fact: {
       ...column,
       boxSizing: 'border-box',
-      width: '48.5%',
-      flexGrow: 1,
+      flex: 1,
       minWidth: 0,
-      backgroundColor: 'rgba(255,255,255,0.72)',
+      backgroundColor: withAlpha(c.white, 0.72),
       borderRadius: l.tileRadius * k,
       padding: `${7 * k}px ${10 * k}px`,
       gap: 2 * k,
@@ -601,6 +845,7 @@ const createStyles = (k: number) => {
     factValue: text('factValue', k),
     contact: {
       ...column,
+      flexShrink: 0,
       borderRadius: l.tileRadius * k,
       padding: `${8 * k}px ${12 * k}px`,
       gap: 3 * k,
@@ -608,4 +853,5 @@ const createStyles = (k: number) => {
     contactLine: { ...row, alignItems: 'center', gap: 10 * k, minWidth: 0 },
     contactLabel: { width: l.contactLabel * k, flexShrink: 0 },
   } satisfies Record<string, CSSProperties>;
+  return { ...styles, k };
 };

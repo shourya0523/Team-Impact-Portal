@@ -5,6 +5,20 @@ type Contact = { email?: string | null; phone?: string | null; linkedinUrl?: str
 import type { AthleteCardData } from '@team-impact/ui-primitives/native';
 
 /**
+ * The rookie front's fields (TI-114): team name, stripe colour and division, plus class, major
+ * and season. Part of every card the app draws, so the in-app card matches the export.
+ */
+export const rookieFields = (face: CardFace) =>
+  ({
+    teamName: face.team?.name,
+    teamColor: face.team?.color,
+    classYear: face.classYear,
+    major: face.major,
+    division: face.team?.division,
+    season: face.season,
+  }) satisfies Partial<AthleteCardData>;
+
+/**
  * A card face from the API as the shared card primitive's input. Contact details go on the back
  * only when the caller passes them (never for teen viewers or exports). Experience entries go
  * straight onto the card's rows.
@@ -37,6 +51,7 @@ export const toCardData = (face: CardFace, contact?: Contact): AthleteCardData =
       social: contact.linkedinUrl ?? undefined,
     },
   },
+  ...rookieFields(face),
 });
 
 /** Labels for card fields, in the order the editor and the review list them. */

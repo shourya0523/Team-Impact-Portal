@@ -1,8 +1,10 @@
 # Athlete card
 
-A flippable, baseball-card-style athlete card. The **front** is the athlete's resume, laid over
-their photo. The **back** is their personal info. Swipe sideways or tap to turn it. The card's
-colours are taken from the uploaded photo.
+A flippable, baseball-card-style athlete card. The **front** is the rookie card from the Signing
+Day mockups (TI-114): team colour stripe, jersey number over the photo, name, position and team,
+then class, major and division. The **back** has the experience rows, skills and personal info.
+Swipe sideways or tap to turn it. It deals in on mount and tilts with a holo shine under the
+pointer or finger. The card's colours are taken from the uploaded photo.
 
 The same card renders in the Expo app (`apps/athlete`) and in the Vite portal (`apps/portal`). Both
 renderers share one data model, one visual spec and one set of generated artwork, so the two look
@@ -22,8 +24,18 @@ import { AthleteCard, sampleAthlete } from '@team-impact/ui-primitives/web';
   flipped={flipped} // optional: controlled
   onFlippedChange={setFlipped} // optional
   palette={storedPalette} // optional: skip photo colour sampling
+  tilt // optional, default true: tilt + holo shine (always off under Reduce Motion)
+  dealIn // optional, default true: card-reveal on mount (a fade under Reduce Motion)
 />;
+
+// One flat, motion-free face (no flip, tilt, shine, deal-in or shadow), for PNG export.
+// Native: pass `ref` and capture it with react-native-view-shot's `captureRef`.
+<AthleteCardFace athlete={athlete} side="back" width={320} ref={faceRef} />;
 ```
+
+Rookie-front fields on `AthleteCardData` are optional: `teamName`, `teamColor` (stripe; invalid or
+missing means brand navy via `resolveTeamColor`), `classYear`, `major`, `division`, `season`.
+Without class/major/division the front falls back to the first `resume.stats`.
 
 Leave out `flipped` (optionally passing `defaultFlipped`) and the card tracks its own flip state.
 The demos are `apps/athlete/src/demos/CardDemoScreen.tsx` (route: `/dev/card-demo`) and
@@ -47,11 +59,14 @@ packages/ui-primitives/
 ├── src/athlete-card/              Shared: no React Native, no DOM
 │   ├── types.ts                   AthleteCardData: the card's input
 │   ├── model.ts                   prepareCard(), list limits, useFlipState, sampleAthlete
+│   ├── fit.ts                     fitName(): long names shrink, wrap at a space/hyphen, then "…"
+│   ├── tilt.ts                    Tilt pose from a point, spring curve for CSS, deal-in start pose
 │   ├── spec.ts                    THE DESIGN FILE: sizes, colours, text, motion, photo bleed
 │   ├── patterns.ts                Generated SVG artwork for both faces
 │   ├── palette.ts                 Photo → colour palette, cache, useCardPalette
 │   ├── png.ts                     Tiny PNG decoder (app-side colour sampling only)
-│   └── flip.ts                    Flip-angle maths (runs on Reanimated's UI thread)
+│   ├── flip.ts                    Flip-angle maths (runs on Reanimated's UI thread)
+│   └── *.test.ts                  vitest: art, PNG decoder, palette, fit, tilt, rookie model, AA
 ├── src/native/                    Expo / React Native renderer
 │   ├── AthleteCard.tsx            Reanimated + Gesture Handler card
 │   ├── CardArt.tsx                CardArt, PhotoBleed, Gradient (react-native-svg)
@@ -77,9 +92,11 @@ athlete id + palette ──frontArt()/backArt()──► SVG layers
                                        │
              native/ or web/ AthleteCard renders, back to front:
    FRONT  CardArt (gradient, glow, patterns) → PhotoBleed (masked photo, scrim, frame line)
-          → logo, jersey badge, name, position badge, resume text
+          → jersey number, logo, name, position · team · school, class / major / division
+          → team stripe → shine (interactive card only)
    BACK   CardArt (tint, dots, flow lines, shadow, wavy band, chrome rim, light work)
-          → avatar, name, about, facts, interests, contact
+          → avatar, name, experience, skills + interests, about, facts, contact, footer
+          → team stripe → shine (interactive card only)
 ```
 
 Each face sits in its own animated layer, and the two are rotated 180° from each other.
@@ -89,7 +106,11 @@ Each face sits in its own animated layer, and the two are rotated 180° from eac
 `prepareCard()` turns `AthleteCardData` into display-ready data:
 
 - **List limits:** lists are capped by `CARD_LIMITS` (3 stats, 3 experience entries, 5 skills,
-  4 facts, 5 interests), because the card has a fixed size and can't grow.
+  2 facts, 5 interests), because the card has a fixed size and can't grow. Blank entries are
+  dropped rather than drawn as empty rows.
+- **Rookie front:** `nameFit` (from `fitName`: one line at up to 34, else two balanced lines, else
+  down to 18, else "…"), `jerseyDigits` ("07" stays "07"), `rookieLine`, `rookieStats`,
+  `teamColor`, `seasonLine`. Anything missing is left out instead of printed blank.
 - **Text built for display:** initials, `#8`-style jersey number, the sport · school line, the
   hometown · pronouns line, and contact lines.
 - **Position badge:** shows `positionShort` (e.g. `MF`) if given, otherwise the first letters of
@@ -225,6 +246,25 @@ cross-origin photos without CORS on the portal, and fully transparent images.
 - **Clicks, Enter and Space** flip the card. A click right after a drag is ignored.
 - **Mid-flip lift on clicks:** done with the Web Animations API.
 
+### Tilt, shine and deal-in (`tilt.ts`, both `AthleteCard.tsx`)
+
+Our own implementation (no third-party tilt or holo code).
+
+- **Tilt:** `tiltFromPoint()` maps the pointer/finger to `rotateX`/`rotateY`, clamped to
+  `tilt.maxDegrees` (9°). Web: pointer events (hover, or press before a swipe starts) write the
+  transform to the DOM. App: the pan gesture's `onTouchesDown/Move` (they fire before it activates)
+  drive shared values. A swipe that starts turning the card lets go of the tilt.
+- **Spring back:** on release, `spring` token. App: `withSpring`. Web: `springCurve()` samples the
+  same spring into a CSS `linear()` easing (fallback: the `easing.spring` bezier).
+- **Shine:** a white hotspot plus an iridescent band (`cardShine`) following the point, faded in
+  while touched. Web: CSS gradients on each face reading CSS variables. App: static SVG gradients
+  moved with transforms. The back mirrors x because it's turned 180°.
+- **Deal-in:** `duration.cardReveal` with `easing.cardDeal` from `dealStart()` (from below, turned,
+  small). Web: Web Animations API before first paint. App: a shared value.
+- **Reduce Motion:** no tilt and no shine are rendered; the deal-in is a fade; flips are instant.
+- **PNG export** uses `AthleteCardFace` (native capture) or a canvas drawing (web), never the
+  interactive card, so the shine can't bake into the image.
+
 ## Changing the design
 
 | You want to change                     | Edit                                                                                          |
@@ -234,6 +274,8 @@ cross-origin photos without CORS on the portal, and fully transparent images.
 | Fonts and text sizes                   | `cardText` in `spec.ts`                                                                       |
 | Fixed brand colours                    | `cardColors` in `spec.ts` (from ui-tokens `colors.card.art`)                                  |
 | Flip speed, depth, lift                | `cardMotion` in `spec.ts`; spring feel: `flipSpring` in `native/AthleteCard.tsx`              |
+| Tilt, deal-in, shine                   | `cardMotion` (from ui-tokens `motion`) and `cardShine` in `spec.ts`                           |
+| Name size and wrapping                 | `nameMaxSize` / `nameMinSize` / `nameCharWidth` in `cardLayout`                               |
 | How the photo fades                    | `photoBleed` in `spec.ts`                                                                     |
 | Pattern shapes and placement           | `geometryFor()` in `patterns.ts`                                                              |
 | Pattern colours, opacity, which layers | `frontArt()` / `backArt()` layers in `patterns.ts`                                            |
@@ -268,7 +310,7 @@ peer dependencies, so the portal never installs or bundles them.
 
 ```bash
 pnpm --filter @team-impact/ui-primitives typecheck   # web/shared project, then src/native
-pnpm --filter @team-impact/ui-primitives test        # art, PNG decoder, palette
+pnpm --filter @team-impact/ui-primitives test        # art, PNG decoder, palette, fit, tilt, AA
 pnpm --filter @team-impact/portal test               # card flips via click and button
 ```
 
