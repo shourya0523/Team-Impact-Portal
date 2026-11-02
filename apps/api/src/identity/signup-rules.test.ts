@@ -45,6 +45,19 @@ describe('sign-up rules: age gate', () => {
     expect(check({ ...teen, birthDate: '2013-10-24' })).toMatchObject({ field: 'birthDate' });
   });
 
+  it('waits for the 13th birthday to begin in every time zone, not just in UTC', () => {
+    const teen = { accountType: 'teen', parentAgreed: true, birthDate: '2013-10-23' };
+    // 05:00 UTC on the 23rd is still 22:00 on the 22nd in Los Angeles: not 13 there yet.
+    expect(checkSelfSignup({ ...adult, ...teen }, new Date('2026-10-23T05:00:00Z'))).toMatchObject({
+      field: 'birthDate',
+    });
+    // 11:59 UTC is 23:59 on the 22nd at UTC−12; from noon UTC the birthday has begun everywhere.
+    expect(checkSelfSignup({ ...adult, ...teen }, new Date('2026-10-23T11:59:00Z'))).toMatchObject({
+      field: 'birthDate',
+    });
+    expect(checkSelfSignup({ ...adult, ...teen }, new Date('2026-10-23T12:00:00Z'))).toBeNull();
+  });
+
   it('makes 13 to 17 year olds teens, who must confirm a parent agreed', () => {
     const fifteen = bornYearsAgo(15);
     expect(check({ birthDate: fifteen, accountType: 'athlete' })).toMatchObject({

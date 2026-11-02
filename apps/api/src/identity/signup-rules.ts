@@ -50,6 +50,9 @@ export interface SignupRefusal {
   message: string;
 }
 
+/** UTC−12, the furthest-behind time zone. */
+const LATEST_UTC_OFFSET_MS = 12 * 60 * 60 * 1000;
+
 const refuse = (field: SignupRefusal['field'], message: string): SignupRefusal => ({
   field,
   message,
@@ -72,7 +75,10 @@ export const checkSelfSignup = (
   const dob = CalendarDate.safeParse(input.birthDate);
   if (!dob.success) return refuse('birthDate', 'Enter your birth date.');
 
-  const age = ageOn(dob.data, today);
+  // A birthday starts at local midnight, and the last place to reach it is UTC−12. Counting age
+  // there means nobody passes the 13+ gate (or the 18 line) before their birthday has begun
+  // everywhere, so a 12-year-old in, say, Los Angeles can't sign up on the UTC date of their birthday.
+  const age = ageOn(dob.data, new Date(today.getTime() - LATEST_UTC_OFFSET_MS));
   const band = ageBand(age);
   if (band === 'child') {
     return refuse(
