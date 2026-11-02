@@ -46,6 +46,63 @@ export const tiltFromPoint = (
   };
 };
 
+/** How the phone is held, in degrees: pitch tips the top toward or away, roll turns it sideways. */
+export interface Attitude {
+  pitch: number;
+  roll: number;
+}
+
+/** A gyro tilt pose, plus how far it is from flat (0..1), which sets the shine's strength. */
+export interface GyroPose extends TiltPose {
+  strength: number;
+}
+
+/** Difference between two angles in degrees, the short way round (-180..180). */
+const angleDelta = (to: number, from: number) => {
+  'worklet';
+  return ((((to - from) % 360) + 540) % 360) - 180;
+};
+
+const clampUnit = (v: number) => {
+  'worklet';
+  return Math.min(1, Math.max(-1, v));
+};
+
+/**
+ * Moves `rest`, the angle the phone has been held at lately, a fraction `rate` of the way toward
+ * `now`. Whatever angle the athlete settles at becomes flat after a few seconds, so the card only
+ * reacts to movement, not to how the phone happens to be held.
+ */
+export const followRest = (rest: Attitude, now: Attitude, rate: number): Attitude => {
+  'worklet';
+  return {
+    pitch: rest.pitch + angleDelta(now.pitch, rest.pitch) * rate,
+    roll: rest.roll + angleDelta(now.roll, rest.roll) * rate,
+  };
+};
+
+/**
+ * Tilt from the phone's own movement (gyro): tipping it `rangeDegrees` away from `rest` reaches
+ * `maxDegrees`, never more. The shine slides the opposite way, like light catching foil.
+ */
+export const tiltFromAttitude = (
+  now: Attitude,
+  rest: Attitude,
+  rangeDegrees: number,
+  maxDegrees: number,
+): GyroPose => {
+  'worklet';
+  const nx = rangeDegrees > 0 ? clampUnit(angleDelta(now.roll, rest.roll) / rangeDegrees) : 0;
+  const ny = rangeDegrees > 0 ? clampUnit(angleDelta(now.pitch, rest.pitch) / rangeDegrees) : 0;
+  return {
+    rotateX: -ny * maxDegrees + 0,
+    rotateY: nx * maxDegrees + 0,
+    shineX: 0.5 - nx / 2,
+    shineY: 0.5 + ny / 2,
+    strength: Math.max(Math.abs(nx), Math.abs(ny)),
+  };
+};
+
 /** Linear interpolation, `t` = 0 gives `from`, 1 gives `to`. */
 export const mix = (from: number, to: number, t: number) => {
   'worklet';

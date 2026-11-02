@@ -35,8 +35,11 @@ import {
   FLAT_POSE,
   cssLinearEasing,
   dealStart,
+  followRest,
   springCurve,
+  tiltFromAttitude,
   tiltFromPoint,
+  type Attitude,
   type TiltPose,
 } from '../athlete-card/tilt';
 import type { AthleteCardData } from '../athlete-card/types';
@@ -58,6 +61,11 @@ export interface AthleteCardProps {
   palette?: CardPalette;
   /** Tilt (up to `tilt.maxDegrees`) and holo shine under the pointer. Default on; off under Reduce Motion. */
   tilt?: boolean;
+  /**
+   * On phones and tablets, tilt with the device's movement (`deviceorientation`; iOS asks
+   * permission on the first tap). Default on; off under Reduce Motion or with `tilt` off.
+   */
+  gyro?: boolean;
   /** Deal the card in on mount (card-reveal motion; a fade under Reduce Motion). Default on. */
   dealIn?: boolean;
   className?: string;
@@ -141,6 +149,7 @@ export const AthleteCard = ({
   onFlippedChange,
   palette: paletteOverride,
   tilt = true,
+  gyro = true,
   dealIn = true,
   className,
   style,
@@ -206,7 +215,7 @@ export const AthleteCard = ({
   }, [restAngle, reduceMotion]);
 
   /** Follow the pointer (`settle` false) or spring back to flat and fade the shine (`settle`). */
-  const setPose = (pose: TiltPose, settle: boolean) => {
+  const setPose = (pose: TiltPose, settle: boolean, shine: number = cardShine.opacity) => {
     const el = tiltRef.current;
     if (!el) return;
     el.style.transition = settle
@@ -217,7 +226,7 @@ export const AthleteCard = ({
       el.style.setProperty(shineVars.x, percent(pose.shineX));
       el.style.setProperty(shineVars.y, percent(pose.shineY));
     }
-    el.style.setProperty(shineVars.opacity, settle ? '0' : String(cardShine.opacity));
+    el.style.setProperty(shineVars.opacity, settle ? '0' : String(shine));
   };
   const follow = (event: PointerEvent<HTMLDivElement>) => {
     const r = event.currentTarget.getBoundingClientRect();
@@ -234,6 +243,47 @@ export const AthleteCard = ({
     if (tiltOn) setPose(FLAT_POSE, true);
   };
 
+  // Gyro tilt on touch devices, while no finger is on the card. The resting angle follows how the
+  // device is held, so only movement tilts the card.
+  useEffect(() => {
+    if (
+      !tiltOn ||
+      !gyro ||
+      typeof window === 'undefined' ||
+      !('DeviceOrientationEvent' in window)
+    ) {
+      return;
+    }
+    if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+    let rest: Attitude | null = null;
+    let frame = 0;
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      if (event.beta === null || event.gamma === null || drag.current) return;
+      const now = { pitch: event.beta, roll: event.gamma };
+      const base = followRest(rest ?? now, now, cardMotion.gyroRecenter);
+      rest = base;
+      const pose = tiltFromAttitude(now, base, cardMotion.gyroRange, cardMotion.tiltMax);
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => setPose(pose, false, pose.strength * cardShine.opacity));
+    };
+    window.addEventListener('deviceorientation', onOrientation);
+    return () => {
+      window.removeEventListener('deviceorientation', onOrientation);
+      cancelAnimationFrame(frame);
+    };
+    // setPose only touches refs.
+  }, [tiltOn, gyro]);
+
+  /** iOS Safari only sends orientation after the user allows it, and only asks from a tap. */
+  const askedGyro = useRef(false);
+  const askForGyro = () => {
+    if (askedGyro.current || !tiltOn || !gyro || typeof window === 'undefined') return;
+    askedGyro.current = true;
+    const orientation = window.DeviceOrientationEvent as unknown as
+      { requestPermission?: () => Promise<string> } | undefined;
+    orientation?.requestPermission?.().catch(() => undefined);
+  };
+
   // Reduce Motion switched on mid-tilt: drop straight back to flat, with no shine.
   useEffect(() => {
     if (tiltOn) return;
@@ -246,6 +296,7 @@ export const AthleteCard = ({
 
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     if (event.pointerType === 'mouse' && event.button !== 0) return;
+    if (event.pointerType === 'touch') askForGyro();
     suppressClick.current = false;
     drag.current = {
       pointerId: event.pointerId,

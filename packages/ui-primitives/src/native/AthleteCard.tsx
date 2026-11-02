@@ -13,11 +13,16 @@ import { Gesture, GestureDetector, type GestureTouchEvent } from 'react-native-g
 import Animated, {
   cancelAnimation,
   Easing,
+  SensorType,
+  useAnimatedReaction,
+  useAnimatedSensor,
   useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
+  type DerivedValue,
   type SharedValue,
 } from 'react-native-reanimated';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
@@ -49,7 +54,14 @@ import {
   type CardTextStyle,
   type CardTextVariant,
 } from '../athlete-card/spec';
-import { dealStart, mix, tiltFromPoint } from '../athlete-card/tilt';
+import {
+  dealStart,
+  followRest,
+  mix,
+  tiltFromAttitude,
+  tiltFromPoint,
+  type Attitude,
+} from '../athlete-card/tilt';
 import type { AthleteCardData } from '../athlete-card/types';
 import teamImpactLogo from '../../assets/team-impact-logo.png';
 import { CardArt, PhotoBleed } from './CardArt';
@@ -69,6 +81,11 @@ export interface AthleteCardProps {
   palette?: CardPalette;
   /** Tilt (up to `tilt.maxDegrees`) and holo shine under the finger. Default on; off under Reduce Motion. */
   tilt?: boolean;
+  /**
+   * Tilt with the phone's own movement (rotation sensor). Default on; off under Reduce Motion or
+   * with `tilt` off. A finger on the card adds to it.
+   */
+  gyro?: boolean;
   /** Deal the card in on mount (card-reveal motion; a fade under Reduce Motion). Default on. */
   dealIn?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -102,7 +119,7 @@ const useCardModel = (athlete: AthleteCardData, width: number, paletteOverride?:
 };
 
 /**
- * Baseball-style athlete card: the rookie front (photo, number, name, team, class/major/division)
+ * The Impact Card, a trading-card-style athlete card: the rookie front (photo, number, name, team, class/major/division)
  * and experience plus personal info on the back. Swipe sideways to turn it (it follows the finger
  * and settles on release), or tap to flip. It deals in on mount and, while touched, tilts toward
  * the finger with a holo shine, springing back to flat on release. Gesture and animation run on
@@ -116,6 +133,7 @@ export const AthleteCard = ({
   onFlippedChange,
   palette: paletteOverride,
   tilt = true,
+  gyro = true,
   dealIn = true,
   style,
 }: AthleteCardProps) => {
@@ -136,6 +154,13 @@ export const AthleteCard = ({
   const shineY = useSharedValue(0.5);
   const shineOpacity = useSharedValue(0);
   const turning = useSharedValue(false);
+  const gyroPose: GyroValues = {
+    x: useSharedValue(0),
+    y: useSharedValue(0),
+    shineX: useSharedValue(0.5),
+    shineY: useSharedValue(0.5),
+    strength: useSharedValue(0),
+  };
 
   // Card reveal on mount; under Reduce Motion `dealFrom` only fades.
   const dealFrom = useMemo(() => dealStart(cardMotion.deal, reduceMotion), [reduceMotion]);
@@ -150,7 +175,10 @@ export const AthleteCard = ({
     tiltX.set(0);
     tiltY.set(0);
     shineOpacity.set(0);
-  }, [tiltOn, tiltX, tiltY, shineOpacity]);
+    gyroPose.x.set(0);
+    gyroPose.y.set(0);
+    gyroPose.strength.set(0);
+  }, [tiltOn, tiltX, tiltY, shineOpacity, gyroPose.x, gyroPose.y, gyroPose.strength]);
 
   // Taps, buttons and controlled props land here; swipes have already moved restAngle.
   useEffect(() => {
@@ -254,8 +282,9 @@ export const AthleteCard = ({
         { perspective: cardMotion.perspective },
         { translateY: mix(dealFrom.translateY, 0, d) * (width / CARD_WIDTH) },
         { rotateZ: `${mix(dealFrom.rotate, 0, d)}deg` },
-        { rotateX: `${tiltX.get()}deg` },
-        { rotateY: `${tiltY.get()}deg` },
+        // Finger and phone movement add up, never past the maximum tilt.
+        { rotateX: `${clampTilt(tiltX.get() + gyroPose.x.get())}deg` },
+        { rotateY: `${clampTilt(tiltY.get() + gyroPose.y.get())}deg` },
         { scale: lift * pressed.get() * mix(dealFrom.scale, 1, d) },
       ],
     };
@@ -274,7 +303,15 @@ export const AthleteCard = ({
     if (event.nativeEvent.actionName === 'activate') setFlipped(!isFlipped);
   };
 
-  const shine = { x: shineX, y: shineY, opacity: shineOpacity, width, height };
+  // The shine follows the finger while one is down, otherwise the phone's movement.
+  const shineOut = {
+    x: useDerivedValue(() => (shineOpacity.get() > 0 ? shineX.get() : gyroPose.shineX.get())),
+    y: useDerivedValue(() => (shineOpacity.get() > 0 ? shineY.get() : gyroPose.shineY.get())),
+    opacity: useDerivedValue(() =>
+      Math.max(shineOpacity.get(), gyroPose.strength.get() * cardShine.opacity),
+    ),
+  };
+  const shine = { ...shineOut, width, height };
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
@@ -286,6 +323,7 @@ export const AthleteCard = ({
         onAccessibilityAction={onAccessibilityAction}
         style={[style, { width, height }, cardStyle]}
       >
+        {tiltOn && gyro && <GyroTilt pose={gyroPose} />}
         <Animated.View style={[styles.face, frontStyle]} pointerEvents="none">
           <View style={styles.clip}>
             <CardArt art={front} />
@@ -303,6 +341,50 @@ export const AthleteCard = ({
       </Animated.View>
     </GestureDetector>
   );
+};
+
+interface GyroValues {
+  x: SharedValue<number>;
+  y: SharedValue<number>;
+  shineX: SharedValue<number>;
+  shineY: SharedValue<number>;
+  strength: SharedValue<number>;
+}
+
+const DEGREES_PER_RADIAN = 180 / Math.PI;
+
+const clampTilt = (degrees: number) => {
+  'worklet';
+  return Math.min(cardMotion.tiltMax, Math.max(-cardMotion.tiltMax, degrees));
+};
+
+/**
+ * Reads the phone's rotation sensor and writes a gyro tilt pose, on the UI thread. Mounted only
+ * while tilt is on, so the sensor is off under Reduce Motion. The resting angle follows how the
+ * phone is held, so only movement tilts the card. Where there is no sensor (web without one),
+ * readings stay at zero and the card stays flat.
+ */
+const GyroTilt = ({ pose }: { pose: GyroValues }) => {
+  const rotation = useAnimatedSensor(SensorType.ROTATION, { interval: 'auto' });
+  const rest = useSharedValue<Attitude | null>(null);
+  useAnimatedReaction(
+    () => rotation.sensor.get(),
+    (reading) => {
+      const now = {
+        pitch: reading.pitch * DEGREES_PER_RADIAN,
+        roll: reading.roll * DEGREES_PER_RADIAN,
+      };
+      const base = followRest(rest.get() ?? now, now, cardMotion.gyroRecenter);
+      rest.set(base);
+      const next = tiltFromAttitude(now, base, cardMotion.gyroRange, cardMotion.tiltMax);
+      pose.x.set(next.rotateX);
+      pose.y.set(next.rotateY);
+      pose.shineX.set(next.shineX);
+      pose.shineY.set(next.shineY);
+      pose.strength.set(next.strength);
+    },
+  );
+  return null;
 };
 
 /**
@@ -341,9 +423,9 @@ export const AthleteCardFace = ({
 
 interface ShineProps {
   side: CardSide;
-  x: SharedValue<number>;
-  y: SharedValue<number>;
-  opacity: SharedValue<number>;
+  x: DerivedValue<number>;
+  y: DerivedValue<number>;
+  opacity: DerivedValue<number>;
   width: number;
   height: number;
 }
@@ -357,7 +439,8 @@ const HOLO_STOPS = [
 ];
 
 /**
- * Holo shine: a white hotspot plus an iridescent band, both following the finger. Static SVG
+ * Holo shine: a white hotspot plus an iridescent band, both following the finger or the phone's
+ * movement. Static SVG
  * gradients moved with transforms, so it stays on the UI thread. The back face is turned 180°,
  * so it mirrors x.
  */
