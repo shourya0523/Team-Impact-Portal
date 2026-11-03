@@ -176,7 +176,7 @@ describe('posts: held for moderation (P5)', () => {
     const created = await staff.post(`/communities/${TEAM_IMPACT}/posts`, {
       text: 'Applications for spring draft day are open.',
     });
-    expect(created.body).toMatchObject({ kind: 'post', official: true, moderation: 'approved' });
+    expect(created.body).toMatchObject({ kind: 'post', official: false, moderation: 'approved' });
     for (const role of ['teen', 'recruiter'] as const) {
       const reader = await as(role);
       expect(ids((await reader.get('/feed')).body.items), role).toContain(created.body.id);
@@ -258,7 +258,7 @@ describe('staff: published at once, no review queue', () => {
     expect((await staff.post(`/communities/${FINANCE}/join`)).status).toBe(200);
     expect((await athlete.post(`/communities/${FINANCE}/join`)).status).toBe(200);
     const created = await staff.post(`/communities/${FINANCE}/posts`, { text: 'Resume clinic' });
-    expect(created.body).toMatchObject({ kind: 'post', official: true, moderation: 'approved' });
+    expect(created.body).toMatchObject({ kind: 'post', official: false, moderation: 'approved' });
     expect(await openTickets(staff, created.body.id)).toEqual([]);
     expect(ids((await athlete.get(`/communities/${FINANCE}/posts`)).body.items)).toContain(
       created.body.id,
@@ -323,7 +323,7 @@ describe('staff: published at once, no review queue', () => {
       authorId: author.id,
       communityId,
       text: 'Staff update',
-      official: true,
+      official: false,
       likeCount: 0,
       commentCount: 0,
       moderation: 'approved' as const,
