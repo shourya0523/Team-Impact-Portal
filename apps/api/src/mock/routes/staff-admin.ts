@@ -462,14 +462,18 @@ export const registerStaffAdminRoutes = (
     },
   );
 
-  /** Approved, in a community staff can still see (not removed, not medical while switched off). */
+  /**
+   * Approved, in a community `u` reads (`community.read`): a member, not removed, not medical while
+   * switched off. Being staff isn't enough, or private and medical content (and who's in a medical
+   * community) would reach staff who aren't members.
+   */
   const listable = (item: { communityId: string; moderation: string }, u: MockUser) => {
     const c = world.communities.find((x) => x.id === item.communityId);
-    return !!c && item.moderation === 'approved' && world.canSeeCommunity(c, u) ? c : undefined;
+    return !!c && item.moderation === 'approved' && world.readsCommunity(c, u) ? c : undefined;
   };
 
-  // Every staff member's plain posts and events, newest first, so staff see what the team has
-  // put out, not just their own.
+  // Every staff member's plain posts and events in communities the viewer is in, newest first, so
+  // staff see what the team has put out, not just their own.
   app.get('/staff/posts', { schema: { response: { 200: z.array(Post) } } }, async (request) => {
     const u = staffOnly(request);
     return world.posts

@@ -10,7 +10,7 @@ import {
   notify,
   notifyJoinApproved,
 } from './activity';
-import { id, USERS } from './fixtures';
+import { id, type MockUser, USERS } from './fixtures';
 import { suspend, warn } from './staff-tools';
 import { removeMember } from './team';
 import { MockWorld } from './world';
@@ -31,8 +31,14 @@ afterEach(() => close?.());
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** One mock API; `as(role)` signs a fixture user in, so several people can act on the same world. */
-const world = async (flags?: FeatureFlags) => {
-  const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true, flags });
+const world = async (flags?: FeatureFlags, seeded?: MockWorld) => {
+  const app = await buildApp({
+    sessionSecret: 'x'.repeat(32),
+    corsOrigins: [],
+    mock: true,
+    flags,
+    world: seeded,
+  });
   close = () => app.close();
   const as = async (role: Role) => {
     const res = await app.inject({ method: 'POST', url: '/auth/dev-sign-in', payload: { role } });
@@ -302,6 +308,79 @@ describe('staff: published at once, no review queue', () => {
     expect(ids((await staff.get('/staff/posts')).body)).toContain(created.body.id);
     expect((await staff.del(`/staff/communities/${FINANCE}`)).status).toBe(204);
     expect(ids((await staff.get('/staff/posts')).body)).not.toContain(created.body.id);
+  });
+
+  /** Seeds an approved staff post and event by `author` in `communityId`, joining them to it. */
+  const seedStaffItems = (w: MockWorld, author: MockUser, communityId: string) => {
+    const c = w.communities.find((x) => x.id === communityId)!;
+    if (c.kind === 'interest' || c.kind === 'medical') {
+      c.members.push({ userId: author.id, joinedAt: '2026-10-01T00:00:00.000Z' });
+    }
+    const createdAt = new Date().toISOString();
+    const post = {
+      id: w.newId(),
+      kind: 'post' as const,
+      authorId: author.id,
+      communityId,
+      text: 'Staff update',
+      official: true,
+      likeCount: 0,
+      commentCount: 0,
+      moderation: 'approved' as const,
+      createdAt,
+    };
+    const event = {
+      id: w.newId(),
+      title: 'Staff mixer',
+      details: null,
+      startsAt: '2026-11-20T23:00:00.000Z',
+      endsAt: null,
+      location: 'Online',
+      hostId: author.id,
+      communityId,
+      goingCount: 0,
+      moderation: 'approved' as const,
+      createdAt,
+    };
+    w.posts.push(post);
+    w.events.push(event);
+    return [post.id, event.id] as const;
+  };
+
+  it('keeps another staff member’s medical and private posts and events from non-members', async () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const ava = { ...USERS.staff, id: id(199), firstName: 'Ava', email: 'ava@teamimpact.org' };
+    w.users.push(ava);
+    const [medicalPost, medicalEvent] = seedStaffItems(w, ava, MEDICAL);
+    const [privatePost, privateEvent] = seedStaffItems(w, ava, CAPTAINS);
+    const [openPost, openEvent] = seedStaffItems(w, ava, TEAM_IMPACT);
+    const { as } = await world(undefined, w);
+    const maya = await as('staff');
+
+    const posts = ids((await maya.get('/staff/posts')).body);
+    const events = ids((await maya.get('/staff/events')).body);
+    // Ava's Team Impact items still reach Maya, so only the communities she isn't in are cut.
+    expect(posts).toContain(openPost);
+    expect(events).toContain(openEvent);
+    expect(posts).not.toContain(medicalPost);
+    expect(posts).not.toContain(privatePost);
+    expect(events).not.toContain(medicalEvent);
+    expect(events).not.toContain(privateEvent);
+  });
+
+  it('drops medical posts and events while medical communities are switched off', async () => {
+    const listed = async (medicalCommunities: boolean) => {
+      const w = new MockWorld({ identitySearch: true, medicalCommunities });
+      const [post, event] = seedStaffItems(w, USERS.staff, MEDICAL);
+      const { as } = await world({ identitySearch: true, medicalCommunities }, w);
+      const staff = await as('staff');
+      const posts = ids((await staff.get('/staff/posts')).body);
+      const events = ids((await staff.get('/staff/events')).body);
+      close?.();
+      return { post: posts.includes(post), event: events.includes(event) };
+    };
+    expect(await listed(true)).toEqual({ post: true, event: true });
+    expect(await listed(false)).toEqual({ post: false, event: false });
   });
 
   it('publishes a staff event and notifies the community', async () => {
