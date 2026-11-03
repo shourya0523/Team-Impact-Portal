@@ -83,7 +83,7 @@ const fakeApi = (reply?: () => Response) => {
           community: { id: c.id, name: c.name, kind: c.kind },
           text: body.text,
           imageUrl: null,
-          official: true,
+          official: false,
           likeCount: 0,
           commentCount: 0,
           likedByMe: false,
