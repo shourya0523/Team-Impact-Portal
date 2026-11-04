@@ -27,7 +27,10 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
-  /** The mock data to serve, for tests that seed it; a fresh fixture world by default. */
+  /**
+   * The mock data to serve, for tests that seed it; a fresh fixture world by default. Its own flags
+   * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees.
+   */
   world?: MockWorld;
 }
 

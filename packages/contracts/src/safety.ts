@@ -32,7 +32,8 @@ export type MyReport = z.infer<typeof MyReport>;
 
 /**
  * Someone the viewer blocked. Neither sees the other's posts, comments or events from then on,
- * and they can't reply to each other. Team Impact's official posts can't be blocked.
+ * and they can't reply to each other. Team Impact's official posts, and staff content in Team
+ * Impact's own community, stay visible.
  */
 export const Block = z.object({
   user: UserSummary,

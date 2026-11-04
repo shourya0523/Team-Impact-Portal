@@ -6,7 +6,7 @@ import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton } from '@/components/Report';
+import { blockable, ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, IconButton, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -179,11 +179,7 @@ function PostCard({ post, onChanged }: { post: Post; onChanged?: () => void }) {
         {me?.id !== post.author.id && (
           <ReportButton
             target={{ kind: 'post', id: post.id }}
-            author={
-              post.author.role === 'staff'
-                ? undefined
-                : { id: post.author.id, name: post.author.firstName }
-            }
+            author={blockable(post.author, post.community.kind)}
             onDone={onChanged}
           />
         )}

@@ -153,11 +153,41 @@ describe('blocking', () => {
     expect(postIds((await athlete.get('/feed')).body)).toContain(NOAH_POST);
   });
 
-  it('never blocks Team Impact’s official posts', async () => {
+  it('won’t let you block yourself', async () => {
     const w = await world();
     const athlete = await w.as('athlete');
-    expect((await athlete.call('POST', `/blocks/${USERS.staff.id}`)).status).toBe(400);
     expect((await athlete.call('POST', `/blocks/${USERS.jordan.id}`)).status).toBe(400);
+  });
+
+  it('blocks a staff member outside Team Impact only, and never their announcements', async () => {
+    const w = await world();
+    const staff = await w.as('staff');
+    const athlete = await w.as('athlete');
+    await staff.call('POST', `/communities/${FINANCE}/join`);
+    await athlete.call('POST', `/communities/${FINANCE}/join`);
+    const outside = await staff.call('POST', `/communities/${FINANCE}/posts`, { text: 'Clinic' });
+    const inside = await staff.call('POST', `/communities/${TEAM_IMPACT}/posts`, { text: 'Hi' });
+    const event = await staff.call('POST', `/communities/${FINANCE}/events`, {
+      title: 'Mixer',
+      startsAt: '2026-11-20T23:00:00.000Z',
+      location: 'Online',
+    });
+    const announced = await staff.call('POST', '/staff/announcements', {
+      text: 'Gala tickets',
+      sendPush: false,
+    });
+
+    expect((await athlete.call('POST', `/blocks/${USERS.staff.id}`)).status).toBe(201);
+    const feed = postIds((await athlete.get('/feed')).body);
+    expect(feed).not.toContain(outside.body.id);
+    expect(postIds((await athlete.get(`/communities/${FINANCE}/posts`)).body)).not.toContain(
+      outside.body.id,
+    );
+    expect((await athlete.get(`/events/${event.body.id}`)).status).toBe(404);
+    // Team Impact's own community stays whole: announcements and plain staff posts alike.
+    expect(feed).toContain(inside.body.id);
+    expect(feed).toContain(announced.body.id);
+    expect(feed).toContain(id(402));
   });
 });
 

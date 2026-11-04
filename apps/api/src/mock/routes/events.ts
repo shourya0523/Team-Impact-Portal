@@ -27,7 +27,10 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
     if (!e || !c || !world.readsCommunity(c, u)) throw httpError(404, 'No such event');
     const visible =
       e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id);
-    if (!visible || hiddenFor(world, u, { id: e.id, authorId: e.hostId })) {
+    if (
+      !visible ||
+      hiddenFor(world, u, { id: e.id, authorId: e.hostId, communityId: e.communityId })
+    ) {
       throw httpError(404, 'No such event');
     }
     return { u, e, c };

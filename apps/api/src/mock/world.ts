@@ -452,7 +452,9 @@ export class MockWorld {
       .filter(
         (e) => e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id),
       )
-      .filter((e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId }))
+      .filter(
+        (e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId, communityId: e.communityId }),
+      )
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .map((e) => this.calendarEvent(e, readable.get(e.communityId)!, u));
   };

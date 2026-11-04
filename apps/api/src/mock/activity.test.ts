@@ -348,13 +348,14 @@ describe('staff: published at once, no review queue', () => {
   };
 
   it('keeps another staff member’s medical and private posts and events from non-members', async () => {
-    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const flags = { identitySearch: true, medicalCommunities: true };
+    const w = new MockWorld(flags);
     const ava = { ...USERS.staff, id: id(199), firstName: 'Ava', email: 'ava@teamimpact.org' };
     w.users.push(ava);
     const [medicalPost, medicalEvent] = seedStaffItems(w, ava, MEDICAL);
     const [privatePost, privateEvent] = seedStaffItems(w, ava, CAPTAINS);
     const [openPost, openEvent] = seedStaffItems(w, ava, TEAM_IMPACT);
-    const { as } = await world(undefined, w);
+    const { as } = await world(flags, w);
     const maya = await as('staff');
 
     const posts = ids((await maya.get('/staff/posts')).body);
@@ -376,7 +377,7 @@ describe('staff: published at once, no review queue', () => {
       const staff = await as('staff');
       const posts = ids((await staff.get('/staff/posts')).body);
       const events = ids((await staff.get('/staff/events')).body);
-      close?.();
+      await close?.();
       return { post: posts.includes(post), event: events.includes(event) };
     };
     expect(await listed(true)).toEqual({ post: true, event: true });

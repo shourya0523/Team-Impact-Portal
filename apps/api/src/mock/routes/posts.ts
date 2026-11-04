@@ -60,7 +60,7 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
       }
       // Always a plain post, staff's in Team Impact too: announcements come only from the portal
       // (`POST /staff/announcements`, TI-146). Not official either: staff posts skip review, so
-      // they can still be reported and blocked like anyone's.
+      // they can still be reported, and blocked outside Team Impact (`content.read`).
       const created = {
         id: world.newId(),
         kind: 'post' as const,

@@ -18,7 +18,7 @@ const postBase = {
   text: z.string(),
   /** An optional photo, already uploaded (http(s) only). */
   imageUrl: z.url().nullable(),
-  /** Posted by Team IMPACT staff. Official posts can't be blocked. */
+  /** A Team Impact announcement (from the portal). Official posts can’t be blocked. */
   official: z.boolean(),
   /** Rallies, the platform's reaction (the app labels it "Rally"). */
   likeCount: z.number().int().nonnegative(),

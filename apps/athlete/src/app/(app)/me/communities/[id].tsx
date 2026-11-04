@@ -7,7 +7,7 @@ import { canJoinCommunity, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton } from '@/components/Report';
+import { blockable, ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
 import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
@@ -338,11 +338,7 @@ export default function CommunityDetail() {
                               {p.author.id !== me?.id && !p.official && (
                                 <ReportButton
                                   target={{ kind: 'post', id: p.id }}
-                                  author={
-                                    p.author.role === 'staff'
-                                      ? undefined
-                                      : { id: p.author.id, name: p.author.firstName }
-                                  }
+                                  author={blockable(p.author, x.kind)}
                                   onDone={posts.reload}
                                 />
                               )}

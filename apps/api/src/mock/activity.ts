@@ -376,7 +376,7 @@ export const commentsFor = (world: MockWorld, postId: string, u: MockUser): Comm
       )
       .filter((k) => !world.teenOutsideTeam(k.authorId, c))
       // Blocks and the viewer's own reports hide comments too (./safety.ts).
-      .filter((k) => !hiddenFor(world, u, k))
+      .filter((k) => !hiddenFor(world, u, { ...k, communityId: c.id }))
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .map((k) => toComment(world, k))
   );

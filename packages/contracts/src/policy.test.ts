@@ -219,6 +219,13 @@ describe('blocks', () => {
     expect(can(me, 'content.read', content({ blocked: true, official: true }))).toBe(true);
   });
 
+  it('a blocked staff member’s content stays visible in Team Impact only', () => {
+    expect(can(me, 'content.read', content({ blocked: true, staffInTeamImpact: true }))).toBe(true);
+    expect(can(me, 'content.read', content({ blocked: true, staffInTeamImpact: false }))).toBe(
+      false,
+    );
+  });
+
   it('reported or suspended content is hidden', () => {
     expect(can(me, 'content.read', content({ reportedByActor: true }))).toBe(false);
     expect(can(me, 'content.read', content({ authorSuspended: true }))).toBe(false);
