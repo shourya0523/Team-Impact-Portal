@@ -45,6 +45,7 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+import type { MockEmail } from './outbox';
 
 /** A feed page request: the route's query, plus the time for tests that need a fixed one. */
 type PageRequest = { cursor?: string; limit: number; now?: string };
@@ -87,6 +88,8 @@ export class MockWorld {
   /** Team QR codes and coach invites (`./team.ts`). */
   readonly qrCodes: MockQrCode[] = initialQrCodes();
   readonly coachInvites: MockCoachInvite[] = initialCoachInvites();
+  /** Email the mock "sent" (`./outbox.ts`); real email sending replaces it. */
+  readonly outbox: MockEmail[] = [];
   // Staff-managed records (safety area), copied so staff tools can write to them.
   readonly colleges = structuredClone(fx.COLLEGES);
   readonly companies = structuredClone(fx.COMPANIES);

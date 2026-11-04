@@ -21,8 +21,11 @@ const JOINED_VIA: Record<TeamMember['joinedVia'], string> = {
   qr_code: 'joined with a code',
 };
 
+/** "Coach · invited by Dana Lee Oct 3", "Athlete · joined with a code Oct 5". */
 export const joinedLine = (m: TeamMember) =>
-  `${ROLE_LABEL[m.user.role]} · ${JOINED_VIA[m.joinedVia]} ${shortDate(m.joinedAt)}`;
+  `${ROLE_LABEL[m.user.role]} · ${JOINED_VIA[m.joinedVia]}${
+    m.addedBy ? ` by ${fullName(m.addedBy)}` : ''
+  } ${shortDate(m.joinedAt)}`;
 
 /** "JUMBQ7K4" reads out as "JUMB-Q7K4". */
 export const formatShortCode = (code: string) => `${code.slice(0, 4)}-${code.slice(4)}`;

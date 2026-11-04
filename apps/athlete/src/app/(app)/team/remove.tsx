@@ -31,7 +31,7 @@ export default function RemoveMember() {
   return (
     <Screen eyebrow="Team" title="Remove a member" back>
       <Gutter>
-        <Async state={roster.state}>
+        <Async state={roster.state} onRetry={roster.reload}>
           {(r) => {
             const found = r && userId ? findMember(r, userId) : null;
             if (!r || !teamId) return <NoTeam />;

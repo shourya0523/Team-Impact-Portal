@@ -6,8 +6,16 @@ import { CLIENT_EVENTS, forgedBody } from '../test/events';
 import { useZodContracts } from '../zod';
 import { id, USERS } from './fixtures';
 import { registerMockRoutes } from './routes';
-import { INVITE_TOKENS, QR_TOKENS } from './team';
+import { hashInviteToken, INVITE_TOKENS, QR_TOKENS } from './team';
 import { MockWorld } from './world';
+
+/** An invite's token: only ever emailed, so it's read back from the outbox by its hash. */
+const inviteToken = (world: MockWorld, inviteId: string) => {
+  const { tokenHash } = world.coachInvites.find((i) => i.id === inviteId)!;
+  return world.outbox
+    .map((e) => e.link?.split('/').pop() ?? '')
+    .find((t) => hashInviteToken(t) === tokenHash)!;
+};
 
 const SOCCER = id(201);
 const LACROSSE = id(202); // invited by staff, waiting on its first coach
@@ -115,7 +123,7 @@ describe('mock API: tracked events', () => {
     ]);
     // The link is only ever emailed; the new coach opens it signed out.
     await call('POST', '/auth/sign-out');
-    const token = world.coachInvites.find((i) => i.id === invited.body.id)!.token;
+    const token = inviteToken(world, invited.body.id);
     const accepted = await call('POST', `/invites/${token}/accept`, {
       newAccount: {
         firstName: 'Alex',
@@ -137,7 +145,7 @@ describe('mock API: tracked events', () => {
   it('logs each inviter when one coach accepts invites from staff and from a coach', async () => {
     const { world, call, signInAs, logged } = await setup();
     const email = 'alex.moore@tufts.edu';
-    const tokenOf = (inviteId: string) => world.coachInvites.find((i) => i.id === inviteId)!.token;
+    const tokenOf = (inviteId: string) => inviteToken(world, inviteId);
     await signInAs('coach');
     const fromDana = await call('POST', `/teams/${SOCCER}/coach-invites`, { email });
     await signInAs('staff');
