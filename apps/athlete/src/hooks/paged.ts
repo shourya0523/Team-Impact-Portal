@@ -15,7 +15,11 @@ export interface Paged<T> {
   loadingMore: boolean;
   /** Pull to refresh: the posts already shown stay until page 1 comes back. */
   refreshing: boolean;
-  /** A next page or refresh that failed; what's shown stays, and the footer offers a retry. */
+  /**
+   * A next page or refresh that failed; what's shown stays. A failed next page shows in the footer
+   * and stops paging until retried; a failed refresh shows at the top and doesn't, since the
+   * posts and cursor on screen are still good.
+   */
   failure: { error: Error; during: 'more' | 'refresh' } | null;
 }
 
@@ -40,6 +44,10 @@ export const initialPaged = <T>(): Paged<T> => ({
   failure: null,
 });
 
+/** A failed refresh stays on show through paging, until a refresh works. */
+const keepRefreshFailure = <T>(state: Paged<T>) =>
+  state.failure?.during === 'refresh' ? state.failure : null;
+
 /** `next` after `items`, skipping any id already there. */
 const append = <T extends { id: string }>(items: T[], next: T[]) => {
   const seen = new Set(items.map((x) => x.id));
@@ -57,7 +65,7 @@ export const pagedReducer = <T extends { id: string }>(
       if (state.first.status !== 'ready') return { ...initialPaged<T>(), run: action.run };
       return { ...state, run: action.run, refreshing: true, loadingMore: false, failure: null };
     case 'more':
-      return { ...state, loadingMore: true, failure: null };
+      return { ...state, loadingMore: true, failure: keepRefreshFailure(state) };
     case 'loaded':
       if (action.run !== state.run) return state;
       return {
@@ -67,7 +75,8 @@ export const pagedReducer = <T extends { id: string }>(
         nextCursor: action.page.nextCursor,
         loadingMore: false,
         refreshing: false,
-        failure: null,
+        // A next page landing doesn't mean the refresh worked.
+        failure: action.append ? keepRefreshFailure(state) : null,
       };
     case 'failed':
       if (action.run !== state.run) return state;
@@ -83,17 +92,74 @@ export const pagedReducer = <T extends { id: string }>(
   }
 };
 
-/** Whether a next page can be asked for now: one at a time, and not over a failure or refresh. */
+/**
+ * Whether a next page can be asked for now: one at a time, not while refreshing, and not over a
+ * failed next page until it's retried. A failed refresh doesn't stop it.
+ */
 export const canLoadMore = <T>(state: Paged<T>) =>
   state.first.status === 'ready' &&
   state.nextCursor !== null &&
   !state.loadingMore &&
   !state.refreshing &&
-  state.failure === null;
+  state.failure?.during !== 'more';
 
 /**
- * A next page the server refused with 400: the cursor isn't one it issued (`apps/api/src/mock/feed.ts`),
- * so start again from page 1 instead of showing an error.
+ * A next page the server refused as `bad_request`: the cursor isn't one it issued
+ * (`apps/api/src/mock/feed.ts`), so start again from page 1 instead of showing an error. Other 400s
+ * (`validation_error`) would fail again from page 1 too, so they show as errors instead of looping.
  */
 export const restartsList = (error: unknown) =>
-  error instanceof ApiRequestError && error.status === 400;
+  error instanceof ApiRequestError &&
+  error.status === 400 &&
+  error.body.error.code === 'bad_request';
+
+/**
+ * What `usePaged` does between the reducer and the network, kept out of React so it can be tested
+ * with a fake `load`. `state` reads the latest state; run ids keep counting for the loader's life,
+ * so a late page from an earlier run (a refresh, another chip) never matches the current one.
+ */
+export const createPagedLoader = <T extends { id: string }>({
+  load,
+  dispatch,
+  state,
+}: {
+  load: (cursor?: string) => Promise<Page<T>>;
+  dispatch: (action: PagedAction<T>) => void;
+  state: () => Paged<T>;
+}) => {
+  let runs = 0;
+  /** The run whose next page is on its way, so a fast scroll can't ask twice. */
+  let inFlight = 0;
+
+  const fromFirst = (type: 'start' | 'refresh') => {
+    const run = ++runs;
+    dispatch({ type, run });
+    load().then(
+      (page) => dispatch({ type: 'loaded', run, page, append: false }),
+      (error: Error) => dispatch({ type: 'failed', run, error, append: false }),
+    );
+  };
+
+  const more = (retrying: boolean) => {
+    const s = state();
+    const current = retrying ? { ...s, failure: null } : s;
+    if (!canLoadMore(current) || inFlight === runs) return;
+    const run = runs;
+    inFlight = run;
+    dispatch({ type: 'more' });
+    return load(current.nextCursor!)
+      .then(
+        (page) => dispatch({ type: 'loaded', run, page, append: true }),
+        (error: Error) => {
+          if (run !== runs) return;
+          if (restartsList(error)) fromFirst('refresh');
+          else dispatch({ type: 'failed', run, error, append: true });
+        },
+      )
+      .finally(() => {
+        if (inFlight === run) inFlight = 0;
+      });
+  };
+
+  return { fromFirst, more };
+};

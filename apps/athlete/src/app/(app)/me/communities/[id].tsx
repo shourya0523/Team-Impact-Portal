@@ -18,10 +18,12 @@ import {
   ErrorText,
   IconButton,
   PageFooter,
+  RefreshError,
   SCROLL_END,
   Segmented,
 } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { useRefreshOnPostsChanged } from '@/hooks/postsChanged';
 import { usePaged } from '@/hooks/usePaged';
 import { useRole } from '@/navigation/role';
 import { KIND_STYLE, monogram } from '@/theme';
@@ -137,6 +139,7 @@ export default function CommunityDetail() {
   const insets = useSafeAreaInsets();
   const community = useApi(() => api.community(id), [id]);
   const posts = usePaged((cursor) => api.communityPosts(id, cursor), [id]);
+  useRefreshOnPostsChanged(posts.refresh);
   const [override, setOverride] = useState<Community | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('posts');
@@ -320,6 +323,9 @@ export default function CommunityDetail() {
                     onChange={setTab}
                   />
                 </View>
+                {tab === 'posts' && (
+                  <RefreshError failure={posts.failure} onRetry={posts.refresh} />
+                )}
                 {tab === 'events' && <CommunityEvents key={tabKey(x)} community={x} />}
                 {tab === 'members' && <CommunityMembers key={tabKey(x)} community={x} />}
               </View>
@@ -364,7 +370,8 @@ export default function CommunityDetail() {
                   <PageFooter
                     loading={posts.loadingMore}
                     failure={posts.failure}
-                    onRetry={posts.retry}
+                    caughtUp={posts.caughtUp}
+                    onRetry={posts.retryMore}
                   />
                 ) : null
               }

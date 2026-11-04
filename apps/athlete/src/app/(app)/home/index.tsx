@@ -13,9 +13,11 @@ import {
   Gutter,
   IconButton,
   PageFooter,
+  RefreshError,
   ScreenList,
 } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { useRefreshOnPostsChanged } from '@/hooks/postsChanged';
 import { usePaged } from '@/hooks/usePaged';
 import { useRole } from '@/navigation/role';
 import { KIND_STYLE, monogram } from '@/theme';
@@ -114,6 +116,7 @@ export default function Home() {
   const [filter, setFilter] = useState<FeedScope>('all');
   // A new list from page 1 per chip: the server filters, so every page is full (step 3a, `scope`).
   const feed = usePaged((cursor) => api.feed(cursor, filter), [filter]);
+  useRefreshOnPostsChanged(feed.refresh);
   const communities = useApi(() => api.communities());
   const canPost = role !== 'parent' && role !== 'recruiter';
 
@@ -166,6 +169,7 @@ export default function Home() {
               onPress={() => setFilter('communities')}
             />
           </View>
+          <RefreshError failure={feed.failure} onRetry={feed.refresh} />
         </>
       }
       data={feed.state.status === 'ready' ? feed.state.data : []}
@@ -195,7 +199,14 @@ export default function Home() {
           )}
         </Async>
       }
-      footer={<PageFooter loading={feed.loadingMore} failure={feed.failure} onRetry={feed.retry} />}
+      footer={
+        <PageFooter
+          loading={feed.loadingMore}
+          failure={feed.failure}
+          caughtUp={feed.caughtUp}
+          onRetry={feed.retryMore}
+        />
+      }
     />
   );
 }

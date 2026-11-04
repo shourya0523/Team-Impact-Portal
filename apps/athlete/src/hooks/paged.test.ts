@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from '../api/client';
 import {
   canLoadMore,
+  createPagedLoader,
   initialPaged,
   type Paged,
   type PagedAction,
@@ -146,6 +147,23 @@ describe('pagedReducer', () => {
     expect(s.failure).toEqual({ error, during: 'refresh' });
   });
 
+  it('keeps paging after a failed refresh, from the cursor already shown', () => {
+    const error = new Error('offline');
+    const failed = reduce(
+      ...loaded(['p1']),
+      { type: 'refresh', run: 2 },
+      { type: 'failed', run: 2, error, append: false },
+    );
+    expect(canLoadMore(failed)).toBe(true);
+    const s = [
+      { type: 'more' } as const,
+      { type: 'loaded', run: 2, page: page(['p2']), append: true } as const,
+    ].reduce(pagedReducer<Item>, failed);
+    expect(ids(s)).toEqual(['p1', 'p2']);
+    // The refresh still didn't work, so its note stays up until one does.
+    expect(s.failure).toEqual({ error, during: 'refresh' });
+  });
+
   it('clears a failure when the next page is asked for again', () => {
     const s = reduce(
       ...loaded(['p1']),
@@ -205,17 +223,133 @@ describe('canLoadMore', () => {
   });
 });
 
-describe('restartsList', () => {
-  const apiError = (status: number) =>
-    new ApiRequestError(status, { error: { code: 'bad_request', message: 'Invalid cursor.' } });
+const apiError = (status: number, code: 'bad_request' | 'validation_error' = 'bad_request') =>
+  new ApiRequestError(status, { error: { code, message: 'Invalid cursor.' } });
 
+describe('restartsList', () => {
   it('restarts on a cursor the server refused', () => {
     expect(restartsList(apiError(400))).toBe(true);
   });
 
-  it('shows anything else as an error', () => {
+  it('shows anything else as an error, other 400s included, so they can’t loop', () => {
+    expect(restartsList(apiError(400, 'validation_error'))).toBe(false);
     expect(restartsList(apiError(500))).toBe(false);
     expect(restartsList(apiError(403))).toBe(false);
     expect(restartsList(new TypeError('Network request failed'))).toBe(false);
+  });
+});
+
+/** A promise settled by hand, so a test decides which response lands first. */
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+};
+
+/** The loader over the real reducer, with every `load` call held until the test settles it. */
+const harness = () => {
+  let state = initialPaged<Item>();
+  const calls: { cursor?: string; reply: ReturnType<typeof deferred<Page>> }[] = [];
+  const loader = createPagedLoader<Item>({
+    load: (cursor) => {
+      const reply = deferred<Page>();
+      calls.push({ cursor, reply });
+      return reply.promise;
+    },
+    dispatch: (action) => {
+      state = pagedReducer(state, action);
+    },
+    state: () => state,
+  });
+  /** Lets settled promises run their callbacks. */
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  return { loader, calls, flush, state: () => state };
+};
+type Page = ReturnType<typeof page>;
+
+describe('createPagedLoader', () => {
+  /** Page 1 (p1, p2) in, with a cursor for more. */
+  const started = async () => {
+    const h = harness();
+    h.loader.fromFirst('start');
+    h.calls[0]!.reply.resolve(page(['p1', 'p2'], 'c1'));
+    await h.flush();
+    return h;
+  };
+
+  it('asks for a next page once, however fast the list scrolls', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.loader.more(false);
+    h.loader.more(false);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1']);
+    h.calls[1]!.reply.resolve(page(['p3']));
+    await h.flush();
+    expect(ids(h.state())).toEqual(['p1', 'p2', 'p3']);
+  });
+
+  it('starts over from page 1 when the server refuses the cursor', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.calls[1]!.reply.reject(apiError(400));
+    await h.flush();
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1', undefined]);
+    expect(h.state().refreshing).toBe(true);
+    expect(h.state().failure).toBeNull();
+    h.calls[2]!.reply.resolve(page(['p9'], 'c2'));
+    await h.flush();
+    expect(ids(h.state())).toEqual(['p9']);
+  });
+
+  it('shows any other 400 on a next page as an error instead of starting over', async () => {
+    const h = await started();
+    h.loader.more(false);
+    const error = apiError(400, 'validation_error');
+    h.calls[1]!.reply.reject(error);
+    await h.flush();
+    expect(h.calls).toHaveLength(2);
+    expect(h.state().failure).toEqual({ error, during: 'more' });
+    // Nothing more until retried.
+    h.loader.more(false);
+    expect(h.calls).toHaveLength(2);
+    h.loader.more(true);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1', 'c1']);
+  });
+
+  it('drops a next page that lands after a refresh', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.loader.fromFirst('refresh');
+    h.calls[2]!.reply.resolve(page(['p1', 'p5'], 'c9'));
+    await h.flush();
+    h.calls[1]!.reply.resolve(page(['old']));
+    await h.flush();
+    expect(ids(h.state())).toEqual(['p1', 'p5']);
+    expect(h.state().nextCursor).toBe('c9');
+  });
+
+  it('drops a page from the previous chip once a new list starts', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.loader.fromFirst('start');
+    h.calls[1]!.reply.reject(new Error('offline'));
+    h.calls[2]!.reply.resolve(page(['t1']));
+    await h.flush();
+    expect(ids(h.state())).toEqual(['t1']);
+    expect(h.state().failure).toBeNull();
+  });
+
+  it('can page again in the new run while the old one’s page is still out', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.loader.fromFirst('refresh');
+    h.calls[2]!.reply.resolve(page(['p1'], 'c5'));
+    await h.flush();
+    h.loader.more(false);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1', undefined, 'c5']);
   });
 });

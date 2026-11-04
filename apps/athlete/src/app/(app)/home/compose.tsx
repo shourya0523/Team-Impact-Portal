@@ -7,6 +7,7 @@ import { api } from '@/api';
 import { describeError } from '@/api/errors';
 import { CommunityPicker } from '@/components/activity';
 import { Async, ErrorText, Gutter, Screen } from '@/components/ui';
+import { markPostsChanged } from '@/hooks/postsChanged';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { Button, Input, Text } from '@/ui';
@@ -47,7 +48,11 @@ export default function Compose() {
                 ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
               })
               .then(
-                (p) => router.replace({ pathname: '/home/posts/[id]', params: { id: p.id } }),
+                (p) => {
+                  // Home and the community page refresh when you go back, so the post shows there.
+                  markPostsChanged();
+                  router.replace({ pathname: '/home/posts/[id]', params: { id: p.id } });
+                },
                 (e: Error) => setError(describeError(e)),
               )
               .finally(() => setBusy(false));

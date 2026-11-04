@@ -288,27 +288,55 @@ export function EmptyState({
   );
 }
 
+type PageFailure = { error: Error; during: 'more' | 'refresh' } | null;
+
 /**
- * Under a paged list: a spinner while the next page loads, or why it (or a refresh) failed with a
- * way to try again. The items already shown stay above it either way.
+ * Under a paged list: a spinner while the next page loads, why it failed with a way to try again,
+ * or a line saying that's everything. The items already shown stay above it. A failed refresh
+ * shows at the top instead (`RefreshError`), where the pull was.
  */
 export function PageFooter({
   loading,
   failure,
+  caughtUp,
   onRetry,
 }: {
   loading: boolean;
-  failure: { error: Error; during: 'more' | 'refresh' } | null;
+  failure: PageFailure;
+  caughtUp: boolean;
   onRetry: () => void;
 }) {
-  if (loading) return <ActivityIndicator color={colors.brand} style={styles.loading} />;
-  if (!failure) return null;
+  if (loading) {
+    return (
+      <ActivityIndicator
+        color={colors.brand}
+        style={styles.loading}
+        accessibilityLabel="Loading more posts"
+      />
+    );
+  }
+  if (failure?.during === 'more') {
+    return (
+      <View style={[styles.gutter, styles.footer]}>
+        <ErrorText>Couldn’t load more: {describeError(failure.error)}</ErrorText>
+        <Button label="Try again" variant="secondary" size="sm" onPress={onRetry} />
+      </View>
+    );
+  }
+  if (!caughtUp) return null;
+  return (
+    <Text variant="small" color="secondary" style={[styles.center, styles.caughtUp]}>
+      You’re all caught up
+    </Text>
+  );
+}
+
+/** Above a paged list: a pull to refresh that failed. What's shown stays, and paging still works. */
+export function RefreshError({ failure, onRetry }: { failure: PageFailure; onRetry: () => void }) {
+  if (failure?.during !== 'refresh') return null;
   return (
     <View style={[styles.gutter, styles.footer]}>
-      <ErrorText>
-        {failure.during === 'refresh' ? 'Couldn’t refresh' : 'Couldn’t load more'}:{' '}
-        {describeError(failure.error)}
-      </ErrorText>
+      <ErrorText>Couldn’t refresh: {describeError(failure.error)}</ErrorText>
       <Button label="Try again" variant="secondary" size="sm" onPress={onRetry} />
     </View>
   );
@@ -420,4 +448,5 @@ const styles = StyleSheet.create({
   progress: { flexDirection: 'row', gap: spacing.xs, flex: 1 },
   bar: { flex: 1, height: BAR, borderRadius: BAR / 2 },
   loading: { marginTop: spacing.lg },
+  caughtUp: { marginTop: spacing.lg },
 });

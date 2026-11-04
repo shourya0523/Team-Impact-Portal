@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useReducer, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import type { Page } from '@/api/client';
 import type { Loadable } from './useApi';
-import { canLoadMore, initialPaged, pagedReducer, restartsList } from './paged';
+import { createPagedLoader, initialPaged, pagedReducer } from './paged';
 
 /**
  * A cursor-paged list (the home feed, a community's posts), loaded a page at a time. `state` is the
  * first page as a `Loadable`, so `<Async>` works as with `useApi`; after that, `loadMore` appends
  * the next page (FlatList `onEndReached`), `refresh` starts again from page 1 (pull to refresh),
- * and `remove` drops items on the device. The state logic and its tests are in `./paged.ts`.
+ * and `remove` drops items on the device. The state logic, the loader and their tests are in
+ * `./paged.ts`.
  */
 export const usePaged = <T extends { id: string }>(
   load: (cursor?: string) => Promise<Page<T>>,
@@ -15,58 +16,38 @@ export const usePaged = <T extends { id: string }>(
 ) => {
   const [s, dispatch] = useReducer(pagedReducer<T>, undefined, initialPaged<T>);
   const fetchPage = useCallback(load, deps);
-  const runs = useRef(0);
-  /** The run whose next page is on its way, so a fast scroll can't ask twice. */
-  const inFlight = useRef(0);
-
-  const fromFirst = useCallback(
-    (type: 'start' | 'refresh') => {
-      const run = ++runs.current;
-      dispatch({ type, run });
-      fetchPage().then(
-        (page) => dispatch({ type: 'loaded', run, page, append: false }),
-        (error: Error) => dispatch({ type: 'failed', run, error, append: false }),
-      );
-    },
-    [fetchPage],
+  // The loader lives as long as the screen, so run ids keep counting across chips and refreshes;
+  // it reads the latest `load` and state through refs.
+  const latest = useRef({ fetchPage, s });
+  latest.current = { fetchPage, s };
+  const [loader] = useState(() =>
+    createPagedLoader<T>({
+      load: (cursor) => latest.current.fetchPage(cursor),
+      dispatch,
+      state: () => latest.current.s,
+    }),
   );
 
-  useEffect(() => fromFirst('start'), [fromFirst]);
+  useEffect(() => loader.fromFirst('start'), [loader, fetchPage]);
 
-  const more = (retrying: boolean) => {
-    const current = retrying ? { ...s, failure: null } : s;
-    if (!canLoadMore(current) || inFlight.current === runs.current) return;
-    const run = runs.current;
-    inFlight.current = run;
-    dispatch({ type: 'more' });
-    fetchPage(current.nextCursor!)
-      .then(
-        (page) => dispatch({ type: 'loaded', run, page, append: true }),
-        (error: Error) => {
-          if (run !== runs.current) return;
-          if (restartsList(error)) fromFirst('refresh');
-          else dispatch({ type: 'failed', run, error, append: true });
-        },
-      )
-      .finally(() => {
-        if (inFlight.current === run) inFlight.current = 0;
-      });
-  };
-
+  const refresh = useCallback(() => loader.fromFirst('refresh'), [loader]);
   const state: Loadable<T[]> =
     s.first.status === 'ready' ? { status: 'ready', data: s.items } : s.first;
 
   return {
     state,
     hasMore: s.nextCursor !== null,
+    /** Every page is in and there was something to show: the end of the list. */
+    caughtUp: s.first.status === 'ready' && s.items.length > 0 && s.nextCursor === null,
     loadingMore: s.loadingMore,
     refreshing: s.refreshing,
     /** A next page or refresh that failed, and which; the items already shown stay. */
     failure: s.failure,
-    loadMore: () => more(false),
-    /** Tries again whatever failed last: the next page, or the refresh. */
-    retry: () => (s.failure?.during === 'refresh' ? fromFirst('refresh') : more(true)),
-    refresh: () => fromFirst('refresh'),
+    loadMore: () => void loader.more(false),
+    /** Tries the next page again after it failed. */
+    retryMore: () => void loader.more(true),
+    /** Stable, so it can sit in a focus effect's deps. */
+    refresh,
     remove: (drop: (item: T) => boolean) => dispatch({ type: 'remove', drop }),
   };
 };
