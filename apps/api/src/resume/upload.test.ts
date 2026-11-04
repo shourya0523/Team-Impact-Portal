@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import { USERS } from '../mock/fixtures';
+import { RESUME_READS_PER_HOUR } from '../mock/routes/cards';
 import { buildScan } from './test/build-pdf';
 import { CORPUS, longPdf } from './test/corpus';
 
@@ -74,6 +75,20 @@ describe('POST /cards/me/resume with a file', () => {
     const res = await athlete('POST', '/cards/me/resume', upload(await buildScan()));
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ failed: true, failReason: 'no_text', fields: {} });
+  });
+
+  it('limits how many resumes one athlete can have read in an hour', async () => {
+    const { athlete } = await signedIn();
+    const file = upload(await CORPUS[0]!.pdf());
+    for (let i = 0; i < RESUME_READS_PER_HOUR; i++) {
+      expect((await athlete('POST', '/cards/me/resume', file)).statusCode).toBe(200);
+    }
+    const res = await athlete('POST', '/cards/me/resume', file);
+    expect(res.statusCode).toBe(429);
+    expect(res.json().error.code).toBe('rate_limited');
+    // Typing the card in (no file) is never limited.
+    const typed = { fileName: 'resume.pdf', mimeType: 'application/pdf', sizeBytes: 10, text: 'x' };
+    expect((await athlete('POST', '/cards/me/resume', typed)).statusCode).toBe(200);
   });
 
   it('is for card holders only', async () => {

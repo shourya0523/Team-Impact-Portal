@@ -55,6 +55,13 @@ additional AI company sees resumes"), and the privacy policy draft names it as a
 
 - The file is only held in memory for the request; it is never written anywhere.
 - The first bytes must match the declared type; over 3 pages or 5 MB is refused.
+- Those caps don't bound how far a PDF unpacks (a 120 KB file can hold a million text runs), so
+  pdf.js runs in a worker thread (`pdf-worker.mjs`), never on the API's event loop. A resume is
+  refused as unreadable when it has more text than any real one (30,000 runs), takes over 10 s,
+  or grows the process by over 384 MB; the worker is then replaced. Limits are in `PDF_LIMITS`
+  (`pdf.ts`), and `pdf-limits.test.ts` checks each one with a compression bomb.
+- One PDF is read at a time per instance, with up to 32 waiting; past that, and past 10 uploads
+  per athlete per hour, the upload answers 429 so the app can retry.
 - Lines with an address or birthdate are dropped before any reader sees them.
 - Every value is validated against the card schema (`CardFields`); text is plain, no markup.
 - Text that looks like instructions is data: the layout reader can't follow it, and the LLM's output

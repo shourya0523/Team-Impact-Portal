@@ -24,6 +24,9 @@ import {
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 
+/** Real resume reads (with a file) per athlete per hour. */
+export const RESUME_READS_PER_HOUR = 10;
+
 /**
  * The athlete's own Impact Card: draft, resume upload and review, publish, history, export.
  * Only card holders (current and alumni athletes) reach these, so parents can't make a card for
@@ -37,6 +40,20 @@ export const registerCardRoutes = (
 ) => {
   const athlete = (request: FastifyRequest) => requireRole(request, 'athlete', 'alumni_athlete');
   const now = () => new Date().toISOString();
+
+  /** Each real read runs pdf.js (or OCR), the expensive part, so an athlete gets a few an hour. */
+  const reads = new Map<string, number[]>();
+  const takeRead = (userId: string) => {
+    const since = Date.now() - 60 * 60 * 1000;
+    const recent = (reads.get(userId) ?? []).filter((at) => at > since);
+    if (recent.length >= RESUME_READS_PER_HOUR) {
+      throw httpError(
+        429,
+        'That’s a lot of resumes for one hour. Try again later, or type your card in.',
+      );
+    }
+    reads.set(userId, [...recent, Date.now()]);
+  };
 
   app.get('/cards/me', { schema: { response: { 200: MyCardState } } }, async (request) =>
     myCardState(world, athlete(request)),
@@ -106,7 +123,11 @@ export const registerCardRoutes = (
             `Resumes can be up to ${RESUME_UPLOAD_LIMITS.maxBytes / 2 ** 20} MB`,
           );
         }
+        takeRead(u.id);
         const reading = await readResume({ bytes, mimeType, fileName }, resume);
+        if (reading.reason === 'busy') {
+          throw httpError(429, 'Lots of resumes are being read right now. Try again in a minute.');
+        }
         if (reading.reason === 'wrong_file_type') {
           throw httpError(400, 'That file doesn’t match its type. Upload a PDF or a photo.');
         }
