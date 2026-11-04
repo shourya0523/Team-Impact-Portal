@@ -159,7 +159,7 @@ The tab bars come from each board's `tabs` array in the wireframe:
 | `recruiter`      | Recruiter               | Review · Lists · Me ²                 | `/review` |
 
 ¹ **Alumni.** The wireframe has no alumni tab bar, and has one "Alumni" sign-up option, while contracts
-has two alumni roles. Former athletes keep a Card tab: contracts' `hasBaseballCard()` includes them,
+has two alumni roles. Former athletes keep a Card tab: contracts' `hasImpactCard()` includes them,
 and the wireframe's "Claim your pre-built card" (L5) flows into card review.
 
 ² **Recruiter.** The wireframe's recruiter bar is Review · Lists. Me is added so recruiters can sign out.

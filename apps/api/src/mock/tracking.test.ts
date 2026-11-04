@@ -1,7 +1,12 @@
 import cookie from '@fastify/cookie';
 import Fastify from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { type Role, TRACKED_EVENT_NAMES, type TrackedEventName } from '@team-impact/contracts';
+import {
+  CURRENT_TERMS_VERSION,
+  type Role,
+  TRACKED_EVENT_NAMES,
+  type TrackedEventName,
+} from '@team-impact/contracts';
 import { CLIENT_EVENTS, forgedBody } from '../test/events';
 import { useZodContracts } from '../zod';
 import { id, USERS } from './fixtures';
@@ -69,6 +74,7 @@ describe('mock API: tracked events', () => {
       birthDate: '2005-03-04',
       role: 'athlete',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     });
     expect(res.status).toBe(201);
     expect(logged('user.signed_up')).toMatchObject([
@@ -84,6 +90,7 @@ describe('mock API: tracked events', () => {
         lastName: 'Nguyen',
         password: 'correct horse battery',
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
     });
     expect(accepted.status).toBe(200);
@@ -122,6 +129,7 @@ describe('mock API: tracked events', () => {
         lastName: 'Moore',
         password: 'correct horse battery',
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
     });
     expect(accepted.status).toBe(200);
@@ -152,6 +160,7 @@ describe('mock API: tracked events', () => {
         lastName: 'Moore',
         password: 'correct horse battery',
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
     });
     expect(alex.status).toBe(200);
@@ -181,6 +190,7 @@ describe('mock API: tracked events', () => {
       firstName: 'Robin',
       lastName: 'Hale',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     });
     expect(requested.status).toBe(202);
 

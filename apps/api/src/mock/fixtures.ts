@@ -408,7 +408,7 @@ export const POSTS: MockPost[] = [
       likeCount: 48,
     },
   ),
-  post(403, USERS.sam, 304, 10, 'Finished my Baseball Card. Happy to help with yours on Tuesdays.'),
+  post(403, USERS.sam, 304, 10, 'Finished my Impact Card. Happy to help with yours on Tuesdays.'),
   post(404, USERS.lisa, 303, 9, 'Thank you to everyone who sent meals this week. It means a lot.'),
   post(405, USERS.elena, 304, 8, 'Northbeam is hiring summer analysts. Apply through the link.', {
     kind: 'opportunity',
@@ -472,7 +472,7 @@ export const EVENTS: MockEvent[] = [
   {
     id: id(503),
     title: 'First-gen resume workshop',
-    details: 'Bring a draft; we’ll turn it into your Baseball Card.',
+    details: 'Bring a draft; we’ll turn it into your Impact Card.',
     startsAt: '2026-10-22T23:00:00.000Z',
     endsAt: '2026-10-23T00:30:00.000Z',
     location: 'Tisch Library, Room 304',

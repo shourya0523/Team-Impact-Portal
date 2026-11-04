@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CreateJoinRequest, NewChild, SignupRequest } from './index';
+import { CreateJoinRequest, CURRENT_TERMS_VERSION, NewChild, SignupRequest } from './index';
 
 const bornYearsAgo = (years: number) => {
   const d = new Date();
@@ -20,6 +20,7 @@ describe('sign-up and join contracts', () => {
       birthDate: bornYearsAgo(12),
       role: 'athlete',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     });
     expect(result.success).toBe(false);
     expect(result.error?.issues[0]?.message).toMatch(/parent or guardian/);

@@ -331,8 +331,8 @@ export function Modal({
   );
 }
 
-/** The Baseball Card: flips on tap, tilts + shines under the pointer. */
-export function BaseballCard({
+/** The Impact Card: flips on tap, tilts + shines under the pointer. */
+export function ImpactCard({
   a,
   team,
   interactive = true,

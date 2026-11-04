@@ -44,9 +44,13 @@ const card: CardWithContact = {
   contact: { email: 'jordan.lee@tufts.edu' },
 };
 
-/** A fake API: `signedInAs` decides what /me says; everything else returns the fixtures above. */
-const fakeApi = (signedInAs: Role | null) => {
+/**
+ * A fake API: `signedInAs` decides what /me says, `termsChanged` whether /me/terms asks them to
+ * accept again; everything else returns the fixtures above.
+ */
+const fakeApi = (signedInAs: Role | null, { termsChanged = false } = {}) => {
   let me = signedInAs && meFor(signedInAs);
+  let mustAccept = termsChanged;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
@@ -60,6 +64,10 @@ const fakeApi = (signedInAs: Role | null) => {
         return me
           ? json(200, me)
           : json(401, { error: { code: 'unauthenticated', message: 'Sign in first' } });
+      }
+      if (path === '/me/terms') {
+        if (init?.method === 'POST') mustAccept = false;
+        return json(200, { current: 'now', accepted: mustAccept ? 'before' : 'now', mustAccept });
       }
       if (path === '/config/flags')
         return json(200, { identitySearch: true, medicalCommunities: true });
@@ -112,6 +120,29 @@ describe('portal shell', () => {
     const nav = within(screen.getByRole('navigation', { name: 'Main' }));
     expect(nav.getByRole('link', { name: 'Moderation' })).toBeTruthy();
     expect(nav.queryByRole('link', { name: 'Search' })).toBeNull();
+  });
+});
+
+describe('terms changed since the account agreed (TI-107)', () => {
+  it('shows only the new terms until they are accepted, then the page', async () => {
+    fakeApi('recruiter', { termsChanged: true });
+    at('/search');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Our terms have changed' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Search athletes' })).toBeNull();
+    const agree = screen.getByRole('button', { name: 'Agree and continue' }) as HTMLButtonElement;
+    expect(agree.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(agree);
+    expect(await screen.findByRole('heading', { name: 'Search athletes' })).toBeTruthy();
+  });
+
+  it('goes straight to the page when nothing changed', async () => {
+    fakeApi('staff');
+    at('/staff/teams');
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: 'Teams' })).toBeTruthy();
+    expect(screen.queryByRole('heading', { name: 'Our terms have changed' })).toBeNull();
   });
 });
 

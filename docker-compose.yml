@@ -10,5 +10,12 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+  # OCR for resume photos and scans (TI-113): `docker compose --profile ocr up -d`, then set
+  # DOCLING_URL=http://localhost:5001. CPU only, about 4.4 GB. Pin a release tag before staging.
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu:latest
+    profiles: [ocr]
+    ports:
+      - '5001:5001'
 volumes:
   pgdata:

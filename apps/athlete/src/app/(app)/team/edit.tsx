@@ -81,7 +81,7 @@ function EditForm({ team }: { team: Team }) {
       <Card>
         <Text weight="semibold">Team colour</Text>
         <Text variant="small" color="secondary">
-          Used on your team’s avatar and Baseball Card stripes. Leave it empty for Team IMPACT navy.
+          Used on your team’s avatar and Impact Card stripes. Leave it empty for Team IMPACT navy.
         </Text>
         <View style={styles.colorRow}>
           <View

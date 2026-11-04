@@ -16,7 +16,7 @@ import { users } from './identity';
 import { colleges } from './teams';
 
 /**
- * Baseball Cards, one per athlete per season, versioned. Recruiter filters (TI-34) are real indexed
+ * Impact Cards, one per athlete per season, versioned. Recruiter filters (TI-34) are real indexed
  * columns; everything else lives in payload. An unclaimed alumni card has no athlete yet, only the
  * ingested record it was built from.
  */

@@ -2,6 +2,7 @@ import { buildApp } from './app';
 import { createDb } from './db/client';
 import { loadEnv } from './env';
 import { scheduleEventsLogRetention } from './events-log';
+import { resumeConfigFromEnv } from './resume';
 
 const env = loadEnv();
 // env.ts requires DATABASE_URL unless MOCK_API is on.
@@ -16,6 +17,7 @@ const app = await buildApp({
     identitySearch: env.FLAG_IDENTITY_SEARCH,
     medicalCommunities: env.FLAG_MEDICAL_COMMUNITIES,
   },
+  resume: resumeConfigFromEnv(env),
 });
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');

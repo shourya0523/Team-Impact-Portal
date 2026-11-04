@@ -551,7 +551,7 @@ export const posts: Post[] = [
     role: 'Athlete',
     team: 'ws',
     time: '1d',
-    text: 'Finished my Baseball Card. If anyone wants help with theirs, I am in the library Tuesdays.',
+    text: 'Finished my Impact Card. If anyone wants help with theirs, I am in the library Tuesdays.',
     scope: 'community',
     likes: 31,
     comments: [],

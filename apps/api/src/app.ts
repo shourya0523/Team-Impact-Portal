@@ -10,6 +10,7 @@ import {
 import type { Db } from './db/client';
 import { isActiveUser, track } from './events-log';
 import { registerMockRoutes } from './mock/routes';
+import type { ResumeReaderConfig } from './resume';
 import { MockWorld } from './mock/world';
 import { httpError, useZodContracts } from './zod';
 
@@ -27,6 +28,8 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
+  /** How uploaded resumes are read: OCR sidecar and the optional LLM pass (TI-113). */
+  resume?: ResumeReaderConfig;
 }
 
 /** Identity search and medical communities ship on for the pilot (PRD §7, §5). */
@@ -40,6 +43,7 @@ export const buildApp = async ({
   logger = false,
   flags = DEFAULT_FLAGS,
   mock = false,
+  resume = {},
 }: AppOptions) => {
   const app = useZodContracts(Fastify({ logger }));
 
@@ -59,7 +63,7 @@ export const buildApp = async ({
   app.get('/config/flags', { schema: { response: { 200: FeatureFlags } } }, async () => flags);
 
   if (mock) {
-    registerMockRoutes(app, new MockWorld(flags));
+    registerMockRoutes(app, new MockWorld(flags), { resume });
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

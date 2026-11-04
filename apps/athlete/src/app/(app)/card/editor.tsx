@@ -274,7 +274,7 @@ function Editor({ initial }: { initial: UpdateCardRequest }) {
 export default function CardEditor() {
   const { state } = useApi(() => api.myCard());
   return (
-    <Screen eyebrow="Baseball Card" title="Edit card" back>
+    <Screen eyebrow="Impact Card" title="Edit card" back>
       <Async state={state}>{(s) => <Editor initial={startingValues(s)} />}</Async>
     </Screen>
   );

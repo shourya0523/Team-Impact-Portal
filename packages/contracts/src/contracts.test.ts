@@ -20,11 +20,12 @@ import {
   CreatePostRequest,
   CreateReportRequest,
   CreateTeamRequest,
+  CURRENT_TERMS_VERSION,
   Email,
   ExperienceEntry,
   emailOnDomain,
   FindAlumniQuery,
-  hasBaseballCard,
+  hasImpactCard,
   LinkedInUrl,
   MergeCommunityRequest,
   MergeCollegeRequest,
@@ -70,6 +71,7 @@ const adultSignup = {
   birthDate: bornYearsAgo(20),
   role: 'athlete',
   acceptTerms: true,
+  termsVersion: CURRENT_TERMS_VERSION,
 };
 
 const accepts = (schema: ZodType, value: unknown) => schema.safeParse(value).success;
@@ -78,11 +80,11 @@ const issuePaths = (result: { error?: { issues: { path: PropertyKey[] }[] } }) =
   result.error?.issues.map((issue) => issue.path.join('.'));
 
 describe('roles', () => {
-  it('only athletes have a Baseball Card', () => {
-    expect(hasBaseballCard('athlete')).toBe(true);
-    expect(hasBaseballCard('alumni_athlete')).toBe(true);
-    expect(hasBaseballCard('parent')).toBe(false);
-    expect(hasBaseballCard('recruiter')).toBe(false);
+  it('only athletes have an Impact Card', () => {
+    expect(hasImpactCard('athlete')).toBe(true);
+    expect(hasImpactCard('alumni_athlete')).toBe(true);
+    expect(hasImpactCard('parent')).toBe(false);
+    expect(hasImpactCard('recruiter')).toBe(false);
   });
 
   it('turns 13 on the birthday, not the day before', () => {
@@ -126,6 +128,7 @@ describe('sign-up', () => {
       lastName: 'Park',
       title: 'Campus Recruiter',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     };
     expect(accepts(RecruiterSignupRequest, recruiter)).toBe(false);
     const work = { ...recruiter, email: 'sam.park@northbeam.com' };
@@ -141,6 +144,7 @@ describe('sign-up', () => {
       lastName: 'Lopez',
       password: 'short',
       acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
     };
     expect(issuePaths(AcceptCoachInviteRequest.safeParse({ token: TOKEN, newAccount }))).toEqual([
       'newAccount.password',
