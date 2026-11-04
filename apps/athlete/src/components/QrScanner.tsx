@@ -1,8 +1,8 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useEffect, useRef } from 'react';
 import { ActivityIndicator, Linking, Platform, StyleSheet, View } from 'react-native';
+import { codeFromScan } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
-import { codeFromScan } from '@/components/join';
 import { Button, Text } from '@/ui';
 const FRAME_BORDER = 3;
 

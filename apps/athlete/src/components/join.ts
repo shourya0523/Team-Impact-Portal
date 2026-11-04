@@ -1,26 +1,4 @@
-import { QrCodeParams } from '@team-impact/contracts';
 import { ApiRequestError } from '@/api/client';
-
-/**
- * The code inside a scanned QR or a pasted link. A coach's QR is a link to `/scan?code=XXXXXXXX`
- * (`joinLink` in `(app)/team/qr.tsx`), but a bare token or short code works too, typed any way
- * (`abcd-2345`). Anything else, like a website's QR, is null.
- */
-export const codeFromScan = (data: string): string | null => {
-  const value = data.trim();
-  const fromLink = /[?&]code=([^&#]+)/.exec(value)?.[1];
-  if (fromLink === undefined && value.includes('://')) return null;
-  let candidate = value;
-  if (fromLink !== undefined) {
-    try {
-      candidate = decodeURIComponent(fromLink);
-    } catch {
-      return null; // a broken %-escape
-    }
-  }
-  const parsed = QrCodeParams.shape.code.safeParse(candidate);
-  return parsed.success ? parsed.data : null;
-};
 
 /** What went wrong with a code, and what the person can do next. */
 export type QrProblem = {

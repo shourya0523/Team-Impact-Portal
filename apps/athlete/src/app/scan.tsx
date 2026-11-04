@@ -1,11 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import type { QrCodePreview } from '@team-impact/contracts';
+import { codeFromScan, type QrCodePreview } from '@team-impact/contracts';
 import { colors, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { shortDate } from '@/components/format';
-import { codeFromScan, NOT_A_CODE, qrProblem, type QrProblem } from '@/components/join';
+import { NOT_A_CODE, qrProblem, type QrProblem } from '@/components/join';
 import { QrScanner } from '@/components/QrScanner';
 import { ErrorText, Gutter, Screen } from '@/components/ui';
 import { useRole } from '@/navigation/role';
