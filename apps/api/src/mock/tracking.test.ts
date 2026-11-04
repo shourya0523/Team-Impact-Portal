@@ -12,7 +12,6 @@ import { MockWorld } from './world';
 const SOCCER = id(201);
 const LACROSSE = id(202); // invited by staff, waiting on its first coach
 const TEAM = id(301); // the soccer team's community
-const TEAM_IMPACT = id(302);
 const FIRST_GEN = id(304); // official interest community
 const FAMILY_NIGHT = id(502); // approved event in Team Impact's community
 const TUFTS = id(701);
@@ -247,7 +246,6 @@ describe('mock API: tracked events', () => {
 
     await signInAs('staff');
     const announcement = await call('POST', '/staff/announcements', {
-      communityId: TEAM_IMPACT,
       text: 'Pilot opens in December!',
       sendPush: false,
     });

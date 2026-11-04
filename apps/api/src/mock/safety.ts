@@ -42,13 +42,15 @@ export const blockedBetween = (world: MockWorld, a: string, b: string) =>
 
 /**
  * Whether `u` shouldn't see an item: they reported it (hidden for the reporter straight away), or
- * its author and `u` blocked each other. Official Team Impact posts can't be blocked. A suspended
- * author's content is hidden from everyone until staff restore them (staff can't be suspended).
+ * its author and `u` blocked each other. Official Team Impact posts, and staff content in Team
+ * Impact's community, can't be blocked. A suspended author's content is hidden from everyone until
+ * staff restore them (staff can't be suspended). `communityId` is where the item lives (a
+ * comment's is its post's).
  */
 export const hiddenFor = (
   world: MockWorld,
   u: MockUser,
-  item: { id: string; authorId: string; official?: boolean },
+  item: { id: string; authorId: string; communityId: string; official?: boolean },
 ) => !can(actorOf(world, u), 'content.read', contentFacts(world, u, item));
 
 /**

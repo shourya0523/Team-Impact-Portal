@@ -27,6 +27,11 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
+  /**
+   * The mock data to serve, for tests that seed it; a fresh fixture world by default. Its own flags
+   * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees.
+   */
+  world?: MockWorld;
 }
 
 /** Identity search and medical communities ship on for the pilot (PRD §7, §5). */
@@ -40,6 +45,7 @@ export const buildApp = async ({
   logger = false,
   flags = DEFAULT_FLAGS,
   mock = false,
+  world,
 }: AppOptions) => {
   const app = useZodContracts(Fastify({ logger }));
 
@@ -59,7 +65,7 @@ export const buildApp = async ({
   app.get('/config/flags', { schema: { response: { 200: FeatureFlags } } }, async () => flags);
 
   if (mock) {
-    registerMockRoutes(app, new MockWorld(flags));
+    registerMockRoutes(app, world ?? new MockWorld(flags));
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

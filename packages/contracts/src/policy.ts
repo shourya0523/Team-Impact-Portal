@@ -46,6 +46,11 @@ export interface ContentFacts {
   authorId: string;
   /** Official Team Impact content can't be blocked. */
   official?: boolean;
+  /**
+   * Staff content in Team Impact's own community, which a block doesn't hide either. Staff content
+   * anywhere else stays blockable (PRD §5, v2.4).
+   */
+  staffInTeamImpact?: boolean;
   /** Either the actor or the author blocked the other. */
   blocked: boolean;
   reportedByActor: boolean;
@@ -144,7 +149,7 @@ const canSeeCommunity = (a: Actor, c: CommunityFacts) => {
 };
 
 const canReadContent = (a: Actor, x: ContentFacts) =>
-  !x.reportedByActor && !(!x.official && x.blocked) && !x.authorSuspended;
+  !x.reportedByActor && !(x.blocked && !x.official && !x.staffInTeamImpact) && !x.authorSuspended;
 
 const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
   // Team and family only: the parent, and accounts on the child's team. Recruiters never.

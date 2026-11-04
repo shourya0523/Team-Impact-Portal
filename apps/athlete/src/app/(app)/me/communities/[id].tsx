@@ -7,7 +7,7 @@ import { canJoinCommunity, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton } from '@/components/Report';
+import { blockable, ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
 import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
@@ -306,26 +306,39 @@ export default function CommunityDetail() {
                         page.items.map((p) => (
                           <Card key={p.id}>
                             <View style={styles.person}>
-                              <Avatar
-                                name={`${p.author.firstName} ${p.author.lastName}`}
-                                role={p.author.role}
-                              />
-                              <View style={styles.grow}>
-                                <Text weight="semibold">
-                                  {p.author.firstName} {p.author.lastName}
-                                </Text>
-                                <Text variant="caption" weight="medium" color="muted">
-                                  {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
-                                </Text>
-                              </View>
+                              {p.kind === 'announcement' ? (
+                                // From Team Impact, not the staff member who wrote it.
+                                <View style={styles.grow}>
+                                  <Badge
+                                    label="Team IMPACT announcement"
+                                    variant="brand"
+                                    icon="megaphone"
+                                    caps
+                                  />
+                                  <Text variant="caption" weight="medium" color="muted">
+                                    {shortDate(p.createdAt)}
+                                  </Text>
+                                </View>
+                              ) : (
+                                <>
+                                  <Avatar
+                                    name={`${p.author.firstName} ${p.author.lastName}`}
+                                    role={p.author.role}
+                                  />
+                                  <View style={styles.grow}>
+                                    <Text weight="semibold">
+                                      {p.author.firstName} {p.author.lastName}
+                                    </Text>
+                                    <Text variant="caption" weight="medium" color="muted">
+                                      {ROLE_LABEL[p.author.role]} · {shortDate(p.createdAt)}
+                                    </Text>
+                                  </View>
+                                </>
+                              )}
                               {p.author.id !== me?.id && !p.official && (
                                 <ReportButton
                                   target={{ kind: 'post', id: p.id }}
-                                  author={
-                                    p.author.role === 'staff'
-                                      ? undefined
-                                      : { id: p.author.id, name: p.author.firstName }
-                                  }
+                                  author={blockable(p.author, x.kind)}
                                   onDone={posts.reload}
                                 />
                               )}

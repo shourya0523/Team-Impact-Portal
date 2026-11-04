@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import {
   REPORT_REASONS,
+  type CommunityKind,
   type CreateReportRequest,
   type ReportReason,
+  type Role,
 } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
@@ -19,6 +21,18 @@ export const REASON_LABEL: Record<ReportReason, string> = {
   other: 'Something else',
 };
 
+/**
+ * Who the report form may offer to block: the item's author, unless they're staff posting in Team
+ * Impact's own community, where a block wouldn't hide them (PRD §5, v2.4).
+ */
+export const blockable = (
+  author: { id: string; firstName: string; role: Role },
+  where: CommunityKind,
+): ReportProps['author'] =>
+  author.role === 'staff' && where === 'team_impact'
+    ? undefined
+    : { id: author.id, name: author.firstName };
+
 const WHAT: Record<CreateReportRequest['target']['kind'], string> = {
   post: 'post',
   comment: 'comment',
@@ -31,7 +45,7 @@ const DOT = 20;
 
 type ReportProps = {
   target: CreateReportRequest['target'];
-  /** Offer blocking the item's author from the same form (P2). Never Team Impact staff. */
+  /** Offer blocking the item's author from the same form (P2); see `blockable`. */
   author?: { id: string; name: string };
   /** After a report or block, e.g. to reload a feed the item should drop out of. */
   onDone?: () => void;
