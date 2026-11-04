@@ -1,3 +1,4 @@
+import { can } from '@team-impact/contracts';
 import type {
   CreateReportRequest,
   ModerationTicket,
@@ -6,6 +7,7 @@ import type {
 } from '@team-impact/contracts';
 import { commentsFor } from './activity';
 import type { MockPost } from './fixtures';
+import { actorOf, contentFacts } from './policy';
 import { canSeeChild } from './profiles';
 import { isLastCoach } from './team';
 import type { MockUser, MockWorld } from './world';
@@ -47,10 +49,7 @@ export const hiddenFor = (
   world: MockWorld,
   u: MockUser,
   item: { id: string; authorId: string; official?: boolean },
-) =>
-  world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id) ||
-  (!item.official && blockedBetween(world, u.id, item.authorId)) ||
-  world.staffTools.suspensions.some((s) => s.userId === item.authorId);
+) => !can(actorOf(world, u), 'content.read', contentFacts(world, u, item));
 
 /**
  * What a report points at, as `u` can see it, with a one-line preview for the staff ticket.

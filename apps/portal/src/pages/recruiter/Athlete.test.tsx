@@ -84,7 +84,7 @@ describe('athlete page', () => {
     renderPage();
     const email = await screen.findByRole('link', { name: 'jordan@example.edu' });
     expect(email.getAttribute('href')).toBe('mailto:jordan@example.edu');
-    expect(events).toEqual([view]);
+    await vi.waitFor(() => expect(events).toEqual([view]));
 
     fireEvent.copy(email);
     await vi.waitFor(() => expect(events).toHaveLength(2));
