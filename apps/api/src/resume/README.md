@@ -62,7 +62,18 @@ additional AI company sees resumes"), and the privacy policy draft names it as a
   (`pdf.ts`), and `pdf-limits.test.ts` checks each one with a compression bomb.
 - One PDF is read at a time per instance, with up to 32 waiting; past that, and past 10 uploads
   per athlete per hour, the upload answers 429 so the app can retry.
-- Lines with an address or birthdate are dropped before any reader sees them.
+- Lines with an address or birthdate are dropped before any reader sees them (`isSensitiveLine`).
+  A birthdate is a labelled one ("DOB", "born"), any ISO day, or a single unlabelled day in any
+  common format ("03/14/2004", "14.03.2004", "March 14, 2004", "14 March 2004") whose year makes
+  the person at least 13. Days that are one end of a range ("06/01/2022 – 08/31/2022"), are named
+  as another event ("Graduated 05/15/2010") or are too recent don't drop the line; month-and-year
+  dates ("Aug 2022", "06/2022") are never days.
+- Before the LLM pass, `stripContacts` replaces emails, phone numbers (US, `+` with 8–15 digits,
+  and national numbers of 10–15 digits that aren't just years), links (`https://`, `www.`, any
+  `domain.tld/path`, and lowercase bare domains with common endings), `@handles` and any
+  birthdate-like day left over. Skill names that look like domains (`Node.js`, `ASP.NET`), degree
+  abbreviations, GPAs, stats and year ranges are kept. An `@Acme` written as "at Acme" is stripped
+  as a handle.
 - Every value is validated against the card schema (`CardFields`); text is plain, no markup.
 - Text that looks like instructions is data: the layout reader can't follow it, and the LLM's output
   is schema-checked and grounded, so it can only return words that are in the resume.

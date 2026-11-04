@@ -63,6 +63,102 @@ describe('guardrails', () => {
     expect(out).toBe('[email] | [phone] | [link]');
   });
 
+  it.each([
+    ['+44 7911 123456', '[phone]'],
+    ['+91 98765 43210', '[phone]'],
+    ['07911 123456', '[phone]'],
+    ['+33 6 12 34 56 78', '[phone]'],
+    ['+1 (617) 555-0142', '[phone]'],
+    ['617.555.0142', '[phone]'],
+    ['github.com/jlee', '[link]'],
+    ['GitHub.com/jlee', '[link]'],
+    ['instagram.com/jlee', '[link]'],
+    ['x.com/jlee', '[link]'],
+    ['jlee.dev', '[link]'],
+    ['GitHub.com', '[link]'],
+    ['Jlee.dev', '[link]'],
+    ['jlee.co.uk', '[link]'],
+    ['https://jlee.dev/work', '[link]'],
+    ['@jlee', '[handle]'],
+    ['Jordan Lee | 03/14/2004 | Boston', 'Jordan Lee | [date] | Boston'],
+    ['14.03.2004', '[date]'],
+    ['March 14, 2004', '[date]'],
+    ['14 March 2004', '[date]'],
+    ['14th of March, 2004', '[date]'],
+    ['3/14/04', '[date]'],
+    [
+      'Jordan Lee | +44 7911 123456 | github.com/jlee | @jlee | 2019 – 2023',
+      'Jordan Lee | [phone] | [link] | [handle] | 2019 – 2023',
+    ],
+  ])('strips %s', (text, out) => {
+    expect(stripContacts(text, NOW)).toBe(out);
+  });
+
+  it.each([
+    '2019 – 2023',
+    '2019-2023',
+    'Aug 2022 - May 2026',
+    '06/2022 – 08/2022',
+    'Class of 2026',
+    'Fall 2025',
+    'GPA 3.85/4.00',
+    '#23 | 18.2 PPG | 3.85 3.90 3.95',
+    '2015 2016 2017 2018',
+    '2019-20 2020-21 season',
+    'Node.js, Vue.js, ASP.NET, Next.js, Node.js/Express, ASP.net/MVC',
+    'B.S. Biology, M.B.A.',
+    'Python 3.10.12',
+    'Intern @ Acme',
+    '06/01/2022 – 08/31/2022 Intern, Acme',
+    '06/01/2010 - 08/31/2010 Intern, Acme',
+    '09/01/2010 – Present',
+    'Graduated 05/15/2026',
+  ])('keeps %s for the extractor', (text) => {
+    expect(stripContacts(text, NOW)).toBe(text);
+  });
+
+  it.each([
+    '03/14/2004',
+    '14.03.2004',
+    '03-14-2004',
+    'March 14, 2004',
+    'Mar. 14th 2004',
+    '14 March 2004',
+    '14-Mar-2004',
+    '2004/03/14',
+    '3/14/04',
+    'Jordan Lee | 03/14/2004 | Boston',
+    'Jordan Lee - 03/14/2004 - Boston',
+  ])('drops %s as a birthdate', (line) => {
+    expect(isSensitiveLine(line, NOW)).toBe(true);
+  });
+
+  it.each([
+    '06/01/2022 – 08/31/2022 Intern, Acme',
+    '06/01/2010 - 08/31/2010 Intern, Acme',
+    'June 1, 2010 to August 31, 2010 Camp counselor',
+    '09/01/2010 – Present',
+    'Graduated 05/15/2026',
+    'Graduated 05/15/2010',
+    'Expected 05/15/2027',
+    '2019 – 2023',
+    'Aug 2022 - May 2026',
+    '06/2022 – 08/2022',
+    'Class of 2026',
+    'Fall 2025',
+    'GPA 3.85/4.00',
+    'Python 3.10.12, Node.js',
+  ])('keeps %s', (line) => {
+    expect(isSensitiveLine(line, NOW)).toBe(false);
+  });
+
+  it('only counts a day as a birthdate when it makes the person at least 13', () => {
+    expect(isSensitiveLine('03/14/2013', NOW)).toBe(true);
+    expect(isSensitiveLine('03/14/2014', NOW)).toBe(false);
+    expect(isSensitiveLine('03/14/2014', new Date('2027-06-01T00:00:00Z'))).toBe(true);
+    expect(stripContacts('03/14/2014', NOW)).toBe('03/14/2014');
+  });
+
   it('checks the file starts the way its type says', () => {
     expect(matchesType(new TextEncoder().encode('%PDF-1.7'), 'application/pdf')).toBe(true);
     expect(matchesType(new TextEncoder().encode('<html>'), 'application/pdf')).toBe(false);
