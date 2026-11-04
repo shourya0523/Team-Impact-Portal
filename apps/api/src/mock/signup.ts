@@ -1,7 +1,9 @@
 import {
   ageOn,
+  CONSENT_FLAGS,
+  CURRENT_TERMS_VERSION,
   type ConsentFlag,
-  type CurrentTermsVersion,
+  type TermsVersion,
   type NewChild,
   type PendingChild,
   type PendingRecruiter,
@@ -18,7 +20,7 @@ export { INVITE_TOKENS, QR_TOKENS } from './team';
 export interface MockPendingRecruiter extends Omit<PendingRecruiter, 'company'> {
   companyId: string;
   /** The terms they accepted when they asked; recorded against the account staff create. */
-  termsVersion: CurrentTermsVersion;
+  termsVersion: TermsVersion;
 }
 
 /**
@@ -44,6 +46,16 @@ export const newSignupState = () => ({
 export const consentsOf = (state: SignupState, userId: string) =>
   state.consents.filter((c) => c.userId === userId);
 export type SignupState = ReturnType<typeof newSignupState>;
+
+/**
+ * The version of `userId`'s latest terms acceptance. Fixture users' acceptances live in the seed,
+ * not here, so on the mock an account with none recorded counts as having accepted the current
+ * text; accounts made through the mock's sign-up routes always have one.
+ */
+export const latestTermsVersion = (state: SignupState, userId: string): string => {
+  const terms = consentsOf(state, userId).filter((c) => c.flag === CONSENT_FLAGS.terms && c.value);
+  return terms.at(-1)?.termsVersion ?? CURRENT_TERMS_VERSION;
+};
 
 /** What the coach sees about each child: first name, last initial and age, never the date. */
 export const pendingChildren = (children: NewChild[] | undefined): PendingChild[] =>

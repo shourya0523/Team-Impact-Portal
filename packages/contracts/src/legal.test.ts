@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ACCEPTED_TERMS_VERSIONS,
   AcceptCoachInviteRequest,
+  AcceptTermsRequest,
   CONSENT_FLAGS,
   CURRENT_TERMS_VERSION,
   LEGAL_DOCUMENT_IDS,
   LEGAL_DOCUMENT_NAMES,
   LEGAL_DOCUMENTS,
+  mustAcceptTerms,
+  PREVIOUS_TERMS_VERSIONS,
   RecruiterSignupRequest,
   SignupRequest,
   TermsVersion,
@@ -63,12 +67,36 @@ describe('legal documents (TI-107)', () => {
     expect(LEGAL_DOCUMENT_NAMES).toBe('Terms of Use, Privacy Policy and Acceptable Use Policy');
   });
 
-  it('only accepts the current version', () => {
-    expect(TermsVersion.safeParse(CURRENT_TERMS_VERSION).success).toBe(true);
+  it('accepts the current version and any still-accepted earlier one, nothing else', () => {
+    expect(ACCEPTED_TERMS_VERSIONS[0]).toBe(CURRENT_TERMS_VERSION);
+    for (const version of ACCEPTED_TERMS_VERSIONS) {
+      expect(TermsVersion.safeParse(version).success, version).toBe(true);
+    }
     for (const old of ['v2.0', '2026-10-draft.1', '', undefined, null]) {
+      if (PREVIOUS_TERMS_VERSIONS.includes(String(old))) continue;
       expect(TermsVersion.safeParse(old).success, String(old)).toBe(false);
     }
-    expect(TermsVersion.safeParse('v2.0').error?.issues[0]?.message).toMatch(/terms have changed/);
+    // An installed app can't "reload": the message says to update it too.
+    expect(TermsVersion.safeParse('v2.0').error?.issues[0]?.message).toMatch(
+      /terms have changed. Update the app/,
+    );
+  });
+
+  it('accepts only the current version when accepting again', () => {
+    const accept = { acceptTerms: true, termsVersion: CURRENT_TERMS_VERSION };
+    expect(AcceptTermsRequest.safeParse(accept).success).toBe(true);
+    expect(AcceptTermsRequest.safeParse({ ...accept, acceptTerms: false }).success).toBe(false);
+    for (const version of [...PREVIOUS_TERMS_VERSIONS, 'v2.0']) {
+      expect(AcceptTermsRequest.safeParse({ ...accept, termsVersion: version }).success).toBe(
+        false,
+      );
+    }
+  });
+
+  it('asks anyone whose latest acceptance is not the current text to accept again', () => {
+    expect(mustAcceptTerms(CURRENT_TERMS_VERSION)).toBe(false);
+    expect(mustAcceptTerms('2026-10-draft.1')).toBe(true);
+    expect(mustAcceptTerms(null)).toBe(true);
   });
 
   it('stores acceptances under the flags the consent_records seed uses', () => {

@@ -1,11 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import type { FeatureFlags, Me, Role } from '@team-impact/contracts';
+import {
+  CURRENT_TERMS_VERSION,
+  type FeatureFlags,
+  type Me,
+  type Role,
+} from '@team-impact/contracts';
 import { api } from './api';
 
 interface Session {
   /** `undefined` while the first `/me` is in flight; `null` when signed out. */
   me: Me | null | undefined;
   flags: FeatureFlags | undefined;
+  /**
+   * True when the legal text changed since the signed-in account accepted it: the portal shows
+   * the new text and nothing else until they accept (TI-107). `undefined` while asking.
+   */
+  mustAcceptTerms: boolean | undefined;
+  acceptTerms: () => Promise<void>;
   signIn: (role: Role) => Promise<Me>;
   signOut: () => Promise<void>;
 }
@@ -16,6 +27,7 @@ const SessionContext = createContext<Session | null>(null);
 export const SessionProvider = ({ children }: { children: ReactNode }) => {
   const [me, setMe] = useState<Me | null | undefined>(undefined);
   const [flags, setFlags] = useState<FeatureFlags>();
+  const [mustAcceptTerms, setMustAcceptTerms] = useState<boolean>();
 
   useEffect(() => {
     // A 401 means signed out; any other failure also shows sign-in, with the API's error there.
@@ -24,6 +36,30 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
     api
       .flags()
       .then(setFlags, () => setFlags({ identitySearch: false, medicalCommunities: false }));
+  }, []);
+
+  // Asked again for each account that signs in. If the API can't say, the portal carries on: it
+  // still refuses a stale version wherever one is sent.
+  const meId = me?.id;
+  useEffect(() => {
+    setMustAcceptTerms(undefined);
+    if (!meId) return;
+    let live = true;
+    api.termsStatus().then(
+      (status) => live && setMustAcceptTerms(status.mustAccept),
+      () => live && setMustAcceptTerms(false),
+    );
+    return () => {
+      live = false;
+    };
+  }, [meId]);
+
+  const acceptTerms = useCallback(async () => {
+    const status = await api.acceptTerms({
+      acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
+    });
+    setMustAcceptTerms(status.mustAccept);
   }, []);
 
   const signIn = useCallback(async (role: Role) => {
@@ -38,7 +74,7 @@ export const SessionProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   return (
-    <SessionContext.Provider value={{ me, flags, signIn, signOut }}>
+    <SessionContext.Provider value={{ me, flags, mustAcceptTerms, acceptTerms, signIn, signOut }}>
       {children}
     </SessionContext.Provider>
   );

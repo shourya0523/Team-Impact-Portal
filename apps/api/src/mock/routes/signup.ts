@@ -6,7 +6,7 @@ import {
   ageOn,
   CoachInvitePreview,
   CONSENT_FLAGS,
-  type CurrentTermsVersion,
+  type TermsVersion,
   emailOnDomain,
   IdParams,
   InviteParams,
@@ -66,11 +66,12 @@ export const registerSignupRoutes = (
   /**
    * Stores what the new account agreed to, like the real API's `consent_records` rows: the terms
    * version always, and for a teen their confirmation that a parent or guardian agreed (TI-107).
-   * The contract (`TermsVersion`) only lets the current version through, so it's typed as that.
+   * The contract (`TermsVersion`) lets through the current version and any still-accepted earlier
+   * one; an account on an earlier one is asked to accept the current text (`GET /me/terms`).
    */
   const recordAcceptance = (
     u: MockUser,
-    termsVersion: CurrentTermsVersion,
+    termsVersion: TermsVersion,
     { parentAgreed = false } = {},
   ) => {
     const row = { userId: u.id, value: true, termsVersion, createdAt: u.createdAt };
@@ -317,7 +318,7 @@ export const registerSignupRoutes = (
         ...(pending.title ? { title: pending.title } : {}),
       });
       // They accepted when they asked, so the record names that version and time. If the terms
-      // changed while they waited, asking them to accept the new text is the real auth's job.
+      // changed while they waited, `GET /me/terms` asks them to accept the new text.
       world.signup.consents.push({
         userId: u.id,
         flag: CONSENT_FLAGS.terms,

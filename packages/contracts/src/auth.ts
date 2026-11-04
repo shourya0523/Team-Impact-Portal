@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { CalendarDate, Email, PersonName, Token } from './common';
 import { emailDomain, isPersonalEmailDomain } from './companies';
-import { LEGAL_DOCUMENT_NAMES, TermsVersion } from './legal';
+import { CurrentTermsVersionSchema, LEGAL_DOCUMENT_NAMES, TermsVersion } from './legal';
 import { ageBand, ageOn, SelfSignupRole } from './roles';
 
 const Password = z.string().min(12, 'Use at least 12 characters');
@@ -16,8 +16,8 @@ export type LoginRequest = z.infer<typeof LoginRequest>;
 /**
  * Open sign-up in the athlete app. Birth date is used only to check age: the minimum is 13,
  * 13–17 year olds sign up as teens, and adults can't pick the teen role. `termsVersion` is the
- * legal text the user was shown (`./legal.ts`); it must be the current one and is stored with
- * the acceptance (TI-107).
+ * legal text the user was shown (`./legal.ts`); it must be one the API still accepts and is
+ * stored with the acceptance (TI-107).
  */
 export const SignupRequest = z
   .object({
@@ -93,3 +93,14 @@ export const RecruiterSignupRequest = z.object({
   termsVersion: TermsVersion,
 });
 export type RecruiterSignupRequest = z.infer<typeof RecruiterSignupRequest>;
+
+/**
+ * Accepting the legal text again after it changed (`TermsStatus.mustAccept`). A teen confirms
+ * again that a parent or guardian agreed, as at sign-up.
+ */
+export const AcceptTermsRequest = z.object({
+  acceptTerms: AcceptTerms,
+  termsVersion: CurrentTermsVersionSchema,
+  parentAgreed: z.literal(true).optional(),
+});
+export type AcceptTermsRequest = z.infer<typeof AcceptTermsRequest>;

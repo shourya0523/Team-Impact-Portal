@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { CONSENT_FLAGS, CURRENT_TERMS_VERSION } from '@team-impact/contracts';
+import { CONSENT_FLAGS, CURRENT_TERMS_VERSION, mustAcceptTerms } from '@team-impact/contracts';
 import { consentsOf } from '../mock/signup';
 import { INVITE_TOKENS } from '../mock/team';
 import { anonymous, mockApp, signInAs } from './agents';
@@ -140,5 +140,95 @@ describe('terms acceptance at sign-up (TI-107)', () => {
     expect(consentsOf(world.signup, approved.body.user.id)).toEqual([
       expect.objectContaining({ flag: CONSENT_FLAGS.terms, termsVersion: CURRENT_TERMS_VERSION }),
     ]);
+  });
+});
+
+describe('accepting the terms again after they change (TI-107)', () => {
+  /** Signs `body` up, then rewrites their acceptance as if it was of an earlier text. */
+  const signedUpOnOldTerms = async (body: object) => {
+    const { app, world } = await setup();
+    const agent = anonymous(app);
+    const res = await agent.post('/auth/sign-up', body);
+    expect(res.status).toBe(201);
+    for (const c of consentsOf(world.signup, res.body.id)) c.termsVersion = '2026-10-draft.1';
+    return { agent, world, id: res.body.id as string };
+  };
+
+  it('tells an account on the current text that nothing is needed', async () => {
+    const { app } = await setup();
+    for (const role of ['athlete', 'parent', 'recruiter', 'staff'] as const) {
+      const res = await (await signInAs(app, role)).get('/me/terms');
+      expect(res.body).toEqual({
+        current: CURRENT_TERMS_VERSION,
+        accepted: CURRENT_TERMS_VERSION,
+        mustAccept: false,
+      });
+    }
+  });
+
+  it('asks an account on an earlier text to accept the current one, and records it', async () => {
+    const { agent, world, id } = await signedUpOnOldTerms(adult);
+    expect((await agent.get('/me/terms')).body).toMatchObject({
+      accepted: '2026-10-draft.1',
+      mustAccept: true,
+    });
+
+    const stale = await agent.post('/me/terms', {
+      acceptTerms: true,
+      termsVersion: '2026-10-draft.1',
+    });
+    expect(stale.status).toBe(400);
+    expect(issuePaths(stale.body)).toEqual(['body.termsVersion']);
+    const unticked = await agent.post('/me/terms', { termsVersion: CURRENT_TERMS_VERSION });
+    expect(unticked.status).toBe(400);
+
+    const res = await agent.post('/me/terms', {
+      acceptTerms: true,
+      termsVersion: CURRENT_TERMS_VERSION,
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ accepted: CURRENT_TERMS_VERSION, mustAccept: false });
+    // Append-only: the earlier acceptance stays on record, with the text it was of.
+    expect(consentsOf(world.signup, id).map((c) => c.termsVersion)).toEqual([
+      '2026-10-draft.1',
+      CURRENT_TERMS_VERSION,
+    ]);
+  });
+
+  it('has a teen confirm again that a parent or guardian agreed', async () => {
+    const { agent, world, id } = await signedUpOnOldTerms(teen);
+    const accept = { acceptTerms: true, termsVersion: CURRENT_TERMS_VERSION };
+    expect((await agent.post('/me/terms', accept)).status).toBe(400);
+    const res = await agent.post('/me/terms', { ...accept, parentAgreed: true });
+    expect(res.status).toBe(200);
+    expect(
+      consentsOf(world.signup, id)
+        .slice(-2)
+        .map((c) => [c.flag, c.termsVersion]),
+    ).toEqual([
+      [CONSENT_FLAGS.terms, CURRENT_TERMS_VERSION],
+      [CONSENT_FLAGS.parentAgreed, CURRENT_TERMS_VERSION],
+    ]);
+  });
+
+  it('asks a recruiter approved after the terms changed to accept the new text', async () => {
+    const { app, world } = await setup();
+    expect((await anonymous(app).post('/auth/recruiter-sign-up', recruiter)).status).toBe(202);
+    // The text changed while they waited for staff.
+    world.signup.pendingRecruiters[0]!.termsVersion = '2026-10-draft.1';
+    const staff = await signInAs(app, 'staff');
+    const queue = await staff.get('/staff/recruiter-sign-ups');
+    const approved = await staff.post(`/staff/recruiter-sign-ups/${queue.body[0].id}/approve`);
+    expect(consentsOf(world.signup, approved.body.user.id).map((c) => c.termsVersion)).toEqual([
+      '2026-10-draft.1',
+    ]);
+    expect(
+      mustAcceptTerms(consentsOf(world.signup, approved.body.user.id).at(-1)!.termsVersion),
+    ).toBe(true);
+  });
+
+  it('needs a session', async () => {
+    const { app } = await setup();
+    expect((await anonymous(app).get('/me/terms')).status).toBe(401);
   });
 });
