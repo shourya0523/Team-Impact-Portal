@@ -12,6 +12,7 @@ const FIRST_GEN = id(304); // official interest
 const FINANCE = id(305); // open interest
 const CAPTAINS = id(307); // private interest
 const COACH_POST = id(401);
+const SAM_POST = id(403); // in First-gen
 const NOAH_POST = id(406);
 const SOCCER = id(201);
 const TUFTS = id(701);
@@ -341,6 +342,24 @@ describe('staff tools', () => {
     // Riley joins First-gen through the merge but is not made findable by recruiters.
     expect(merged.body.recruiterSearchOptInCount).toBe(2);
     expect((await staff.get(`/communities/${FINANCE}`)).status).toBe(404);
+  });
+
+  it('removes a community that breaks the rules, but never a team’s or Team Impact’s', async () => {
+    const w = await world();
+    const staff = await w.as('staff');
+    const jordan = await w.as('athlete'); // made First-gen
+    const recruiter = await w.as('recruiter');
+    expect(postIds((await jordan.get('/feed')).body)).toContain(SAM_POST);
+    expect((await staff.call('DELETE', `/staff/communities/${FIRST_GEN}`)).status).toBe(204);
+    // Gone for its members, posts and all.
+    expect((await jordan.get(`/communities/${FIRST_GEN}`)).status).toBe(404);
+    expect(postIds((await jordan.get('/feed')).body)).not.toContain(SAM_POST);
+    // An official community stops being a recruiter filter with it.
+    const search = await recruiter.get(`/search/athletes?communityId=${FIRST_GEN}`);
+    expect(search.status).toBe(400);
+    for (const kept of [TEAM_COMMUNITY, TEAM_IMPACT]) {
+      expect((await staff.call('DELETE', `/staff/communities/${kept}`)).status, kept).toBe(400);
+    }
   });
 
   it('posts staff announcements straight into the Team Impact feed', async () => {

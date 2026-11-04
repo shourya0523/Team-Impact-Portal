@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { canJoinCommunity, type Community } from '@team-impact/contracts';
+import { canJoinCommunity, canPostIn, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
+import { HeldNote } from '@/components/activity';
 import { ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
 import { Async, ErrorText, SCROLL_END, Segmented } from '@/components/ui';
@@ -158,11 +159,10 @@ export default function CommunityDetail() {
           const userMade = x.kind === 'interest' || x.kind === 'medical' ? x : null;
           const isPrivate = userMade?.private ?? false;
           const isCreator = !!me && userMade?.createdBy.id === me.id;
-          const canPost =
-            x.myMembership &&
-            role !== 'parent' &&
-            role !== 'recruiter' &&
-            !(role === 'teen' && x.kind !== 'team');
+          // A new community waits for Team Impact to check its name and description; until then
+          // only its creator (and staff) can see it, so there's no one to post to or join with.
+          const held = x.moderation !== 'approved';
+          const canPost = !!role && canPostIn(role, x);
           return (
             <ScrollView contentContainerStyle={styles.scroll}>
               <View style={[styles.cover, { backgroundColor: k.band, paddingTop: insets.top }]}>
@@ -208,6 +208,8 @@ export default function CommunityDetail() {
                       {x.name}
                     </Text>
                     <Text color="secondary">{x.about}</Text>
+                    {/* Staff see every held community; the note is for the one who made it. */}
+                    {held && isCreator && <HeldNote what="community" />}
                   </View>
                   {userMade && !isCreator && (
                     <ReportButton target={{ kind: 'community', id: x.id }} />
@@ -231,6 +233,7 @@ export default function CommunityDetail() {
                     />
                   ) : (
                     !x.myMembership &&
+                    !held &&
                     role &&
                     canJoinCommunity(role, x.kind) &&
                     (userMade?.myJoinRequest ? (
