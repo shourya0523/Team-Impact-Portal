@@ -187,6 +187,22 @@ describe('communities', () => {
     expect(can(actor('staff'), 'community.see', pending)).toBe(true);
   });
 
+  it('creating follows the role, and medical needs its switch on', () => {
+    const create = (role: Role, kind: 'interest' | 'medical', medicalEnabled = true) =>
+      can(actor(role), 'community.create', { kind, medicalEnabled });
+    expect(create('athlete', 'interest')).toBe(true);
+    expect(create('athlete', 'medical')).toBe(true);
+    expect(create('athlete', 'medical', false)).toBe(false);
+    expect(create('athlete', 'interest', false)).toBe(true);
+    expect(create('parent', 'medical')).toBe(true);
+    expect(create('parent', 'medical', false)).toBe(false);
+    expect(create('parent', 'interest')).toBe(false);
+    for (const role of ['teen', 'recruiter'] as const) {
+      expect(create(role, 'interest'), role).toBe(false);
+      expect(create(role, 'medical'), role).toBe(false);
+    }
+  });
+
   it('teens are listed only in their team community', () => {
     const teen = { memberId: 'teen', memberRole: 'teen' as const, blocked: false };
     expect(can(actor('athlete'), 'community.listMember', { ...teen, kind: 'team' })).toBe(true);

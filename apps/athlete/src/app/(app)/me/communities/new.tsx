@@ -25,12 +25,12 @@ type Access = 'open' | 'private';
 
 /**
  * "/me/communities/new": an interest or medical community, open or private (set now, for good).
- * Who can make which follows PRD §5 (`canCreateCommunity`): parents make medical ones only; teens
+ * Who can make which follows PRD §5 (`community.create`): parents make medical ones only; teens
  * and recruiters make neither medical nor interest. The medical kind is gone entirely when its
  * switch is off. Name and description wait for review; names are unique per kind.
  */
 export default function CreateCommunity() {
-  const { role } = useRole();
+  const { me } = useRole();
   const { state } = useApi(() => api.flags());
   const [picked, setPicked] = useState<CreatableCommunityKind | null>(null);
   const [access, setAccess] = useState<Access>('open');
@@ -43,7 +43,7 @@ export default function CreateCommunity() {
     <Screen eyebrow="Communities" title="Create community" back>
       <Async state={state}>
         {(flags) => {
-          const kinds = creatableKinds(role, flags);
+          const kinds = creatableKinds(me, flags);
           const kind = picked && kinds.includes(picked) ? picked : (kinds[0] ?? null);
           if (!kind) {
             return (

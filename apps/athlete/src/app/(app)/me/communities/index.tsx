@@ -77,11 +77,11 @@ function Tile({ x }: { x: Community }) {
  * medical ones only (PRD §5). With the medical switch off, the kind is offered to no one (PRD §11).
  */
 export default function Communities() {
-  const { role } = useRole();
+  const { role, me } = useRole();
   const { state, reload } = useApi(() => api.communities());
   const flags = useApi(() => api.flags());
   // Until the flags load (or if they fail), medical counts as off.
-  const kinds = creatableKinds(role, flags.state.status === 'ready' ? flags.state.data : undefined);
+  const kinds = creatableKinds(me, flags.state.status === 'ready' ? flags.state.data : undefined);
   const [query, setQuery] = useState('');
   const [joining, setJoining] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);

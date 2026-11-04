@@ -1,4 +1,9 @@
-import { canJoinCommunity, type CommunityKind } from './communities';
+import {
+  canCreateCommunity,
+  canJoinCommunity,
+  type CommunityKind,
+  type CreatableCommunityKind,
+} from './communities';
 import type { ModerationStatus } from './moderation';
 import type { Role } from './roles';
 
@@ -72,6 +77,8 @@ interface Targets {
   'community.see': CommunityFacts;
   'community.read': CommunityFacts;
   'community.join': { kind: CommunityKind };
+  /** Starting a community of a kind; `medicalEnabled` is the medical switch (PRD §11). */
+  'community.create': { kind: CreatableCommunityKind; medicalEnabled: boolean };
   'community.members': CommunityFacts;
   /** One person appearing in a community's member list. */
   'community.listMember': {
@@ -187,6 +194,10 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
         (c.kind === 'team_impact' || (c.kind === 'interest' && !!c.official)))),
 
   'community.join': (a, t) => canJoinCommunity(a.role, t.kind),
+
+  // What PRD §5 lets the role make; with the switch off the medical kind doesn't exist (PRD §11).
+  'community.create': (a, t) =>
+    (t.kind !== 'medical' || t.medicalEnabled) && canCreateCommunity(a.role, t.kind),
 
   'community.members': (a, c) => membersDenial(a, c) === null,
 

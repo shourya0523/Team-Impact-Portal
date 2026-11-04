@@ -553,6 +553,25 @@ describe('creating and leaving communities', () => {
     expect(ids((await priya.get('/communities')).body)).toContain(created.body.id);
   });
 
+  it('takes no posts or events in a held community, its creator’s included, until approved', async () => {
+    const { as } = await world();
+    const athlete = await as('athlete');
+    const created = await athlete.post('/communities', {
+      kind: 'interest',
+      name: 'Pre-med athletes',
+      about: 'MCAT study groups.',
+      private: false,
+    });
+    const at = `/communities/${created.body.id}`;
+    const event = { title: 'Study hall', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    expect((await athlete.post(`${at}/posts`, { text: 'Hi' })).status).toBe(409);
+    expect((await athlete.post(`${at}/events`, event)).status).toBe(409);
+
+    await approve(await as('staff'), created.body.id);
+    expect((await athlete.post(`${at}/posts`, { text: 'Hi' })).status).toBe(201);
+    expect((await athlete.post(`${at}/events`, event)).status).toBe(201);
+  });
+
   it('rejects a duplicate name in the same kind, ignoring case', async () => {
     const { as } = await world();
     const coach = await as('coach');

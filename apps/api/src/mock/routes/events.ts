@@ -39,6 +39,8 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
     async (request, reply) => {
       const u = viewer(request);
       const c = seenCommunity(world, u, request.params.id);
+      // Only its creator and staff see a held community, so saying so gives nothing away.
+      if (c.moderation !== 'approved') throw httpError(409, 'This community is waiting for review');
       if (!world.readsCommunity(c, u) || !canCreateEventIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t create events in this community');
       }

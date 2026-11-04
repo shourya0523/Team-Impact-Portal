@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { canJoinCommunity, type Community } from '@team-impact/contracts';
+import { canJoinCommunity, canPostIn, type Community } from '@team-impact/contracts';
 import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
@@ -162,12 +162,7 @@ export default function CommunityDetail() {
           // A new community waits for Team Impact to check its name and description; until then
           // only its creator (and staff) can see it, so there's no one to post to or join with.
           const held = x.moderation !== 'approved';
-          const canPost =
-            !held &&
-            x.myMembership &&
-            role !== 'parent' &&
-            role !== 'recruiter' &&
-            !(role === 'teen' && x.kind !== 'team');
+          const canPost = !!role && canPostIn(role, x);
           return (
             <ScrollView contentContainerStyle={styles.scroll}>
               <View style={[styles.cover, { backgroundColor: k.band, paddingTop: insets.top }]}>
@@ -213,7 +208,8 @@ export default function CommunityDetail() {
                       {x.name}
                     </Text>
                     <Text color="secondary">{x.about}</Text>
-                    {held && <HeldNote what="community" />}
+                    {/* Staff see every held community; the note is for the one who made it. */}
+                    {held && isCreator && <HeldNote what="community" />}
                   </View>
                   {userMade && !isCreator && (
                     <ReportButton target={{ kind: 'community', id: x.id }} />

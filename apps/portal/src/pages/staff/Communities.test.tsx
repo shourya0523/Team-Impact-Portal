@@ -41,12 +41,18 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-/** A fake staff API that records writes and applies the official switch. */
-const fakeApi = () => {
-  let rows: StaffCommunity[] = [team, medical, open, captains, held].map((community) => ({
-    community,
-    recruiterSearchOptInCount: community.kind === 'interest' ? 0 : null,
-  }));
+/**
+ * A fake staff API that records writes and applies the official switch. With the medical switch
+ * off it leaves medical communities out, as the real one does.
+ */
+const fakeApi = (medicalCommunities = true) => {
+  const all = [team, medical, open, captains, held];
+  let rows: StaffCommunity[] = all
+    .filter((c) => medicalCommunities || c.kind !== 'medical')
+    .map((community) => ({
+      community,
+      recruiterSearchOptInCount: community.kind === 'interest' ? 0 : null,
+    }));
   const writes: { method: string; path: string; body: unknown }[] = [];
   vi.stubGlobal(
     'fetch',
@@ -57,8 +63,7 @@ const fakeApi = () => {
           status,
           headers: { 'content-type': 'application/json' },
         });
-      if (path === '/config/flags')
-        return json({ identitySearch: false, medicalCommunities: true });
+      if (path === '/config/flags') return json({ identitySearch: false, medicalCommunities });
       if (path === '/staff/communities') return json(rows);
       const official = path.match(/^\/staff\/communities\/(.+)\/official$/);
       if (official && init?.method === 'PUT') {
@@ -95,6 +100,20 @@ describe('staff communities page', () => {
       expect((await row(never.name)).getByText('Can’t be official'), never.name).toBeTruthy();
     }
     expect(screen.getAllByRole('button', { name: 'Mark official' })).toHaveLength(1);
+  });
+
+  it('lists the rest as usual while the medical switch is off', async () => {
+    fakeApi(false);
+    render(
+      <SessionProvider>
+        <CommunitiesPage />
+      </SessionProvider>,
+    );
+
+    expect((await row(open.name)).getByRole('button', { name: 'Mark official' })).toBeTruthy();
+    expect((await row(team.name)).getByText('Can’t be official')).toBeTruthy();
+    expect(screen.queryByText(medical.name)).toBeNull();
+    expect(screen.queryByText('Medical')).toBeNull();
   });
 
   it('marks a community official, then takes it back', async () => {
