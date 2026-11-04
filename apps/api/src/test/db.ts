@@ -13,16 +13,45 @@ import * as schema from '../db/schema';
 
 const MIGRATIONS = fileURLToPath(new URL('../../drizzle', import.meta.url));
 
+/** Hosts a test run may create and drop databases on: this machine, or a docker-compose service. */
+const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '::1', 'postgres', 'db']);
+
+/** Every database the harness creates starts with this, and it only ever drops names it made. */
+const TEST_DB_PREFIX = 'ti_test_';
+
 /**
- * The Postgres server tests run against, if any (TI-89). CI sets `DATABASE_URL` to its throwaway
- * Postgres service (turbo passes only declared env to `test`, and `test` declares that one);
- * `TEST_DATABASE_URL` wins when both are set. Unset, tests use in-memory PGlite.
+ * The Postgres server tests run against, if any (TI-89): `TEST_DATABASE_URL`, and nothing else.
+ * `DATABASE_URL` is never read here, so a shell that exports a real (say staging) `DATABASE_URL`
+ * still gets in-memory PGlite. Unset or blank, tests use PGlite. CI sets `TEST_DATABASE_URL` to its
+ * throwaway Postgres service; `turbo.json` declares it (and `TEST_DATABASE_ALLOW_REMOTE`) on `test`,
+ * since turbo strips undeclared env vars.
  *
- * Tests never touch the database the URL names: each `createTestDb()` creates its own database on
- * that server and drops it on `close()`, so the role needs CREATEDB.
+ * The URL's host must be local (`localhost`, `127.0.0.1`, `::1`) or a docker-compose service name
+ * (`postgres`, `db`); anything else throws unless `TEST_DATABASE_ALLOW_REMOTE=1` is also set.
+ *
+ * Tests never touch the database the URL names: each `createTestDb()` creates its own
+ * `ti_test_<random>` database on that server and drops it on `close()`, so the role needs CREATEDB.
  */
-export const testDatabaseUrl = () =>
-  process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || undefined;
+export const testDatabaseUrl = (env: NodeJS.ProcessEnv = process.env): string | undefined => {
+  const url = env.TEST_DATABASE_URL?.trim();
+  if (!url) return undefined;
+  let host: string;
+  try {
+    // postgres:// is not a special scheme, so `URL` keeps the host's case and IPv6 brackets.
+    host = new URL(url).hostname.toLowerCase().replace(/^\[(.*)\]$/, '$1');
+  } catch {
+    throw new Error('TEST_DATABASE_URL is not a valid URL');
+  }
+  if (!LOCAL_HOSTS.has(host) && env.TEST_DATABASE_ALLOW_REMOTE !== '1') {
+    // Name only the host: the URL carries a password.
+    throw new Error(
+      `TEST_DATABASE_URL points at ${host ? `"${host}"` : 'no host'}, which is not local ` +
+        `(${[...LOCAL_HOSTS].join(', ')}). Tests create and drop databases there; set ` +
+        'TEST_DATABASE_ALLOW_REMOTE=1 if that server really is a throwaway one.',
+    );
+  }
+  return url;
+};
 
 export interface TestDb {
   db: Db;
@@ -54,13 +83,19 @@ const seedWith =
 
 /** A fresh database on the test server, migrated, and dropped again on close. */
 const createPostgresDb = async (url: string): Promise<TestDb> => {
-  const name = `ti_test_${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
+  const name = `${TEST_DB_PREFIX}${Date.now().toString(36)}_${randomBytes(4).toString('hex')}`;
   const admin = postgres(url, { max: 1, onnotice: () => {} });
-  await admin.unsafe(`create database "${name}"`);
+  try {
+    await admin.unsafe(`create database "${name}"`);
+  } catch (e) {
+    await admin.end({ timeout: 5 });
+    throw e;
+  }
   const target = new URL(url);
   target.pathname = `/${name}`;
   const client = postgres(target.toString(), { max: 5, onnotice: () => {} });
   const db = drizzlePostgres(client, { schema });
+  // Drops only the database this call created above, never the one the URL names.
   const close = async () => {
     await client.end({ timeout: 5 });
     await admin.unsafe(`drop database if exists "${name}" with (force)`);
