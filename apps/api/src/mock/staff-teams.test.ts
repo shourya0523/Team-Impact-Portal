@@ -1121,6 +1121,26 @@ describe('a team’s coaches and invites', () => {
     ]);
   });
 
+  it('resending emails a new link, and the old emailed link stops working', async () => {
+    const w = await setup();
+    const staff = await w.as('staff');
+    const email = 'robin.assistant@tufts.edu';
+    const sent = await staff.post(`/staff/teams/${SOCCER}/coach-invites`, { email });
+    expect(sent.status).toBe(201);
+    const oldToken = w.tokenOf(sent.body.id);
+
+    const res = await staff.post(`/staff/coach-invites/${sent.body.id}/resend`);
+    expect(res.status).toBe(201);
+    const newToken = w.tokenOf(res.body.id);
+    // Both links exist only in the two emails; the invite rows hold hashes.
+    expect(w.world.outbox.filter((e) => e.to === email)).toHaveLength(2);
+    expect(newToken).not.toBe(oldToken);
+
+    const anon = w.client();
+    expect((await anon.get(`/invites/${oldToken}`)).status).toBe(410);
+    expect((await anon.get(`/invites/${newToken}`)).status).toBe(200);
+  });
+
   it('resends an invite that expired, leaving the old one expired', async () => {
     const w = await setup();
     const staff = await w.as('staff');

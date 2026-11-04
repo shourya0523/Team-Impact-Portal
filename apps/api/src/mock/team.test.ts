@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { DEFAULT_PREFS } from './activity';
@@ -463,6 +463,17 @@ describe('team: codes and invites made by a coach work in the sign-up routes', (
 });
 
 describe('team: coach invites and edits', () => {
+  it('a coach can’t invite coaches to, or withdraw invites from, another team', async () => {
+    // Dana coaches soccer, not lacrosse. A team she isn't on answers like one that doesn't exist.
+    const { call } = await signIn('coach');
+    const invite = await call('POST', `/teams/${OTHER_TEAM}/coach-invites`, {
+      email: 'someone@tufts.edu',
+    });
+    expect(invite.status).toBe(404);
+    expect((await call('POST', `/coach-invites/${id(1401)}/revoke`)).status).toBe(404);
+    expect((await call('GET', `/teams/${OTHER_TEAM}/coach-invites`)).status).toBe(404);
+  });
+
   it('a coach invites another coach and sees the invite waiting', async () => {
     const { call } = await signIn('coach');
     const res = await call('POST', `/teams/${TEAM}/coach-invites`, {
@@ -535,5 +546,15 @@ describe('team: coach invites and edits', () => {
     expect(email).toMatchObject({ to: 'new.assistant@tufts.edu' });
     const token = email.link.split('/invite/')[1];
     expect((await call('GET', `/invites/${token}`)).status).toBe(200);
+  });
+
+  it('has no dev outbox in production, where it would hand out invite links', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    try {
+      const { call } = await signIn('coach');
+      expect((await call('GET', '/dev/outbox')).status).toBe(404);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
