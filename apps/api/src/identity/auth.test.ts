@@ -540,7 +540,8 @@ describe('attack: stealing a session token from a page', () => {
   });
 });
 
-describe('attack: dodging the rate limit', () => {
+// Each guess is a real argon2 hash (64 MiB, 3 passes): 23 of them can pass the 5s default on CI.
+describe('attack: dodging the rate limit', { timeout: 30_000 }, () => {
   /** A separate app with rate limiting on, as in production, and `trustProxy` proxy hops. */
   const limitedApp = async (trustProxy: number) =>
     buildApp({
