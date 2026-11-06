@@ -6,7 +6,7 @@ import { staff } from './staff';
 import { staffAdmin } from './staff-admin';
 import { staffTools } from './staff-tools';
 
-export { ApiRequestError, request } from './client';
+export { ApiRequestError, request, track } from './client';
 
 /** One object for every call; each product area keeps its calls in its own file. */
 export const api = {

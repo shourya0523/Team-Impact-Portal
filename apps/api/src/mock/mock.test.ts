@@ -238,12 +238,40 @@ describe('mock API: communities', () => {
     expect(sam.memberCount).toBe(3);
   });
 
-  it('ranks the team first and shows only approved posts', async () => {
+  it('puts the team first and shows only approved posts', async () => {
     const { get } = await signIn('athlete');
     const feed = (await get('/feed')).body.items as { community: { kind: string } }[];
     expect(feed[0]?.community.kind).toBe('team');
-    expect(feed.at(-1)?.community.kind).toBe('team_impact');
     expect(JSON.stringify(feed)).not.toContain('$5,000');
+  });
+
+  it('orders every home feed by the pilot ranking (team weighted highest)', async () => {
+    // Fixture posts by number (fixtures.ts), ranked by PILOT_RANKING (./feed.ts). The team posts
+    // (401, 406: newest, team weight 4) lead; 401 and 406 tie, so the higher id goes first.
+    // Team Impact's 402 is a day older and weighted 1, but its 48 rallies lift it above the
+    // other communities' 3-rally posts (weight 1.5), which then follow newest first.
+    const expected: Record<string, number[]> = {
+      athlete: [406, 401, 402, 408, 403, 404, 405], // medical ranks like any other community
+      parent: [406, 401, 402, 404],
+      teen: [406, 401, 402, 403, 405],
+      coach: [406, 401, 402, 408, 403, 405],
+      recruiter: [402, 403, 405], // Team Impact and official First Gen only
+      alumni_athlete: [402, 403, 405],
+      alumni_mentor: [402, 407], // their own held post shows, but has no rallies yet
+      staff: [402],
+    };
+    for (const [role, posts] of Object.entries(expected)) {
+      const { get } = await signIn(role as Role);
+      expect(ids((await get('/feed')).body.items), role).toEqual(posts.map(id));
+      await close?.();
+    }
+  });
+
+  it('orders a community feed by the same ranking', async () => {
+    const { get } = await signIn('athlete');
+    expect(ids((await get(`/communities/${FIRST_GEN}/posts`)).body.items)).toEqual(
+      [403, 405].map(id),
+    );
   });
 
   it('shows a medical community’s posts in its own feed, to members only', async () => {
@@ -307,6 +335,73 @@ describe('mock API: communities', () => {
       const res = await send('PUT', `/staff/communities/${target}/official`, { official: true });
       expect(res.status).toBe(400);
     }
+  });
+});
+
+describe('mock API: feed pages', () => {
+  /** Every page of `url`, two at a time over HTTP, joined back together. */
+  const walk = async (get: Awaited<ReturnType<typeof signIn>>['get'], url: string, max: number) => {
+    const items: string[] = [];
+    let cursor: string | null = null;
+    for (let pages = 1; ; pages++) {
+      const q = new URLSearchParams({ limit: '2', ...(cursor ? { cursor } : {}) });
+      const { body } = await get(`${url}?${q}`);
+      items.push(...ids(body.items));
+      cursor = body.nextCursor;
+      if (!cursor) return items;
+      if (pages > max + 1) throw new Error('paging never ended');
+    }
+  };
+
+  it('walks both feeds page by page to the same posts as one big page', async () => {
+    const { get } = await signIn('athlete');
+    for (const url of ['/feed', `/communities/${FIRST_GEN}/posts`]) {
+      const all = ids((await get(`${url}?limit=100`)).body.items);
+      expect(await walk(get, url, all.length), url).toEqual(all);
+    }
+  });
+
+  it('answers 400 for a cursor it didn’t issue, or one from another feed', async () => {
+    const { get } = await signIn('athlete');
+    for (const url of ['/feed?cursor=nope', `/communities/${TEAM}/posts?cursor=nope`]) {
+      const res = await get(url);
+      expect(res.status, url).toBe(400);
+      expect(res.body.error.code).toBe('bad_request');
+    }
+    const home = (await get('/feed?limit=1')).body.nextCursor;
+    const q = new URLSearchParams({ cursor: home });
+    expect((await get(`/communities/${TEAM}/posts?${q}`)).status).toBe(400);
+  });
+
+  it('pages 20 by default, allows up to 100, and refuses 0 or 101', async () => {
+    const { get, send } = await signIn('coach');
+    // Twenty held posts: the coach sees their own, so the coach's feeds grow past 20.
+    for (let n = 1; n <= 20; n++) {
+      expect(
+        (await send('POST', `/communities/${TEAM}/posts`, { text: `Drill ${n}` })).status,
+      ).toBe(201);
+    }
+    const home = (await get('/feed?limit=100')).body.items.length;
+    const team = (await get(`/communities/${TEAM}/posts?limit=100`)).body.items.length;
+    expect([home, team]).toEqual([26, 22]);
+
+    for (const url of ['/feed', `/communities/${TEAM}/posts`]) {
+      const first = (await get(url)).body;
+      expect(first.items, url).toHaveLength(20);
+      expect(first.nextCursor, url).not.toBeNull();
+      expect((await get(`${url}?limit=100`)).body.nextCursor, url).toBeNull();
+      for (const limit of [0, 101]) {
+        expect((await get(`${url}?limit=${limit}`)).status, `${url} limit ${limit}`).toBe(400);
+      }
+    }
+  });
+
+  it('answers 404, not 400, when the reader can’t see the community at all', async () => {
+    const teen = await signIn('teen');
+    expect((await teen.get(`/communities/${MEDICAL}/posts?cursor=nope`)).status).toBe(404);
+    await close?.();
+    const recruiter = await signIn('recruiter');
+    expect((await recruiter.get(`/communities/${TEAM}/posts?cursor=nope`)).status).toBe(404);
   });
 });
 

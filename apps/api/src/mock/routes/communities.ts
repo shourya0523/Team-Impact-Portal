@@ -15,7 +15,7 @@ import {
 import type { ZodApp } from '../../zod';
 import type { MockWorld } from '../world';
 import { notifyJoinApproved } from '../activity';
-import { httpError, paginate, type Guards } from './context';
+import { httpError, type Guards } from './context';
 
 /** Communities, the home feed and events. */
 export const registerCommunityRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
@@ -52,8 +52,12 @@ export const registerCommunityRoutes = (app: ZodApp, world: MockWorld, { viewer 
     '/communities/:id/posts',
     { schema: { params: IdParams, querystring: PageQuery, response: { 200: page(Post) } } },
     async (request) => {
+      // Can't see the community: 404 before the cursor is looked at, so a cursor can't probe it.
       const { u, c } = visibleCommunity(request, request.params.id);
-      return paginate(world.communityFeed(c, u), request.query);
+      const feedPage = world.communityFeedPage(c, u, request.query);
+      // A cursor we didn't issue, or one from another feed (`../feed.ts`).
+      if (!feedPage) throw httpError(400, 'Invalid cursor. Start again from the first page.');
+      return feedPage;
     },
   );
 
@@ -118,7 +122,11 @@ export const registerCommunityRoutes = (app: ZodApp, world: MockWorld, { viewer 
   app.get(
     '/feed',
     { schema: { querystring: PageQuery, response: { 200: page(Post) } } },
-    async (request) => paginate(world.feed(viewer(request)), request.query),
+    async (request) => {
+      const feedPage = world.feedPage(viewer(request), request.query);
+      if (!feedPage) throw httpError(400, 'Invalid cursor. Start again from the first page.');
+      return feedPage;
+    },
   );
 
   app.get('/events', { schema: { response: { 200: z.array(CalendarEvent) } } }, async (request) =>

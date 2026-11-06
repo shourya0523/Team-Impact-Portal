@@ -8,7 +8,7 @@ import { session } from './session';
 import { team } from './team';
 import { signup } from './signup';
 
-export { ApiRequestError, request } from './client';
+export { ApiRequestError, request, track } from './client';
 
 /** One object for every call; each product area keeps its calls in its own file. */
 export const api = {

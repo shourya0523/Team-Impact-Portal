@@ -1,12 +1,12 @@
 import type { FastifyRequest } from 'fastify';
 import type { Role } from '@team-impact/contracts';
 import type { MockUser, MockWorld } from '../world';
+import { httpError } from '../../zod';
 
 export const SESSION_COOKIE = 'ti_session';
 
 /** Fastify's error handler (src/zod.ts) turns `statusCode` into the shared error shape. */
-export const httpError = (statusCode: number, message: string) =>
-  Object.assign(new Error(message), { statusCode });
+export { httpError };
 
 /** Cursor pagination over an in-memory array: the cursor is the next offset. */
 export const paginate = <T>(

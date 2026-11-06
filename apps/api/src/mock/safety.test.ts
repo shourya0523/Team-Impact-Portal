@@ -228,9 +228,9 @@ describe('staff tools', () => {
         '/staff/teams',
         {
           collegeId: TUFTS,
-          sport: 'Hockey',
+          sport: 'Ice Hockey',
           gender: 'men',
-          name: "Men's Hockey",
+          name: "Men's Ice Hockey",
           division: 'III',
           firstCoachEmail: 'a@tufts.edu',
         },
@@ -240,6 +240,7 @@ describe('staff tools', () => {
       ['GET', `/staff/teams/${SOCCER}/coaches`],
       ['POST', `/staff/teams/${SOCCER}/coach-invites`, { email: 'b@tufts.edu' }],
       ['POST', `/staff/coach-invites/${id(9999)}/revoke`],
+      ['POST', `/staff/coach-invites/${id(9999)}/resend`],
       ['POST', '/staff/companies', { name: 'Acme', domains: ['acme.com'] }],
       ['POST', `/staff/companies/${NORTHBEAM}/suspend`],
       ['POST', `/staff/companies/${NORTHBEAM}/restore`],
@@ -273,9 +274,9 @@ describe('staff tools', () => {
     const staff = await w.as('staff');
     const body = {
       collegeId: TUFTS,
-      sport: 'Hockey',
+      sport: 'Ice Hockey',
       gender: 'men',
-      name: "Men's Hockey",
+      name: "Men's Ice Hockey",
       division: 'III',
       firstCoachEmail: 'Coach@Tufts.edu',
     };
@@ -284,9 +285,17 @@ describe('staff tools', () => {
     expect(team.body.status).toBe('invited');
     const coaches = (await staff.get(`/staff/teams/${team.body.id}/coaches`)).body;
     expect(coaches.invites[0].email).toBe('coach@tufts.edu');
-    expect((await staff.call('POST', '/staff/teams', { ...body, sport: 'hockey' })).status).toBe(
-      409,
+    const again = { ...body, name: 'Jumbos Hockey', firstCoachEmail: 'other@tufts.edu' };
+    expect((await staff.call('POST', '/staff/teams', again)).status).toBe(409);
+    // Sports come from the fixed list, so a differently cased one can't sneak a second team in.
+    expect(
+      (await staff.call('POST', '/staff/teams', { ...again, sport: 'ice hockey' })).status,
+    ).toBe(400);
+    const mens = (await staff.get('/staff/teams')).body.filter(
+      (t: { college: { id: string }; sport: string; gender: string }) =>
+        t.college.id === TUFTS && t.sport.toLowerCase() === 'ice hockey' && t.gender === 'men',
     );
+    expect(mens).toHaveLength(1);
     const archived = await staff.call('POST', `/staff/teams/${team.body.id}/archive`);
     expect(archived.body.status).toBe('archived');
     // Archived teams leave the join search.

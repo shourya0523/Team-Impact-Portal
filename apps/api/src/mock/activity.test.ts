@@ -1,8 +1,9 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { type FeatureFlags, NOTIFICATION_KINDS, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import {
   canReceive,
+  commentsFor,
   DEFAULT_PREFS,
   DISCREET_PUSH_TEXT,
   notify,
@@ -10,6 +11,7 @@ import {
 } from './activity';
 import { id, USERS } from './fixtures';
 import { suspend, warn } from './staff-tools';
+import { removeMember } from './team';
 import { MockWorld } from './world';
 
 const TEAM = id(301);
@@ -19,6 +21,7 @@ const FIRST_GEN = id(304); // official interest; Jordan made it, Priya opted in 
 const FINANCE = id(305); // open interest, Priya made it
 const CAPTAINS = id(307); // private interest, the coach made it
 const COACH_POST = id(401); // approved, in the team community
+const SAM_POST = id(403); // approved, in First Gen
 const FAMILY_NIGHT = id(502); // approved, Team Impact's
 
 let close: (() => Promise<void>) | undefined;
@@ -56,6 +59,32 @@ const world = async (flags?: FeatureFlags) => {
 type Client = Awaited<ReturnType<Awaited<ReturnType<typeof world>>['as']>>;
 
 const ids = (items: { id: string }[]) => items.map((i) => i.id);
+
+const SOCCER = id(201);
+
+/** Basketball (live, with no community in the fixtures) gets one, with the coach and Lisa on it. */
+const addBasketball = (w: MockWorld) => {
+  const basketball = {
+    id: id(309),
+    kind: 'team' as const,
+    teamId: id(210),
+    name: "Tufts Women's Basketball",
+    about: 'The team, its families and coaches.',
+    moderation: 'approved' as const,
+    createdAt: '2026-10-01T12:00:00.000Z',
+    members: [],
+  };
+  w.communities.push(basketball);
+  for (const u of [USERS.coach, USERS.lisa]) {
+    w.teamMembers.push({
+      teamId: basketball.teamId,
+      userId: u.id,
+      joinedVia: 'join_request',
+      joinedAt: '2026-10-02T12:00:00.000Z',
+    });
+  }
+  return basketball;
+};
 
 /** Staff keep (approve) whatever ticket holds `targetId`. */
 const approve = async (staff: Client, targetId: string) => {
@@ -166,6 +195,215 @@ describe('posts: held for moderation (P5)', () => {
   });
 });
 
+describe('feeds: what recruiters read', () => {
+  it('shows official communities’ posts in both feeds, and no other interest community’s', async () => {
+    const { as } = await world();
+    const priya = await as('alumni_athlete');
+    const created = await priya.post(`/communities/${FINANCE}/posts`, { text: 'Mock interviews?' });
+    expect(created.status).toBe(201);
+    await approve(await as('staff'), created.body.id);
+    // Members see it, so its absence below is the recruiter rule, not moderation.
+    expect(ids((await priya.get('/feed')).body.items)).toContain(created.body.id);
+
+    const recruiter = await as('recruiter');
+    const feed = (await recruiter.get('/feed')).body.items as {
+      id: string;
+      community: { id: string };
+    }[];
+    expect(ids(feed)).toContain(SAM_POST);
+    expect(ids(feed)).not.toContain(created.body.id);
+    for (const p of feed) expect([TEAM_IMPACT, FIRST_GEN]).toContain(p.community.id);
+
+    expect(ids((await recruiter.get(`/communities/${FIRST_GEN}/posts`)).body.items)).toContain(
+      SAM_POST,
+    );
+    expect((await recruiter.get(`/communities/${FINANCE}/posts`)).status).toBe(404);
+  });
+});
+
+describe('teens: only ever seen in their team community', () => {
+  const TEEN_POST = id(490);
+  const TEEN_COMMENT = id(1390);
+  const TEEN_TEAM_COMMENT = id(1391);
+
+  /**
+   * Noah (a teen, and a First Gen member) has a post and a comment in First Gen, which the API
+   * would never accept, plus a comment in his team. Built on the world directly for that reason.
+   */
+  const slippedIn = () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    w.posts.push({ ...samPost, id: TEEN_POST, authorId: USERS.noah.id });
+    const comment = (commentId: string, postId: string) => ({
+      id: commentId,
+      postId,
+      authorId: USERS.noah.id,
+      text: 'Me too!',
+      moderation: 'approved' as const,
+      createdAt: new Date().toISOString(),
+    });
+    w.comments.push(comment(TEEN_COMMENT, SAM_POST), comment(TEEN_TEAM_COMMENT, COACH_POST));
+    return w;
+  };
+
+  it('keeps a teen’s post outside their team out of every feed, for every reader', () => {
+    const w = slippedIn();
+    const firstGen = w.communities.find((c) => c.id === FIRST_GEN)!;
+    for (const u of [USERS.jordan, USERS.staff, USERS.noah]) {
+      expect(ids(w.feed(u)), u.firstName).not.toContain(TEEN_POST);
+      expect(ids(w.communityFeed(firstGen, u)), u.firstName).not.toContain(TEEN_POST);
+    }
+    // His team post still reaches the team.
+    expect(ids(w.feed(USERS.jordan))).toContain(id(406));
+  });
+
+  it('keeps a teen’s comment outside their team hidden and uncounted', () => {
+    const w = slippedIn();
+    for (const u of [USERS.jordan, USERS.staff, USERS.noah]) {
+      expect(ids(commentsFor(w, SAM_POST, u)), u.firstName).not.toContain(TEEN_COMMENT);
+    }
+    // Only Priya's comment counts.
+    expect(w.feed(USERS.jordan).find((p) => p.id === SAM_POST)!.commentCount).toBe(1);
+    // His comment in the team community still shows.
+    expect(ids(commentsFor(w, COACH_POST, USERS.jordan))).toContain(TEEN_TEAM_COMMENT);
+  });
+
+  it('keeps a teen’s post out of another team’s community', () => {
+    const w = slippedIn();
+    const basketball = addBasketball(w);
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    w.posts.push({ ...samPost, id: id(493), authorId: USERS.noah.id, communityId: basketball.id });
+    // The coach is on both teams, so reads the basketball community.
+    expect(ids(w.communityFeed(basketball, USERS.coach))).not.toContain(id(493));
+    expect(ids(w.feed(USERS.coach))).not.toContain(id(493));
+    expect(ids(w.communityFeed(basketball, USERS.staff))).not.toContain(id(493));
+  });
+
+  it('hides a teen’s team posts and comments once a coach removes them', () => {
+    const w = slippedIn();
+    expect('error' in removeMember(w, SOCCER, USERS.noah.id)).toBe(false);
+    expect(ids(w.feed(USERS.jordan))).not.toContain(id(406));
+    expect(ids(commentsFor(w, COACH_POST, USERS.jordan))).not.toContain(TEEN_TEAM_COMMENT);
+  });
+});
+
+describe('feeds: pages', () => {
+  type Page = { items: { id: string }[]; nextCursor: string | null } | null;
+
+  /**
+   * Every page in turn, `limit` at a time, joined back together. `expected` is the whole feed: a
+   * walk never needs more pages than it has posts (plus one), so a cursor that doesn't move on
+   * fails instead of looping forever.
+   */
+  const walk = (next: (cursor?: string) => Page, limit: number, expected: unknown[]) => {
+    const items: { id: string }[] = [];
+    let cursor: string | undefined;
+    for (let pages = 1; ; pages++) {
+      const page = next(cursor);
+      expect(page, 'a cursor we issued').not.toBeNull();
+      expect(page!.items.length).toBeLessThanOrEqual(limit);
+      items.push(...page!.items);
+      if (!page!.nextCursor) return items;
+      cursor = page!.nextCursor;
+      if (pages > expected.length + 1) throw new Error('paging never ended');
+    }
+  };
+
+  it('pages through every home and community feed to exactly the full feed', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    // A rally and comment on posts that land past the first page, so their counts come from
+    // the page they're on.
+    w.rallies.push({ postId: id(402), userId: USERS.jordan.id });
+    const comment = w.comments.find((k) => k.postId === id(405))!;
+    w.comments.push({ ...comment, id: id(1399) });
+
+    for (const u of w.users) {
+      const all = w.feed(u);
+      const home = walk((cursor) => w.feedPage(u, { cursor, limit: 2 }), 2, all);
+      expect(home, u.firstName).toEqual(all);
+      for (const c of w.communities) {
+        const inC = w.communityFeed(c, u);
+        const own = walk((cursor) => w.communityFeedPage(c, u, { cursor, limit: 2 }), 2, inC);
+        expect(own, `${u.firstName} in ${c.name}`).toEqual(inC);
+      }
+    }
+    const jordan = walk(
+      (cursor) => w.feedPage(USERS.jordan, { cursor, limit: 2 }),
+      2,
+      w.feed(USERS.jordan),
+    );
+    expect(jordan.find((p) => p.id === id(402))).toMatchObject({ likedByMe: true });
+    expect(jordan.find((p) => p.id === id(405))).toMatchObject({ commentCount: 2 });
+  });
+
+  it('refuses a cursor from another feed, even one the reader can’t see', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const home = w.feedPage(USERS.jordan, { limit: 1 })!;
+    const team = w.communities.find((c) => c.id === TEAM)!;
+    const medical = w.communities.find((c) => c.id === MEDICAL)!;
+    expect(
+      w.communityFeedPage(team, USERS.jordan, { cursor: home.nextCursor!, limit: 1 }),
+    ).toBeNull();
+    // The coach doesn't read the medical community: an empty page, but a bad cursor is still bad.
+    expect(w.communityFeedPage(medical, USERS.coach, { limit: 20 })).toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(w.communityFeedPage(medical, USERS.coach, { cursor: 'nope', limit: 20 })).toBeNull();
+  });
+
+  it('neither repeats nor skips when a post is approved between two pages', async () => {
+    // New posts are stamped with the clock; fix it after the fixtures (Oct 8–12) so the new post
+    // is the newest team post and lands at the very top.
+    vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-20T12:00:00.000Z') });
+    try {
+      const { as } = await world();
+      const jordan = await as('athlete');
+      const first = (await jordan.get('/feed?limit=2')).body;
+      expect(ids(first.items)).toEqual([406, 401].map(id));
+
+      const coach = await as('coach');
+      const created = await coach.post(`/communities/${TEAM}/posts`, { text: 'Lift moved to 8.' });
+      await approve(await as('staff'), created.body.id);
+
+      // A position-based cursor would now return 401 again (everything moved down one).
+      const q = new URLSearchParams({ limit: '2', cursor: first.nextCursor });
+      expect(ids((await jordan.get(`/feed?${q}`)).body.items)).toEqual([402, 408].map(id));
+      // Starting over shows it first: the second page left it out on purpose.
+      expect(ids((await jordan.get('/feed?limit=2')).body.items)[0]).toBe(created.body.id);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('feeds: people on two teams', () => {
+  it('weights both teams alike, and keeps each team page to its own', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const basketball = addBasketball(w);
+    const samPost = w.posts.find((p) => p.id === SAM_POST)!;
+    const at = (createdAt: string, n: number) => ({
+      ...samPost,
+      id: id(n),
+      authorId: USERS.coach.id,
+      communityId: basketball.id,
+      createdAt,
+    });
+    // Newer than soccer's two Oct 12 posts, and older than both.
+    w.posts.push(at('2026-10-12T15:00:00.000Z', 491), at('2026-10-10T12:00:00.000Z', 492));
+
+    // Lisa, a parent on both teams: both teams weigh the same. 491 is 3 hours newer than soccer's
+    // 401 and 406, which outweighs their one comment each at a 12-hour half-life; Team Impact's
+    // 402 (48 rallies) comes before basketball's older 492, then medical.
+    expect(ids(w.feed(USERS.lisa))).toEqual([491, 406, 401, 402, 492, 404].map(id));
+    expect(ids(w.communityFeed(basketball, USERS.lisa))).toEqual([491, 492].map(id));
+    const soccer = w.communities.find((c) => c.id === TEAM)!;
+    expect(ids(w.communityFeed(soccer, USERS.lisa))).toEqual([406, 401].map(id));
+    // Jordan is only on soccer.
+    expect(ids(w.feed(USERS.jordan))).not.toContain(id(491));
+  });
+});
+
 describe('comments', () => {
   it('holds a comment until approved, then counts it and tells the post author', async () => {
     const { as } = await world();
@@ -183,6 +421,11 @@ describe('comments', () => {
       created.body.id,
     );
     expect((await coach.get('/notifications')).body.items).toHaveLength(0);
+    // Not counted while held, not even for its author.
+    expect((await coach.get(`/posts/${COACH_POST}`)).body.commentCount).toBe(before);
+    expect(
+      (await parent.get('/feed')).body.items.find((p: { id: string }) => p.id === COACH_POST),
+    ).toMatchObject({ commentCount: before });
 
     await approve(await as('staff'), created.body.id);
     expect(ids((await coach.get(`/posts/${COACH_POST}/comments`)).body)).toContain(created.body.id);

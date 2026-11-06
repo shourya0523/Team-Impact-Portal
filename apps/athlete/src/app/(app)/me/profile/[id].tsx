@@ -1,9 +1,16 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { ChildProfile, PersonProfile, TeenProfile, TeamSummary } from '@team-impact/contracts';
+import { useEffect } from 'react';
+import { Linking, StyleSheet, View, useWindowDimensions } from 'react-native';
+import type {
+  ChildProfile,
+  ContactSharing,
+  PersonProfile,
+  TeenProfile,
+  TeamSummary,
+} from '@team-impact/contracts';
 import { AthleteCard } from '@team-impact/ui-primitives/native';
 import { colors, spacing } from '@team-impact/ui-tokens';
-import { api } from '@/api';
+import { api, track } from '@/api';
 import { toCardData } from '@/components/cardData';
 import { ROLE_LABEL, KIND_LABEL } from '@/components/format';
 import { Async, Chip, Gutter, Screen, SectionLabel } from '@/components/ui';
@@ -11,6 +18,14 @@ import { useApi } from '@/hooks/useApi';
 import { Avatar, Badge, Card, Icon, TeamAvatar, Text } from '@/ui';
 
 const MAX_CARD_WIDTH = 360;
+
+type Channel = keyof ContactSharing;
+
+const HREF: Record<Channel, (value: string) => string> = {
+  email: (v) => `mailto:${v}`,
+  phone: (v) => `tel:${v.replace(/[^+\d]/g, '')}`,
+  linkedin: (v) => (/^https?:\/\//.test(v) ? v : `https://${v}`),
+};
 
 function Teams({ teams }: { teams: TeamSummary[] }) {
   if (teams.length === 0) return null;
@@ -46,10 +61,26 @@ function OnlyTeam({ children }: { children: string }) {
 function Person({ p }: { p: PersonProfile }) {
   const { width } = useWindowDimensions();
   const channels = [
-    p.contact.email && { label: 'Email', value: p.contact.email },
-    p.contact.phone && { label: 'Phone', value: p.contact.phone },
-    p.contact.linkedinUrl && { label: 'LinkedIn', value: p.contact.linkedinUrl },
-  ].filter((c): c is { label: string; value: string } => !!c);
+    p.contact.email && { channel: 'email' as const, label: 'Email', value: p.contact.email },
+    p.contact.phone && { channel: 'phone' as const, label: 'Phone', value: p.contact.phone },
+    p.contact.linkedinUrl && {
+      channel: 'linkedin' as const,
+      label: 'LinkedIn',
+      value: p.contact.linkedinUrl,
+    },
+  ].filter((c): c is { channel: Channel; label: string; value: string } => !!c);
+
+  // The profile has loaded by the time this renders, so this logs once per card shown.
+  useEffect(() => {
+    if (p.card) {
+      track({ name: 'card.viewed', properties: { cardId: p.card.id }, subjectId: p.user.id });
+    }
+  }, [p.card?.id, p.user.id]);
+
+  const open = (c: { channel: Channel; value: string }) => {
+    track({ name: 'contact.viewed', properties: { channel: c.channel }, subjectId: p.user.id });
+    Linking.openURL(HREF[c.channel](c.value));
+  };
   return (
     <Gutter>
       <View style={styles.row}>
@@ -73,7 +104,9 @@ function Person({ p }: { p: PersonProfile }) {
                 <Text variant="caption" color="muted">
                   {c.label}
                 </Text>
-                <Text selectable>{c.value}</Text>
+                <Text selectable color="brand" accessibilityRole="link" onPress={() => open(c)}>
+                  {c.value}
+                </Text>
               </View>
             ))}
           </Card>
