@@ -8,7 +8,7 @@ import { useRole } from '@/navigation/role';
 export default function Me() {
   const { role, setRole, setMe } = useRole();
 
-  const links: PlaceholderLink[] = [];
+  const links: PlaceholderLink[] = [{ label: 'Edit my profile', href: '/me/edit' }];
   if (role === 'athlete') links.push({ label: 'Contacts and recruiting', href: '/me/recruiting' });
   if (role !== 'recruiter') links.push({ label: 'Privacy and search', href: '/me/privacy' });
   if (role !== 'recruiter') links.push({ label: 'My communities', href: '/me/communities' });

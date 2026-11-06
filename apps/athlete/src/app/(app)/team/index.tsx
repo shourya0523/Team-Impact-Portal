@@ -5,7 +5,15 @@ import type { JoinRequest, TeamMember, TeamRoster } from '@team-impact/contracts
 import { spacing } from '@team-impact/ui-tokens';
 import { api, track } from '@/api';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { fullName, joinedLine, nameList, NoTeam, PersonRow, useTeamId } from '@/components/team';
+import {
+  fullName,
+  joinedLine,
+  nameList,
+  NoTeam,
+  openProfile,
+  PersonRow,
+  useTeamId,
+} from '@/components/team';
 import { Async, ErrorText, Gutter, Screen, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -98,7 +106,13 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
     return (
       <Card>
         {roster.parents.map((p) => (
-          <PersonRow key={p.user.id} user={p.user} detail={joinedLine(p)} right={right(p)}>
+          <PersonRow
+            key={p.user.id}
+            user={p.user}
+            detail={joinedLine(p)}
+            right={right(p)}
+            onPress={() => openProfile(p.user.id)}
+          >
             {p.children.length > 0 && (
               <Text variant="small" color="secondary">
                 Parent of {nameList(p.children.map((c) => c.firstName))}
@@ -150,7 +164,13 @@ function Members({ roster, tab }: { roster: TeamRoster; tab: Tab }) {
   return (
     <Card>
       {list.map((m) => (
-        <PersonRow key={m.user.id} user={m.user} detail={joinedLine(m)} right={right(m)} />
+        <PersonRow
+          key={m.user.id}
+          user={m.user}
+          detail={joinedLine(m)}
+          right={right(m)}
+          onPress={() => openProfile(m.user.id)}
+        />
       ))}
     </Card>
   );
