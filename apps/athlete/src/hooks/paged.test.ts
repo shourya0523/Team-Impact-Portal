@@ -97,6 +97,14 @@ describe('pagedReducer', () => {
     expect(s.nextCursor).toBe('c2');
   });
 
+  it('keeps the posts shown on a restart but drops the refused cursor', () => {
+    const s = reduce(...loaded(['p1', 'p2']), { type: 'restart', run: 2 });
+    expect(s.refreshing).toBe(true);
+    expect(ids(s)).toEqual(['p1', 'p2']);
+    expect(s.nextCursor).toBeNull();
+    expect(canLoadMore({ ...s, refreshing: false })).toBe(false);
+  });
+
   it('starts over when refreshing before anything loaded', () => {
     const s = reduce(
       { type: 'start', run: 1 },
@@ -300,9 +308,28 @@ describe('createPagedLoader', () => {
     expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1', undefined]);
     expect(h.state().refreshing).toBe(true);
     expect(h.state().failure).toBeNull();
+    expect(h.state().nextCursor).toBeNull();
     h.calls[2]!.reply.resolve(page(['p9'], 'c2'));
     await h.flush();
     expect(ids(h.state())).toEqual(['p9']);
+    expect(h.state().nextCursor).toBe('c2');
+  });
+
+  it('doesn’t send a refused cursor again when the restart fails', async () => {
+    const h = await started();
+    h.loader.more(false);
+    h.calls[1]!.reply.reject(apiError(400));
+    await h.flush();
+    const error = new Error('offline');
+    h.calls[2]!.reply.reject(error);
+    await h.flush();
+    expect(h.state().failure).toEqual({ error, during: 'refresh' });
+    expect(ids(h.state())).toEqual(['p1', 'p2']);
+    // Scrolling to the end asks for nothing; only the banner's Try again (a refresh) does.
+    h.loader.more(false);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, 'c1', undefined]);
+    h.loader.fromFirst('refresh');
+    expect(h.calls).toHaveLength(4);
   });
 
   it('shows any other 400 on a next page as an error instead of starting over', async () => {

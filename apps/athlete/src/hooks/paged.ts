@@ -28,6 +28,11 @@ export type PagedAction<T> =
   | { type: 'start'; run: number }
   /** Page 1 again, keeping what's shown. Before anything loaded, the same as `start`. */
   | { type: 'refresh'; run: number }
+  /**
+   * Page 1 again after the server refused the cursor: a refresh that also drops that cursor, so
+   * if this refresh fails, paging can't send the refused cursor again and loop.
+   */
+  | { type: 'restart'; run: number }
   | { type: 'more' }
   | { type: 'loaded'; run: number; page: Page<T>; append: boolean }
   | { type: 'failed'; run: number; error: Error; append: boolean }
@@ -64,6 +69,8 @@ export const pagedReducer = <T extends { id: string }>(
     case 'refresh':
       if (state.first.status !== 'ready') return { ...initialPaged<T>(), run: action.run };
       return { ...state, run: action.run, refreshing: true, loadingMore: false, failure: null };
+    case 'restart':
+      return { ...pagedReducer(state, { type: 'refresh', run: action.run }), nextCursor: null };
     case 'more':
       return { ...state, loadingMore: true, failure: keepRefreshFailure(state) };
     case 'loaded':
@@ -131,7 +138,7 @@ export const createPagedLoader = <T extends { id: string }>({
   /** The run whose next page is on its way, so a fast scroll can't ask twice. */
   let inFlight = 0;
 
-  const fromFirst = (type: 'start' | 'refresh') => {
+  const fromFirst = (type: 'start' | 'refresh' | 'restart') => {
     const run = ++runs;
     dispatch({ type, run });
     load().then(
@@ -152,7 +159,7 @@ export const createPagedLoader = <T extends { id: string }>({
         (page) => dispatch({ type: 'loaded', run, page, append: true }),
         (error: Error) => {
           if (run !== runs) return;
-          if (restartsList(error)) fromFirst('refresh');
+          if (restartsList(error)) fromFirst('restart');
           else dispatch({ type: 'failed', run, error, append: true });
         },
       )

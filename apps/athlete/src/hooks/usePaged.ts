@@ -37,8 +37,15 @@ export const usePaged = <T extends { id: string }>(
   return {
     state,
     hasMore: s.nextCursor !== null,
-    /** Every page is in and there was something to show: the end of the list. */
-    caughtUp: s.first.status === 'ready' && s.items.length > 0 && s.nextCursor === null,
+    /**
+     * Every page is in and there was something to show: the end of the list. Not after a failure,
+     * since then there may be more (a failed restart has no cursor but isn't the end).
+     */
+    caughtUp:
+      s.first.status === 'ready' &&
+      s.items.length > 0 &&
+      s.nextCursor === null &&
+      s.failure === null,
     loadingMore: s.loadingMore,
     refreshing: s.refreshing,
     /** A next page or refresh that failed, and which; the items already shown stay. */
