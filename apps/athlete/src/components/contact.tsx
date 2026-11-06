@@ -1,21 +1,38 @@
 import { Linking } from 'react-native';
-import type { SharedContact } from '@team-impact/contracts';
+import type { ContactSharing, SharedContact } from '@team-impact/contracts';
+import { track } from '@/api';
 import { Text } from '@/ui';
 
 /** `tel:` links want digits (and a leading +) only: "+1 (617) 555-0100" dials as "+16175550100". */
 const dialable = (phone: string) => phone.replace(/[^+\d]/g, '');
 
 /**
+ * LinkedIn URLs may be saved without a scheme ("linkedin.com/in/jordan" passes `LinkedInUrl`), and
+ * a URL without one doesn't open on native, so `https://` is added when it's missing.
+ */
+export const openableUrl = (url: string) => (/^https?:\/\//i.test(url) ? url : `https://${url}`);
+
+/**
  * Contact details someone chose to share, as tappable links: email opens the mail app, phone the
  * dialler, LinkedIn the browser. Renders only the channels present; the API leaves out anything
- * the viewer isn't meant to see, so there is nothing to filter here.
+ * the viewer isn't meant to see, so there is nothing to filter here. Each tap logs `contact.viewed`
+ * against `ownerId`, the person the details belong to.
  */
-export function ContactLinks({ contact }: { contact: SharedContact }) {
+export function ContactLinks({ contact, ownerId }: { contact: SharedContact; ownerId: string }) {
+  type Link = { channel: keyof ContactSharing; label: string; url: string };
   const links = [
-    contact.email && { label: contact.email, url: `mailto:${contact.email}` },
-    contact.phone && { label: contact.phone, url: `tel:${dialable(contact.phone)}` },
-    contact.linkedinUrl && { label: 'LinkedIn', url: contact.linkedinUrl },
-  ].filter((l): l is { label: string; url: string } => !!l);
+    contact.email && { channel: 'email', label: contact.email, url: `mailto:${contact.email}` },
+    contact.phone && {
+      channel: 'phone',
+      label: contact.phone,
+      url: `tel:${dialable(contact.phone)}`,
+    },
+    contact.linkedinUrl && {
+      channel: 'linkedin',
+      label: 'LinkedIn',
+      url: openableUrl(contact.linkedinUrl),
+    },
+  ].filter((l): l is Link => !!l);
 
   return links.map((l) => (
     <Text
@@ -23,7 +40,10 @@ export function ContactLinks({ contact }: { contact: SharedContact }) {
       variant="small"
       color="brand"
       accessibilityRole="link"
-      onPress={() => void Linking.openURL(l.url)}
+      onPress={() => {
+        track({ name: 'contact.viewed', properties: { channel: l.channel }, subjectId: ownerId });
+        void Linking.openURL(l.url);
+      }}
     >
       {l.label}
     </Text>

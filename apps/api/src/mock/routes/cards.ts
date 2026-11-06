@@ -50,6 +50,8 @@ export const registerCardRoutes = (app: ZodApp, world: MockWorld, { requireRole 
     const u = athlete(request);
     const problem = publishCard(world, u, now());
     if (problem) throw httpError(400, problem);
+    const card = cardOf(world, u.id)!;
+    world.track(u.id, { name: 'card.published', properties: { cardId: card.face.id } });
     return myCardState(world, u);
   });
 

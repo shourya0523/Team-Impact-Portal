@@ -23,6 +23,7 @@ in production.
 | `companies.ts`     | Partner companies, email domains, recruiters                |
 | `lists.ts`         | Recruiter lists and notes                                   |
 | `moderation.ts`    | Moderation status and reports                               |
+| `analytics.ts`     | Tracked event names and properties (`events_log`)           |
 
 ## Conventions
 

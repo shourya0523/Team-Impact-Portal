@@ -117,7 +117,7 @@ function Members({
               </Text>
             )}
             {/* Only the team's own coaches get these; the API sends null to everyone else. */}
-            {p.contact && <ContactLinks contact={p.contact} />}
+            {p.contact && <ContactLinks contact={p.contact} ownerId={p.user.id} />}
           </PersonRow>
         ))}
       </Card>
@@ -130,7 +130,9 @@ function Members({
       <Card>
         {roster.athletes.map((a) => (
           <PersonRow key={a.user.id} user={a.user} detail={joinedLine(a)} right={right(a)}>
-            {familyContacts && <AthleteContact contact={familyContacts.get(a.user.id)} />}
+            {familyContacts && (
+              <AthleteContact contact={familyContacts.get(a.user.id)} ownerId={a.user.id} />
+            )}
           </PersonRow>
         ))}
       </Card>
@@ -149,7 +151,13 @@ function Members({
 }
 
 /** What a parent sees under an athlete: the contacts the athlete shares with families (PRD F4). */
-function AthleteContact({ contact }: { contact: SharedContact | undefined }) {
+function AthleteContact({
+  contact,
+  ownerId,
+}: {
+  contact: SharedContact | undefined;
+  ownerId: string;
+}) {
   if (!contact || !hasContact(contact)) {
     return (
       <Text variant="small" color="muted">
@@ -157,7 +165,7 @@ function AthleteContact({ contact }: { contact: SharedContact | undefined }) {
       </Text>
     );
   }
-  return <ContactLinks contact={contact} />;
+  return <ContactLinks contact={contact} ownerId={ownerId} />;
 }
 
 function Empty({ what }: { what: string }) {

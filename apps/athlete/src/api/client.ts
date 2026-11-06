@@ -1,4 +1,4 @@
-import type { ApiError } from '@team-impact/contracts';
+import type { ApiError, TrackEventRequest } from '@team-impact/contracts';
 
 /** Set per build; the default reaches a local API from web and the iOS simulator. */
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
@@ -33,3 +33,11 @@ export const put = <T>(path: string, body: unknown) =>
   request<T>(path, { method: 'PUT', body: JSON.stringify(body) });
 
 export type Page<T> = { items: T[]; nextCursor: string | null };
+
+/**
+ * Logs a client-side event from `TRACKED_EVENTS` in contracts; the API logs the rest itself.
+ * Fire and forget: a failed log never gets in the way of the screen.
+ */
+export const track = (event: TrackEventRequest): void => {
+  post<void>('/events', event).catch(() => undefined);
+};
