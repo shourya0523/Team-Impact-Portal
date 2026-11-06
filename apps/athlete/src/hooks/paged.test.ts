@@ -258,9 +258,14 @@ const deferred = <T>() => {
   return { promise, resolve, reject };
 };
 
-/** The loader over the real reducer, with every `load` call held until the test settles it. */
+/**
+ * The loader over the real reducer, with every `load` call held until the test settles it. While
+ * `lagging` is set, the loader reads the state from before the latest dispatches, as `usePaged`
+ * does until React re-renders.
+ */
 const harness = () => {
   let state = initialPaged<Item>();
+  let rendered: Paged<Item> | null = null;
   const calls: { cursor?: string; reply: ReturnType<typeof deferred<Page>> }[] = [];
   const loader = createPagedLoader<Item>({
     load: (cursor) => {
@@ -271,11 +276,18 @@ const harness = () => {
     dispatch: (action) => {
       state = pagedReducer(state, action);
     },
-    state: () => state,
+    state: () => rendered ?? state,
   });
   /** Lets settled promises run their callbacks. */
   const flush = () => new Promise((r) => setTimeout(r, 0));
-  return { loader, calls, flush, state: () => state };
+  /** From now until `render`, the loader sees the state as it is now. */
+  const lag = () => {
+    rendered = state;
+  };
+  const render = () => {
+    rendered = null;
+  };
+  return { loader, calls, flush, lag, render, state: () => state };
 };
 type Page = ReturnType<typeof page>;
 
@@ -368,6 +380,23 @@ describe('createPagedLoader', () => {
     await h.flush();
     expect(ids(h.state())).toEqual(['t1']);
     expect(h.state().failure).toBeNull();
+  });
+
+  it('waits for the render that shows a refresh before asking for a next page', async () => {
+    const h = await started();
+    h.lag();
+    h.loader.fromFirst('refresh');
+    // Before React re-renders, the state read still has the old run and cursor c1.
+    h.loader.more(false);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, undefined]);
+    h.render();
+    h.calls[1]!.reply.resolve(page(['p9', 'p1'], 'c2'));
+    await h.flush();
+    h.loader.more(false);
+    expect(h.calls.map((c) => c.cursor)).toEqual([undefined, undefined, 'c2']);
+    h.calls[2]!.reply.resolve(page(['p3']));
+    await h.flush();
+    expect(ids(h.state())).toEqual(['p9', 'p1', 'p3']);
   });
 
   it('can page again in the new run while the old one’s page is still out', async () => {

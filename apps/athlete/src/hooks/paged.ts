@@ -150,6 +150,9 @@ export const createPagedLoader = <T extends { id: string }>({
   const more = (retrying: boolean) => {
     const s = state();
     const current = retrying ? { ...s, failure: null } : s;
+    // `state()` can lag one render behind `fromFirst` (in `usePaged` it's read through a ref), so
+    // it may still hold the previous run's cursor. Wait for the render that shows the new run.
+    if (current.run !== runs) return;
     if (!canLoadMore(current) || inFlight === runs) return;
     const run = runs;
     inFlight = run;
