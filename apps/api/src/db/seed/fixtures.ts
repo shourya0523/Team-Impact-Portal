@@ -85,6 +85,15 @@ export const fixtureRows = (now = Date.now()) => {
       ? [{ userId: u.id, flag: 'parent_agreed', value: true, termsVersion: 'v2.0' }]
       : []),
   ]);
+  // The fixtures' sharing, open-to-recruiting and findable opt-ins, as the mock records them.
+  for (const r of fx.fixtureConsent()) {
+    consentRecords.push({
+      userId: r.userId,
+      flag: r.flag,
+      value: true,
+      createdAt: date(r.recordedAt),
+    });
+  }
 
   const orgs: Row<typeof schema.orgs>[] = fx.COMPANIES.map((c) => ({
     id: c.id,

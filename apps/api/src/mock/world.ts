@@ -6,6 +6,7 @@ import {
   type CardFace,
   type CardWithContact,
   type Community,
+  consentFlags,
   type ContactSharing,
   type FeatureFlags,
   type IdentitySearchLogEntry,
@@ -45,6 +46,14 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+
+/** One row of consent history (see `MockWorld.consentRecords`). */
+export interface MockConsentRecord {
+  userId: string;
+  flag: string;
+  value: boolean;
+  recordedAt: string;
+}
 
 /** A feed page request: the route's query, plus the time for tests that need a fixed one. */
 type PageRequest = { cursor?: string; limit: number; now?: string };
@@ -94,15 +103,31 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /**
+   * Append-only consent history, like `consent_records`: every privacy choice gets a timestamped
+   * row and none is ever edited. Write through `recordConsent`.
+   */
+  readonly consentRecords: MockConsentRecord[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
   /** What the real routes write to events_log, checked the same way (`track()`, src/events-log.ts). */
   readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
-  constructor(readonly flags: FeatureFlags) {}
+  constructor(readonly flags: FeatureFlags) {
+    this.consentRecords.push(...fx.fixtureConsent().map((r) => ({ ...r, value: true })));
+  }
 
   newId = () => fx.id(this.nextId++);
+
+  /**
+   * Records a privacy choice going from `previous` to `next`. Nothing changes, nothing is recorded,
+   * so callers never add duplicate history.
+   */
+  recordConsent = (userId: string, flag: string, previous: boolean, next: boolean) => {
+    if (previous === next) return;
+    this.consentRecords.push({ userId, flag, value: next, recordedAt: new Date().toISOString() });
+  };
 
   /** The mock's `track()`: throws on an event the contract refuses, like the real one. */
   track = (userId: string | null, events: TrackedEvent | readonly TrackedEvent[]) => {
@@ -423,16 +448,30 @@ export class MockWorld {
   };
 
   /**
-   * "Recruiters can find me through this community": official interest communities only, for
-   * athletes with a published card. Returns an error message, or null on success.
+   * Why `u` can't set "recruiters can find me through this community", or null if they can:
+   * official interest communities only, for athletes with a published card. Changes nothing, so a
+   * batch can be checked in full before any of it is applied.
    */
-  setFindable = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
-    const member = c.members.find((m) => m.userId === u.id);
+  findableProblem = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
     if (c.kind !== 'interest' || !c.official)
       return 'Only official communities can make you findable';
-    if (!member) return 'Join the community first';
+    if (!c.members.some((m) => m.userId === u.id)) return 'Join the community first';
     const card = this.cards.find((k) => k.face.athleteId === u.id);
     if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    return null;
+  };
+
+  /** Sets the opt-in and records the change. Returns `findableProblem`'s error, or null. */
+  setFindable = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
+    const problem = this.findableProblem(c, u, findable);
+    if (problem) return problem;
+    const member = c.members.find((m) => m.userId === u.id)!;
+    this.recordConsent(
+      u.id,
+      consentFlags.findableIn(c.id),
+      member.recruiterSearchOptIn ?? false,
+      findable,
+    );
     member.recruiterSearchOptIn = findable;
     return null;
   };

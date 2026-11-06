@@ -1,3 +1,4 @@
+import { consentFlags } from '@team-impact/contracts';
 import type {
   CardFace,
   CardVisibility,
@@ -693,3 +694,41 @@ export function summaryOf(u: MockUser) {
 }
 
 export const ALL_USERS: MockUser[] = Object.values(USERS);
+
+/** The consent flags a card's visibility has switched on: shared contact channels, open to recruiting. */
+export const sharingFlagsOn = (v: CardVisibility): string[] =>
+  (['email', 'phone', 'linkedin'] as const)
+    .flatMap((channel) => [
+      v.familiesSee[channel] && consentFlags.familiesSee(channel),
+      v.recruitersSee[channel] && consentFlags.recruitersSee(channel),
+    ])
+    .concat(v.openToRecruiting && consentFlags.openToRecruiting)
+    .filter((flag) => flag !== false);
+
+/**
+ * The consent records behind the fixtures' starting opt-ins, so "the newest record is the current
+ * value" holds from the first request: each card's sharing and open to recruiting (recorded when
+ * the athlete joined) and each findable-through-a-community opt-in (when they joined it). Used by
+ * the mock world and the database seed alike.
+ */
+export const fixtureConsent = (): { userId: string; flag: string; recordedAt: string }[] => {
+  const joined = (userId: string) => ALL_USERS.find((u) => u.id === userId)!.createdAt;
+  return [
+    ...CARDS.flatMap(({ face, visibility }) =>
+      sharingFlagsOn(visibility).map((flag) => ({
+        userId: face.athleteId,
+        flag,
+        recordedAt: joined(face.athleteId),
+      })),
+    ),
+    ...COMMUNITIES.flatMap((c) =>
+      c.members
+        .filter((m) => m.recruiterSearchOptIn)
+        .map((m) => ({
+          userId: m.userId,
+          flag: consentFlags.findableIn(c.id),
+          recordedAt: m.joinedAt,
+        })),
+    ),
+  ];
+};
