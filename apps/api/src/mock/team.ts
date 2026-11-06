@@ -20,6 +20,7 @@ import { isReadableTeamColor } from '@team-impact/ui-tokens';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
 import { actorOf } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
 /**
@@ -363,21 +364,25 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
 
 /**
  * The team's athletes with what each shares with families (PRD §6, F4), for an approved parent on
- * the team; null for anyone else (the route answers 403). It reads through `cardFor`, the rule the
- * athlete's profile already uses, so the two can't disagree: only the athlete's family channels,
- * and nothing while their card is unpublished. Teens are never parents, so they never get here.
+ * the team; null for anyone else (the route answers 403). Both go through `team.athleteContacts`:
+ * an athlete across a block from the parent, whoever blocked whom, is left out. Contacts read
+ * through `cardFor`, the rule the athlete's profile already uses, so the two can't disagree: only
+ * the athlete's family channels, and nothing while their card is unpublished.
  */
 export const athleteContacts = (
   world: MockWorld,
   teamId: string,
   viewer: MockUser,
 ): TeamAthleteContacts | null => {
-  if (viewer.role !== 'parent' || !world.teamIdsOf(viewer.id).includes(teamId)) return null;
+  const actor = actorOf(world, viewer);
+  if (!can(actor, 'team.athleteContacts', { teamId, blocked: false })) return null;
   return world.teamMembers
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const athlete = world.user(m.userId);
       if (athlete?.role !== 'athlete') return [];
+      const blocked = blockedBetween(world, viewer.id, athlete.id);
+      if (!can(actor, 'team.athleteContacts', { teamId, blocked })) return [];
       return [
         { athlete: summaryOf(athlete), contact: world.cardFor(athlete.id, viewer)?.contact ?? {} },
       ];

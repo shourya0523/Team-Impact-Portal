@@ -1,25 +1,37 @@
 // Parent, child and teen profiles (PRD §2, §6; stories F4, T2, T3):
 // - a parent's roster shows each athlete's family-visible contacts, and nothing more
 // - teens and children stay inside their own team
+import cookie from '@fastify/cookie';
+import Fastify from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FamilyVisibleAthlete, Role } from '@team-impact/contracts';
-import { buildApp } from '../app';
+import { useZodContracts } from '../zod';
 import { CHILDREN, id, USERS } from './fixtures';
+import { registerMockRoutes } from './routes';
+import { athleteContacts } from './team';
+import { MockWorld } from './world';
 
 const TEAM = id(201); // Tufts women's soccer: Jordan, Sam, Riley, Ava; parents Lisa and Mark; teen Noah
 const TEAM_COMMUNITY = id(301); // the team's private community
 const TEAM_IMPACT = id(302);
 const MATEO = CHILDREN[0]!; // Lisa's son, on the team
 const ATHLETE_PHONE = '+1 617 555 0100'; // every fixture card's phone
+const BASKETBALL = id(210); // another live Tufts team
 
 let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
 
 type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
-/** One mock API; `as(role)` signs a fixture user in, so several people act on the same world. */
+/**
+ * One mock API on a world the test can also change; `as(role)` signs a fixture user in, so several
+ * people act on the same world.
+ */
 const world = async () => {
-  const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true });
+  const mock = new MockWorld({ identitySearch: true, medicalCommunities: true });
+  const app = useZodContracts(Fastify());
+  await app.register(cookie, { secret: 'x'.repeat(32) });
+  registerMockRoutes(app, mock);
   close = () => app.close();
   const as = async (role: Role, newcomer = false) => {
     const res = await app.inject({
@@ -36,7 +48,9 @@ const world = async () => {
         payload,
         cookies: { [cookie.name]: cookie.value },
       });
-      return { status: r.statusCode, body: r.json(), text: r.body };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const body: any = r.body ? r.json() : undefined;
+      return { status: r.statusCode, body, text: r.body };
     };
     return {
       call,
@@ -51,7 +65,7 @@ const world = async () => {
       },
     };
   };
-  return { as };
+  return { as, mock };
 };
 
 describe('parent roster: athletes’ family contacts (F4)', () => {
@@ -118,6 +132,52 @@ describe('parent roster: athletes’ family contacts (F4)', () => {
       const profile = await lisa.get(`/profiles/${athlete.id}`);
       expect(profile.body.contact, athlete.firstName).toEqual(athletes.get(athlete.id));
     }
+  });
+
+  it('leaves out an athlete who blocked the parent, and comes back after unblocking', async () => {
+    const { as, mock } = await world();
+    const jordan = await as('athlete');
+    const lisa = await as('parent');
+    expect((await jordan.call('POST', `/blocks/${USERS.lisa.id}`)).status).toBe(201);
+
+    const athletes = await lisa.athletes();
+    expect(athletes.has(USERS.jordan.id)).toBe(false);
+    expect(athletes.get(USERS.sam.id)).toEqual({ email: USERS.sam.email }); // others unaffected
+    // Mark, another parent on the team, still sees Jordan's family contacts.
+    const forMark = athleteContacts(mock, TEAM, mock.user(USERS.mark.id)!)!;
+    expect(forMark.find((a) => a.athlete.id === USERS.jordan.id)?.contact).toEqual({
+      email: USERS.jordan.email,
+    });
+
+    expect((await jordan.call('DELETE', `/blocks/${USERS.lisa.id}`)).status).toBe(204);
+    expect((await lisa.athletes()).get(USERS.jordan.id)).toEqual({ email: USERS.jordan.email });
+  });
+
+  it('leaves out an athlete the parent blocked, too: blocks cut both ways', async () => {
+    const { as } = await world();
+    const lisa = await as('parent');
+    expect((await lisa.call('POST', `/blocks/${USERS.jordan.id}`)).status).toBe(201);
+    const athletes = await lisa.athletes();
+    expect(athletes.has(USERS.jordan.id)).toBe(false);
+    expect(athletes.has(USERS.sam.id)).toBe(true);
+  });
+
+  it('is refused to an approved parent of a different team', async () => {
+    const { as, mock } = await world();
+    // Rosa, approved as a parent on basketball, not soccer.
+    mock.teamMembers.push({
+      teamId: BASKETBALL,
+      userId: USERS.rosa.id,
+      joinedVia: 'join_request',
+      joinedAt: new Date().toISOString(),
+    });
+    const rosa = await as('parent', true);
+    expect((await rosa.get(`/teams/${BASKETBALL}/athlete-contacts`)).status).toBe(200);
+    const res = await rosa.get(`/teams/${TEAM}/athlete-contacts`);
+    expect(res.status).toBe(404);
+    expect(res.text).not.toContain(USERS.jordan.email);
+    // And the rule itself refuses her, not only the route's team check.
+    expect(athleteContacts(mock, TEAM, mock.user(USERS.rosa.id)!)).toBeNull();
   });
 
   it('is refused to everyone on the team who isn’t a parent, teens included', async () => {
