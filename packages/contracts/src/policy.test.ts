@@ -24,6 +24,7 @@ const card = (over: Partial<CardFacts> = {}): CardFacts => ({
   published: true,
   openToRecruiting: true,
   ownerSuspended: false,
+  blocked: false,
   ...over,
 });
 
@@ -47,7 +48,7 @@ const content = (over: Partial<ContentFacts> = {}): ContentFacts => ({
 });
 
 describe('child profiles', () => {
-  const child = { parentId: 'parent', teamId: 't1' };
+  const child = { parentId: 'parent', teamId: 't1', parentBlocked: false };
 
   it('are readable by the parent and the team', () => {
     expect(can(actor('parent'), 'child.read', child)).toBe(true);
@@ -62,14 +63,14 @@ describe('child profiles', () => {
   });
 
   it('stay with the family once off a team', () => {
-    const solo = { parentId: 'parent', teamId: null };
+    const solo = { parentId: 'parent', teamId: null, parentBlocked: false };
     expect(can(actor('parent'), 'child.read', solo)).toBe(true);
     expect(can(actor('coach', ['t1']), 'child.read', solo)).toBe(false);
   });
 });
 
 describe('teen profiles', () => {
-  const teen = { id: 'teen', teamIds: ['t1'] };
+  const teen = { id: 'teen', teamIds: ['t1'], blocked: false };
   const asPerson = { ...teen, role: 'teen' as const, card: null, sharesOpenCommunity: true };
 
   it('are readable by the teen and their team only', () => {
@@ -133,6 +134,7 @@ describe('recruiters', () => {
       role: 'athlete' as const,
       teamIds: [],
       sharesOpenCommunity: false,
+      blocked: false,
     };
     expect(can(r, 'person.read', { ...person, card: card() })).toBe(true);
     expect(can(r, 'person.read', { ...person, card: card({ openToRecruiting: false }) })).toBe(
@@ -148,6 +150,7 @@ describe('recruiters', () => {
       teamIds: [],
       card: null,
       sharesOpenCommunity: false,
+      blocked: false,
     };
     expect(can(r, 'person.read', { ...other, companyId: 'acme' })).toBe(true);
     expect(can(r, 'person.read', { ...other, companyId: 'globex' })).toBe(false);

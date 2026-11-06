@@ -19,6 +19,7 @@ import { isReadableTeamColor } from '@team-impact/ui-tokens';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
 import { actorOf } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
 /**
@@ -316,6 +317,14 @@ const childrenOf = (world: MockWorld, parentId: string, teamId: string): RosterC
     .filter((c) => c.parentId === parentId && c.teamId === teamId)
     .map(({ id: childId, firstName }) => ({ id: childId, firstName }));
 
+/** Whether `memberId` shows on `viewer`'s roster of `teamId`, blocks included. */
+const listsMember = (world: MockWorld, viewer: MockUser, teamId: string, memberId: string) =>
+  can(actorOf(world, viewer), 'team.listMember', {
+    teamId,
+    memberId,
+    blocked: blockedBetween(world, viewer.id, memberId),
+  });
+
 export const roster = (world: MockWorld, teamId: string, viewer: MockUser): TeamRoster | null => {
   const t = team(world, teamId);
   if (!t) return null;
@@ -327,7 +336,9 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
-      if (!u) return [];
+      // A block hides the member (and a parent's children with them) from the viewer, unless the
+      // viewer runs the team (PRD §9; `team.listMember`).
+      if (!u || !listsMember(world, viewer, teamId, u.id)) return [];
       const member: TeamMember = {
         user: summaryOf(u),
         joinedVia: m.joinedVia,
