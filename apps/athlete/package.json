@@ -10,7 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "expo export --platform web --output-dir dist",
+    "test": "vitest run && expo export --platform web --output-dir dist",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
   }
 }
