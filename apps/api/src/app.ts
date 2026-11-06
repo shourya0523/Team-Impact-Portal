@@ -7,6 +7,7 @@ import {
   HealthResponse,
   TrackEventRequest,
 } from '@team-impact/contracts';
+import { deleteAccount } from './account-deletion';
 import type { Db } from './db/client';
 import { isActiveUser, track } from './events-log';
 import { type AuthConfig, createAuth } from './identity/auth';
@@ -108,6 +109,21 @@ export const buildApp = async ({
         ...corsOrigins,
       ],
     });
+
+    if (!mock) {
+      /**
+       * Deletes the signed-in account (PRD §9): hidden and signed out everywhere at once, erased
+       * after 30 days (account-deletion.ts). Same route and answers as the mock API, so the app's
+       * Delete account button works unchanged on both.
+       */
+      app.delete('/me', async (request, reply) => {
+        const user = await authenticate!(request);
+        if (!user) throw httpError(401, 'Sign in first.');
+        const refusal = await deleteAccount(identity.db, user.id);
+        if (refusal) throw httpError(...refusal);
+        return reply.status(204).send();
+      });
+    }
   }
 
   const userIdOf =

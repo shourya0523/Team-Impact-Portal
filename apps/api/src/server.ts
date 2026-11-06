@@ -1,6 +1,7 @@
 import { buildApp } from './app';
 import { createDb } from './db/client';
 import { loadEnv } from './env';
+import { scheduleAccountErasure } from './account-deletion';
 import { scheduleEventsLogRetention } from './events-log';
 import { createSmtpMailer } from './identity/mailer';
 
@@ -35,6 +36,8 @@ const app = await buildApp({
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');
 if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
+// Accounts deleted 30 days ago are erased daily. Uploaded files join in once storage exists (#8).
+if (db) scheduleAccountErasure(db, { log: app.log });
 
 // App Platform sends SIGTERM before replacing an instance: finish requests, then close the pool.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

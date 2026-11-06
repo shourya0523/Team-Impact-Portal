@@ -13,9 +13,14 @@ if (!new URL(TEST_DATABASE_URL).pathname.endsWith('_test')) {
   throw new Error('TEST_DATABASE_URL must name a database ending in _test: tests drop it.');
 }
 
-/** Drops and recreates the test database, applies every migration, and returns a client. */
-export const freshTestDatabase = async () => {
+/**
+ * Drops and recreates the test database, applies every migration, and returns a client. Test files
+ * run in parallel, so each file that needs its own database passes a `label`: `team_impact_test`
+ * becomes `team_impact_<label>_test`, still ending in `_test`.
+ */
+export const freshTestDatabase = async (label?: string) => {
   const url = new URL(TEST_DATABASE_URL);
+  if (label) url.pathname = url.pathname.replace(/_test$/, `_${label}_test`);
   const name = url.pathname.slice(1);
   const admin = postgres({
     host: url.hostname,
@@ -38,7 +43,7 @@ export const freshTestDatabase = async () => {
     await admin.end();
   }
 
-  const migrator = postgres(TEST_DATABASE_URL, { max: 1, onnotice: () => {} });
+  const migrator = postgres(url.toString(), { max: 1, onnotice: () => {} });
   try {
     await migrate(drizzle(migrator), {
       migrationsFolder: new URL('../../drizzle', import.meta.url).pathname,
@@ -46,5 +51,5 @@ export const freshTestDatabase = async () => {
   } finally {
     await migrator.end();
   }
-  return createDb(TEST_DATABASE_URL);
+  return createDb(url.toString());
 };
