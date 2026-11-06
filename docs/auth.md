@@ -71,6 +71,10 @@ whose company is suspended, is refused at once. A deleted account reads as "no s
   "forgot password" all answer like the real thing. Only the inbox owner learns anything.
 - **Suspension and deletion take effect at once:** a blocked account's sessions are deleted the
   next time any of them is used.
+- **No tokens in the logs:** request URLs are redacted before they are logged or echoed in a 404
+  (`src/logging.ts`). The reset token in `/api/auth/reset-password/<token>` and every query value
+  under `/api/auth` become `[redacted]`, as do `token`, `code` and `password` parameters elsewhere.
+  A test reads the log through a full verify and reset and checks no token is in it.
 
 ## Sessions on each client
 
@@ -91,7 +95,9 @@ unchanged.
 See `.env.example`: `API_URL`, `PORTAL_URL`, `ATHLETE_APP_URL`, `SMTP_URL`, `MAIL_FROM`,
 `TRUST_PROXY` (1 on DigitalOcean App Platform, 0 when the API is reached directly), plus the
 existing `SESSION_SECRET`, which signs cookies and tokens. Without `SMTP_URL`, emails (links
-included) print in the API log. Production refuses to start without it.
+included) print in the API log, so the log mailer is for development only. Production refuses to
+start without `SMTP_URL`, `API_URL`, `PORTAL_URL` or `ATHLETE_APP_URL`, so emailed links can't
+point at localhost.
 
 ## Trade-offs to know
 

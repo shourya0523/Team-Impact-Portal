@@ -13,6 +13,7 @@ import { type AuthConfig, createAuth } from './identity/auth';
 import { createLogMailer } from './identity/mailer';
 import { registerAuthRoutes } from './identity/routes';
 import { type Authenticate, sessionAuth } from './identity/session';
+import { type LogStream, loggerOptions } from './logging';
 import { registerMockRoutes } from './mock/routes';
 import { MockWorld } from './mock/world';
 import { httpError, useZodContracts } from './zod';
@@ -27,7 +28,8 @@ export interface AppOptions {
    * and to nobody otherwise, so database routes that need a user answer 401.
    */
   currentUserId?: (request: FastifyRequest) => Promise<string | null>;
-  logger?: boolean;
+  /** Request logging, with secrets in URLs redacted (logging.ts). A stream lets tests read it. */
+  logger?: boolean | { stream: LogStream };
   /** Proxy hops to trust for the caller's IP (TRUST_PROXY). 0 when the API is reached directly. */
   trustProxy?: number;
   flags?: Flags;
@@ -64,7 +66,7 @@ export const buildApp = async ({
 }: AppOptions) => {
   const app = useZodContracts(
     Fastify({
-      logger,
+      logger: loggerOptions(logger),
       // Trust the nearest `trustProxy` hops' X-Forwarded-For entries, and no further.
       trustProxy: (_address: string, hop: number) => hop < trustProxy,
     }),

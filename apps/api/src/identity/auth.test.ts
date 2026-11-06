@@ -4,7 +4,7 @@
 // suspensions and deletions take effect at once; password reset signs out everywhere.
 import { eq, sql } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app';
 import type { Db } from '../db/client';
 import * as schema from '../db/schema';
@@ -402,6 +402,75 @@ describe('password reset', () => {
     const res = await post('/api/auth/request-password-reset', { email: 'ghost@tufts.edu' });
     expect(res.statusCode).toBe(200);
     expect(mailer.sent).toHaveLength(0);
+  });
+});
+
+describe('attack: reading tokens out of the server logs', () => {
+  it('never writes a verification or reset token to the log, on any path to it', async () => {
+    const lines: string[] = [];
+    const logged = await buildApp({
+      sessionSecret: 's'.repeat(32),
+      corsOrigins: [PORTAL],
+      logger: { stream: { write: (line) => lines.push(line) } },
+      identity: {
+        db,
+        secret: 's'.repeat(32),
+        baseURL: 'http://localhost:3000',
+        links: { portalUrl: 'http://portal.test', athleteAppUrl: 'http://app.test' },
+        mailer,
+        production: false,
+      },
+    });
+    // Better Auth logs through the console, not Fastify: capture that too.
+    const consoleLines: unknown[][] = [];
+    const spies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((level) =>
+      vi.spyOn(console, level).mockImplementation((...args) => void consoleLines.push(args)),
+    );
+    const send = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object) =>
+      logged.inject({ method, url, payload, headers: { origin: PORTAL } });
+    try {
+      await send('POST', '/api/auth/sign-up/email', {
+        email: 'maya@tufts.edu',
+        password: PASSWORD,
+        name: 'Maya',
+        lastName: 'Okafor',
+        accountType: 'athlete',
+        birthDate: '2004-03-14',
+        acceptTerms: true,
+      });
+      const verify = linkTo('maya@tufts.edu');
+      const verifyToken = verify.searchParams.get('token')!;
+      expect((await send('GET', verify.pathname + verify.search)).statusCode).toBe(302);
+
+      await send('POST', '/api/auth/request-password-reset', {
+        email: 'maya@tufts.edu',
+        redirectTo: 'http://app.test/reset-password',
+      });
+      const reset = linkTo('maya@tufts.edu');
+      const resetToken = reset.pathname.split('/').pop()!;
+      expect(reset.pathname).toBe(`/api/auth/reset-password/${resetToken}`);
+      expect((await send('GET', reset.pathname + reset.search)).statusCode).toBe(302);
+      // A method no route serves: Fastify's default 404 would log (and echo) the raw URL.
+      const wrongMethod = await send('PUT', reset.pathname);
+      expect(wrongMethod.statusCode).toBe(404);
+      expect(wrongMethod.body).not.toContain(resetToken);
+      // A used or made-up token, which Better Auth answers with an error.
+      await send('GET', `/api/auth/verify-email?token=${verifyToken}`);
+      await send('POST', '/api/auth/reset-password', { token: resetToken, newPassword: 'x' });
+    } finally {
+      spies.forEach((spy) => spy.mockRestore());
+      await logged.close();
+    }
+
+    const everything = lines.join('\n') + JSON.stringify(consoleLines);
+    for (const mail of mailer.sent) {
+      for (const token of mail.text.match(/[A-Za-z0-9_-]{20,}/g) ?? []) {
+        expect(everything).not.toContain(token);
+      }
+    }
+    // The log really recorded these requests, so the check above isn't vacuous.
+    expect(everything).toContain('/api/auth/reset-password/[redacted]');
+    expect(everything).toContain('/api/auth/verify-email?token=[redacted]');
   });
 });
 
