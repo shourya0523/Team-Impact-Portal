@@ -83,6 +83,11 @@ interface Targets {
   'team.roster': { teamId: string };
   'team.manage': { teamId: string };
   'team.familyContacts': { teamId: string };
+  /**
+   * One athlete's family-shared contacts on the team's Athletes list (PRD §6, F4). `blocked`: the
+   * actor and that athlete blocked each other. Pass false to ask about the list as a whole.
+   */
+  'team.athleteContacts': { teamId: string; blocked: boolean };
   'content.read': ContentFacts;
   'content.reply': ContentFacts;
 }
@@ -201,6 +206,10 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
 
   // The team's own coaches only. Staff manage the team but don't need a family's phone.
   'team.familyContacts': (a, t) => a.role === 'coach' && onTeam(a, t.teamId),
+
+  // Approved parents on the team; never across a block (PRD §9), whichever side made it. Teens
+  // are never parents, so they never see athletes' contacts this way.
+  'team.athleteContacts': (a, t) => a.role === 'parent' && onTeam(a, t.teamId) && !t.blocked,
 
   'content.read': canReadContent,
 
