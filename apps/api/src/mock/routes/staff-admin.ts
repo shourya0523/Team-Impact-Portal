@@ -421,8 +421,12 @@ export const registerStaffAdminRoutes = (
       }
       for (const m of from.members) {
         // The old community goes away, and with it any opt-in to being findable through it.
-        if (m.recruiterSearchOptIn)
-          world.recordConsent(m.userId, consentFlags.findableIn(from.id), false);
+        world.recordConsent(
+          m.userId,
+          consentFlags.findableIn(from.id),
+          m.recruiterSearchOptIn ?? false,
+          false,
+        );
         if (into.members.some((x) => x.userId === m.userId)) continue;
         // Being findable through a community is its own opt-in; it never carries over.
         into.members.push({ userId: m.userId, joinedAt: m.joinedAt, recruiterSearchOptIn: false });

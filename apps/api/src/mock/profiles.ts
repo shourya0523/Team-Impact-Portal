@@ -302,7 +302,12 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
       recruitersSee: { email: true, phone: false, linkedin: false },
     },
   };
-  if (!existing) world.cards.push(card);
+  if (!existing) {
+    world.cards.push(card);
+    // A new card shares email by default; those choices are consents too (PRD §6).
+    for (const flag of fx.sharingFlagsOn(card.visibility))
+      world.recordConsent(u.id, flag, false, true);
+  }
   // A card from an earlier season stays in the history as it was; this one starts the new season.
   if (card.face.season < CURRENT_SEASON) {
     card.face.id = world.newId();
@@ -334,9 +339,7 @@ export const unpublishCard = (world: MockWorld, u: MockUser, now: string): strin
   const card = cardOf(world, u.id);
   if (!card) return 'You have no Baseball Card yet.';
   card.visibility.published = false;
-  if (card.visibility.openToRecruiting) {
-    world.recordConsent(u.id, consentFlags.openToRecruiting, false);
-  }
+  world.recordConsent(u.id, consentFlags.openToRecruiting, card.visibility.openToRecruiting, false);
   card.visibility.openToRecruiting = false;
   world.profiles.updatedAt.set(u.id, now);
   return null;

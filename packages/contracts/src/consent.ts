@@ -8,7 +8,9 @@ import type { ContactSharing } from './contacts';
  * agreed to, and when. Mirrors the `consent_records` table (flag, value, created_at).
  *
  * Flag names are shared with the seed data (`terms`, `parent_agreed`, `recruiter_visible`), so the
- * mock and the real API write the same vocabulary.
+ * mock and the real API write the same vocabulary. Contact flags use the `contact_visibility` table's
+ * scopes and channels: `familiesSee.phone` is the row (scope `family`, channel `phone`) and its
+ * record is `family_sees:phone`; recruiters' are `recruiter_sees:<channel>`.
  */
 export const consentFlags = {
   terms: 'terms',
@@ -17,9 +19,9 @@ export const consentFlags = {
   /** Open to recruiting: the athlete's card and recruiter contacts appear on the employer portal. */
   openToRecruiting: 'recruiter_visible',
   /** One contact channel shown to approved parents on the athlete's team. */
-  familiesSee: (channel: keyof ContactSharing) => `families_see:${channel}`,
+  familiesSee: (channel: keyof ContactSharing) => `family_sees:${channel}`,
   /** One contact channel shown to recruiters. */
-  recruitersSee: (channel: keyof ContactSharing) => `recruiters_see:${channel}`,
+  recruitersSee: (channel: keyof ContactSharing) => `recruiter_sees:${channel}`,
   /** Findable by recruiters through one official community (the identity-search opt-in). */
   findableIn: (communityId: string) => `findable_in:${communityId}`,
 } as const;

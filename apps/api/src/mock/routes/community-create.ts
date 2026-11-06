@@ -76,9 +76,12 @@ export const registerCommunityCreateRoutes = (
         throw httpError(400, 'You created this community, so you stay in it');
       // Dropping the membership drops the recruiter opt-in with it; rejoining starts it off.
       // Leaving ends any "findable through this community" opt-in, so record it going off.
-      if (c.members.find((m) => m.userId === u.id)?.recruiterSearchOptIn) {
-        world.recordConsent(u.id, consentFlags.findableIn(c.id), false);
-      }
+      world.recordConsent(
+        u.id,
+        consentFlags.findableIn(c.id),
+        c.members.find((m) => m.userId === u.id)?.recruiterSearchOptIn ?? false,
+        false,
+      );
       c.members = c.members.filter((m) => m.userId !== u.id);
       c.requests = c.requests.filter((r) => r.userId !== u.id);
       return world.community(c, u);

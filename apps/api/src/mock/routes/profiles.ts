@@ -88,12 +88,15 @@ export const registerProfileRoutes = (
       if (openToRecruiting && !card?.visibility.published) {
         throw httpError(400, 'Publish your Baseball Card first');
       }
-      for (const s of searchable ?? []) {
+      // Check every opt-in before applying any, so a refused request changes and records nothing.
+      const findable = (searchable ?? []).map((s) => {
         const c = world.communities.find((x) => x.id === s.communityId);
         if (!c || !world.canSeeCommunity(c, u)) throw httpError(404, 'No such community');
-        const problem = world.setFindable(c, u, s.on);
+        const problem = world.findableProblem(c, u, s.on);
         if (problem) throw httpError(400, problem);
-      }
+        return { c, on: s.on };
+      });
+      for (const { c, on } of findable) world.setFindable(c, u, on);
       if (card) {
         // Each sharing choice that changes is a consent record; contact values are not.
         const share = (
@@ -103,20 +106,21 @@ export const registerProfileRoutes = (
         ) => {
           for (const channel of ['email', 'phone', 'linkedin'] as const) {
             const on = next?.[channel];
-            if (on !== undefined && on !== current[channel]) {
-              world.recordConsent(u.id, flag(channel), on);
-              current[channel] = on;
-            }
+            if (on === undefined) continue;
+            world.recordConsent(u.id, flag(channel), current[channel], on);
+            current[channel] = on;
           }
         };
         if (contact) Object.assign(card.contact, contact);
         share(card.visibility.familiesSee, familiesSee, consentFlags.familiesSee);
         share(card.visibility.recruitersSee, recruitersSee, consentFlags.recruitersSee);
-        if (
-          openToRecruiting !== undefined &&
-          openToRecruiting !== card.visibility.openToRecruiting
-        ) {
-          world.recordConsent(u.id, consentFlags.openToRecruiting, openToRecruiting);
+        if (openToRecruiting !== undefined) {
+          world.recordConsent(
+            u.id,
+            consentFlags.openToRecruiting,
+            card.visibility.openToRecruiting,
+            openToRecruiting,
+          );
           card.visibility.openToRecruiting = openToRecruiting;
         }
         world.profiles.updatedAt.set(u.id, new Date().toISOString());
