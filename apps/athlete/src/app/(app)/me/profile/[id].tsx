@@ -5,6 +5,7 @@ import type {
   ChildProfile,
   ContactSharing,
   PersonProfile,
+  Profile,
   TeenProfile,
   TeamSummary,
 } from '@team-impact/contracts';
@@ -13,8 +14,10 @@ import { colors, spacing } from '@team-impact/ui-tokens';
 import { api, track } from '@/api';
 import { toCardData } from '@/components/cardData';
 import { ROLE_LABEL, KIND_LABEL } from '@/components/format';
+import { ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { useRole } from '@/navigation/role';
 import { Avatar, Badge, Card, Icon, TeamAvatar, Text } from '@/ui';
 
 const MAX_CARD_WIDTH = 360;
@@ -87,6 +90,12 @@ function Person({ p }: { p: PersonProfile }) {
         <Avatar name={`${p.user.firstName} ${p.user.lastName}`} role={p.user.role} size="lg" />
         <Badge caps variant="brandTint" label={ROLE_LABEL[p.user.role]} />
       </View>
+      {/* A recruiter's profile sits under their company (PRD §2). */}
+      {p.company && (
+        <Text variant="small" color="secondary">
+          Recruiter at {p.company.name}
+        </Text>
+      )}
       {p.card && (
         <View style={styles.center}>
           <AthleteCard
@@ -177,6 +186,29 @@ function Child({ p }: { p: ChildProfile }) {
   );
 }
 
+/**
+ * Report this person, and block them from the same form (PRD §9). Not on your own profile, and
+ * Team Impact staff can be reported but never blocked. Children have no account to report: their
+ * parent runs the profile, so it's the parent who can be reported or blocked.
+ */
+function ProfileReport({ p }: { p: Profile }) {
+  const { me } = useRole();
+  if (p.kind === 'child' || p.user.id === me?.id) return null;
+  const { user } = p;
+  return (
+    <ReportButton
+      target={{ kind: 'profile', id: user.id }}
+      author={
+        user.role === 'staff'
+          ? undefined
+          : { id: user.id, name: `${user.firstName} ${user.lastName}` }
+      }
+      // A block hides this profile from you, so there's nothing left to show here.
+      onDone={() => router.back()}
+    />
+  );
+}
+
 /** "/me/profile/[id]": someone's profile, or a child's, shaped by the API for the viewer. */
 export default function ProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -188,7 +220,12 @@ export default function ProfileScreen() {
         ? state.data.firstName
         : `${state.data.user.firstName} ${state.data.user.lastName}`;
   return (
-    <Screen eyebrow="Profile" title={title} back>
+    <Screen
+      eyebrow="Profile"
+      title={title}
+      back
+      right={state.status === 'ready' && <ProfileReport p={state.data} />}
+    >
       <Async state={state}>
         {(p) =>
           p.kind === 'child' ? (
