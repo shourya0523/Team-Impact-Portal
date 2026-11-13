@@ -64,8 +64,9 @@ const isLastCoach = async (db: Db, userId: string) => {
 
 /**
  * Communities `userIds` created pass to their longest-standing remaining member, so a private
- * community's join requests still have someone to approve them. With nobody left, the community
- * stays with its creator: hidden now, erased with them (`eraseDeletedAccounts`).
+ * community's join requests still have someone to approve them. Only an active account can inherit:
+ * a suspended or deleted member can't act for it. With nobody left, the community stays with its
+ * creator: hidden now, erased with them (`eraseDeletedAccounts`).
  */
 const handOverCommunities = async (db: Db, userIds: string[]) => {
   const created = await db
@@ -85,6 +86,7 @@ const handOverCommunities = async (db: Db, userIds: string[]) => {
       .where(
         and(
           eq(schema.memberships.communityId, id),
+          eq(schema.users.status, 'active'),
           isNull(schema.users.deletedAt),
           // Not one of the people leaving (a list of one, or every account erased in a batch).
           ...userIds.map((u) => ne(schema.users.id, u)),

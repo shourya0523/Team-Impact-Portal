@@ -227,6 +227,50 @@ describe('deleting your account', () => {
     expect(after!.createdBy).toBe(early.id);
   });
 
+  it('never hands a community to a suspended or deleted member', async () => {
+    const maya = await addUser('Maya', 'athlete');
+    const suspended = await addUser('Sus', 'athlete', { status: 'suspended' });
+    const gone = await addUser('Gone', 'athlete', { deletedAt: new Date() });
+    const active = await addUser('Active', 'athlete');
+    const [book] = await db
+      .insert(schema.communities)
+      .values({ kind: 'interest', name: 'Book club', private: true, createdBy: maya.id })
+      .returning();
+    const at = (days: number) => new Date(Date.now() - days * DAY);
+    await db.insert(schema.memberships).values([
+      { userId: maya.id, communityId: book!.id, source: 'signup', joinedAt: at(30) },
+      // Longer-standing than `active`, but they can't act for the community.
+      { userId: suspended.id, communityId: book!.id, source: 'join_request', joinedAt: at(25) },
+      { userId: gone.id, communityId: book!.id, source: 'join_request', joinedAt: at(20) },
+      { userId: active.id, communityId: book!.id, source: 'join_request', joinedAt: at(5) },
+    ]);
+    expect((await deleteMe(await signedIn(maya.email))).statusCode).toBe(204);
+    const [after] = await db
+      .select()
+      .from(schema.communities)
+      .where(eq(schema.communities.id, book!.id));
+    expect(after!.createdBy).toBe(active.id);
+  });
+
+  it('keeps a community with its creator when only suspended members remain', async () => {
+    const maya = await addUser('Maya', 'athlete');
+    const suspended = await addUser('Sus', 'athlete', { status: 'suspended' });
+    const [club] = await db
+      .insert(schema.communities)
+      .values({ kind: 'interest', name: 'Club', createdBy: maya.id, status: 'approved' })
+      .returning();
+    await db.insert(schema.memberships).values([
+      { userId: maya.id, communityId: club!.id, source: 'signup' },
+      { userId: suspended.id, communityId: club!.id, source: 'join_request' },
+    ]);
+    expect(await deleteAccount(db, maya.id)).toBeNull();
+    const [after] = await db
+      .select()
+      .from(schema.communities)
+      .where(eq(schema.communities.id, club!.id));
+    expect(after!.createdBy).toBe(maya.id);
+  });
+
   it('deleting twice changes nothing', async () => {
     const maya = await addUser('Maya', 'athlete');
     expect(await deleteAccount(db, maya.id, new Date(Date.now() - 10 * DAY))).toBeNull();
