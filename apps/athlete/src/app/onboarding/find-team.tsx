@@ -8,18 +8,54 @@ import { colors, layout, radius, spacing, typography } from '@team-impact/ui-tok
 import { Async, Chip, Progress } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { monogram } from '@/theme';
-import { Button, Card, Icon, TeamAvatar, Text, typeStyle } from '@/ui';
+import { useRole } from '@/navigation/role';
+import { Button, Card, Icon, TeamAvatar, Text, typeStyle, type IconName } from '@/ui';
 
-/** For teams that aren't registered yet (PRD §3, P7). */
-const askForTeam = (college: College) =>
+/**
+ * For teams that aren't registered yet (PRD §3, P7). Without a college (nothing matched the
+ * search), the email leaves both lines for people to fill in.
+ */
+const askForTeam = (college?: College) =>
   Linking.openURL(
-    `mailto:appdev@teamimpact.org?subject=${encodeURIComponent(`Add my team: ${college.name}`)}&body=${encodeURIComponent(
-      `College: ${college.name}\nSport: `,
-    )}`,
+    `mailto:appdev@teamimpact.org?subject=${encodeURIComponent(
+      college ? `Add my team: ${college.name}` : 'Add my team',
+    )}&body=${encodeURIComponent(`College: ${college?.name ?? ''}\nSport: `)}`,
   );
 
 /** The sports a college's teams play, in a stable order. */
 const sportsOf = (teams: TeamSummary[]) => [...new Set(teams.map((t) => t.sport))].sort();
+
+/** The dashed "not here yet" box from the mockup, with a way to ask us to add the team. */
+function Notice({
+  icon,
+  title,
+  body,
+  college,
+}: {
+  icon: IconName;
+  title: string;
+  body: string;
+  college?: College;
+}) {
+  return (
+    <View style={styles.notice}>
+      <Icon name={icon} size={20} color={colors.text.secondary} />
+      <View style={styles.noticeText}>
+        <Text weight="semibold">{title}</Text>
+        <Text variant="small" color="secondary">
+          {body}
+        </Text>
+        <Button
+          label="Ask us to add your team"
+          variant="secondary"
+          size="sm"
+          icon="mail"
+          onPress={() => askForTeam(college)}
+        />
+      </View>
+    </View>
+  );
+}
 
 /**
  * A college, then the sport step: when its teams play more than one sport, people pick the sport
@@ -34,7 +70,7 @@ function CollegeCard({ college }: { college: College }) {
   );
   const sports = all.state.status === 'ready' ? sportsOf(all.state.data) : [];
   const needsSport = sports.length > 1;
-  const state = needsSport ? filtered.state : all.state;
+  const { state, reload } = needsSport ? filtered : all;
   return (
     <Card style={styles.college}>
       <View style={styles.collegeHead}>
@@ -45,7 +81,7 @@ function CollegeCard({ college }: { college: College }) {
         </View>
         <View style={styles.grow}>
           <Text weight="semibold">{college.name}</Text>
-          <Async state={all.state}>
+          <Async state={all.state} onRetry={all.reload}>
             {(teams) => (
               <Text variant="caption" weight="medium" color="muted">
                 {teams.length
@@ -74,7 +110,7 @@ function CollegeCard({ college }: { college: College }) {
         </View>
       )}
       {needsSport && !sport ? null : (
-        <Async state={state}>
+        <Async state={state} onRetry={reload}>
           {(teams: TeamSummary[]) =>
             teams.length ? (
               teams.map((t) => (
@@ -89,6 +125,7 @@ function CollegeCard({ college }: { college: College }) {
                         teamId: t.id,
                         teamName: `${t.college.name.split(' ')[0]} ${t.name}`,
                         division: t.division,
+                        teamColor: t.color ?? '',
                       },
                     })
                   }
@@ -114,12 +151,11 @@ function CollegeCard({ college }: { college: College }) {
               ))
             ) : (
               <View style={styles.empty}>
-                <Button
-                  label="Ask us to add your team"
-                  variant="secondary"
-                  size="sm"
-                  icon="mail"
-                  onPress={() => askForTeam(college)}
+                <Notice
+                  icon="flag"
+                  title={`${sport ?? 'Your team'} at ${college.name} isn’t on Team IMPACT yet`}
+                  body="Ask the coach to contact Team IMPACT. You can request to join once the team is set up."
+                  college={college}
                 />
               </View>
             )
@@ -135,6 +171,7 @@ export default function FindTeam() {
   const insets = useSafeAreaInsets();
   const [query, setQuery] = useState('');
   const colleges = useApi(() => api.colleges());
+  const isParent = useRole().role === 'parent';
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ headerShown: false }} />
@@ -154,7 +191,7 @@ export default function FindTeam() {
           </View>
           <Progress step={1} total={3} onNavy />
           <Text variant="display" size="xl" color="onBrand">
-            Find your{'\n'}team
+            {isParent ? 'Find your child’s team' : 'Find your\nteam'}
           </Text>
           <View style={styles.search}>
             <Icon name="search" size={18} color={colors.text.muted} />
@@ -169,17 +206,34 @@ export default function FindTeam() {
           </View>
         </View>
         <View style={styles.list}>
-          <Async state={colleges.state}>
-            {(list) =>
-              list
-                .filter((x) => x.name.toLowerCase().includes(query.trim().toLowerCase()))
-                .map((x) => <CollegeCard key={x.id} college={x} />)
-            }
+          <Async state={colleges.state} onRetry={colleges.reload}>
+            {(list) => {
+              const q = query.trim();
+              const matches = list.filter((x) => x.name.toLowerCase().includes(q.toLowerCase()));
+              if (matches.length) return matches.map((x) => <CollegeCard key={x.id} college={x} />);
+              return (
+                <Notice
+                  icon="search"
+                  title={q ? `No college matches “${q}”` : 'No colleges on Team IMPACT yet'}
+                  body={
+                    q
+                      ? 'Check the spelling, or try the college’s short name. If it isn’t here, its teams aren’t on Team IMPACT yet.'
+                      : 'Once a college’s teams join, you’ll find them here.'
+                  }
+                />
+              );
+            }}
           </Async>
           <Text variant="small" color="secondary" style={styles.note}>
             Nothing about a team shows until a coach says yes. Have the coach’s QR code? Scanning it
             gets you in straight away.
           </Text>
+          <Button
+            label="Have a QR code from the coach? Scan it"
+            variant="secondary"
+            icon="qr"
+            onPress={() => router.push('/scan')}
+          />
         </View>
       </ScrollView>
     </View>
@@ -239,6 +293,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   empty: { padding: spacing.md, paddingTop: spacing.none },
+  notice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: colors.line,
+    backgroundColor: colors.surface,
+  },
+  noticeText: { flex: 1, gap: spacing.sm, alignItems: 'flex-start' },
   sports: {
     gap: spacing.sm,
     paddingHorizontal: spacing.md,

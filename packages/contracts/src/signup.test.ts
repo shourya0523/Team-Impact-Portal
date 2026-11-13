@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CreateJoinRequest, NewChild, SignupRequest } from './index';
+import { codeFromScan, CreateJoinRequest, NewChild, SignupRequest } from './index';
 
 const bornYearsAgo = (years: number) => {
   const d = new Date();
@@ -50,5 +50,36 @@ describe('sign-up and join contracts', () => {
     ).toBe(true);
     const asTeen = CreateJoinRequest.parse({ role: 'teen', teamId: TEAM, children });
     expect(asTeen).not.toHaveProperty('children');
+  });
+});
+
+describe('codeFromScan', () => {
+  it('reads the short code from a coach’s QR link, on every scheme the app is opened with', () => {
+    expect(codeFromScan('teamimpact://scan?code=JUMBQ7K4')).toBe('JUMBQ7K4');
+    expect(codeFromScan('exp://192.168.0.2:8081/--/scan?code=JUMBQ7K4')).toBe('JUMBQ7K4');
+    expect(codeFromScan('http://localhost:8081/scan?ref=poster&code=JUMBQ7K4#top')).toBe(
+      'JUMBQ7K4',
+    );
+  });
+
+  it('takes a typed short code any way it’s written, and decodes an escaped one', () => {
+    expect(codeFromScan('  jumb-q7k4 ')).toBe('JUMBQ7K4');
+    expect(codeFromScan('teamimpact://scan?code=jumb%2Dq7k4')).toBe('JUMBQ7K4');
+  });
+
+  it('passes a bare token through unchanged', () => {
+    const token = 'kX9fQ2mZ7pL4vB8nR3tY6wC1';
+    expect(codeFromScan(token)).toBe(token);
+  });
+
+  it('is null for anything that isn’t a Team IMPACT code', () => {
+    expect(codeFromScan('https://example.com/menu')).toBeNull(); // someone else’s QR
+    expect(codeFromScan('teamimpact://scan?code=%E0%A4%A')).toBeNull(); // a broken escape
+    expect(codeFromScan('teamimpact://scan?code=ABC')).toBeNull(); // too short to be either
+    expect(codeFromScan('JUMB2026')).toBeNull(); // 0 is a look-alike the alphabet leaves out
+    expect(codeFromScan('')).toBeNull();
+    // Long enough to be a token, but not one: it stays on the phone.
+    expect(codeFromScan('WIFI:S:CafeGuest;T:WPA;P:hunter22;;')).toBeNull();
+    expect(codeFromScan('Call me at 617 555 0100 tonight')).toBeNull();
   });
 });
