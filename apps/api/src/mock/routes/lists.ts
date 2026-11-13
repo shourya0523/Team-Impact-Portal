@@ -159,10 +159,13 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       const u = recruiter(request);
       const list = listOf(u, request.params.id);
       const { athleteId } = request.params;
-      if (!list.entries.some((e) => e.athleteId === athleteId)) {
+      // An athlete off the employer portal gets the same answer as one never saved, so the reply
+      // never confirms that a hidden athlete is on the list.
+      const card = world.cards.find((c) => c.face.athleteId === athleteId);
+      const onList = list.entries.some((e) => e.athleteId === athleteId);
+      if (!onList || !card || !world.recruiterCanSee(card)) {
         throw httpError(404, 'Not on this list');
       }
-      visibleAthlete(athleteId);
       const note = {
         id: world.newId(),
         athleteId,

@@ -474,6 +474,22 @@ describe('recruiter lists', () => {
     expect(cleared.body.entries).toHaveLength(1);
   });
 
+  it('answers a note on a hidden saved athlete exactly as one on an athlete never saved', async () => {
+    const w = await world();
+    const elena = await w.as('recruiter');
+    const note = (athleteId: string) =>
+      elena.call('PUT', `/lists/${FALL_INTERNS}/athletes/${athleteId}/note`, { text: 'Hi' });
+    // Riley is saved but has turned recruiting off; Sam is visible but not on this list; Mateo is a
+    // child, never on the portal or a list.
+    const hidden = await note(USERS.riley.id);
+    const notSaved = await note(USERS.sam.id);
+    const never = await note(MATEO);
+    expect(hidden.status).toBe(404);
+    expect(hidden.text).toBe(notSaved.text);
+    expect(hidden.text).toBe(never.text);
+    expect(hidden.text).not.toContain('athlete');
+  });
+
   it('turns a saved athlete into no longer available while recruiting is off, and back', async () => {
     const w = await world();
     const elena = await w.as('recruiter');
