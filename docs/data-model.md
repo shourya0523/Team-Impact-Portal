@@ -30,7 +30,10 @@ Event names and properties are defined once, in `packages/contracts/src/analytic
 - **Seasons.** `memberships.season` and `cards.season` let roster dedupe (TI-36) resolve one athlete
   across years. Cards are versioned (`season`, `version`).
 - **Moderation first.** `posts`, `comments`, `events` and `communities` default to
-  `status = pending`.
+  `status = pending`, so nothing appears until moderation sets it. Team Impact staff content is
+  written approved (no pre-publication review). Everyone else's is screened by OpenAI first: not
+  flagged is approved, flagged with lower confidence stays pending for staff, flagged with high
+  confidence is blocked and never approved; a failed screen leaves it pending (CLAUDE.md).
 - **Community shape.** Check constraints: a `team` community has a `team_id` and no other kind
   does; only `interest` and `medical` can be `private`; only an open `interest` community can be
   `official`. Interest and medical names are unique per kind, ignoring case.

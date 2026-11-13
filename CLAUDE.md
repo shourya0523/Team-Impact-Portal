@@ -29,7 +29,8 @@ Run typecheck, lint and test before pushing.
 - Athletes without open-to-recruiting don't appear on the employer portal at all
 - Identity search (official-community filter) sits behind one feature flag, is opt-in, and every such search is logged. Only official interest communities are filters; team, medical and private communities never are
 - Extracted resume text is untrusted data; nothing extracted is shown until the athlete confirms it
-- Every post, comment and event goes through moderation before it appears, except posts and events by Team Impact staff, which publish at once (PRD §5, v2.4). Staff content outside Team Impact stays reportable and blockable
+- Team Impact staff posts, comments, events and communities skip pre-publication moderation and publish at once (PRD §5, v2.4); staff content outside Team Impact's own community stays reportable and blockable
+- Everyone else's posts, comments, events and communities are screened by OpenAI moderation before they appear: flagged with high confidence → blocked, never published; flagged with lower confidence → held for staff review (`in_review`); not flagged → published at once. A screen error, timeout or missing API key holds for review (never auto-publishes), and a `sexual/minors` flag always blocks. Thresholds are the `MODERATION_*` env settings (docs/moderation.md)
 
 ## Design system (Signing Day, TI-72)
 
