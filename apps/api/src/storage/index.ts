@@ -1,4 +1,5 @@
 import {
+  CopyObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
@@ -16,6 +17,11 @@ export interface Storage {
     file: { contentType: string; byteSize: number },
     expiresInSeconds: number,
   ): Promise<{ url: string; headers: Record<string, string> }>;
+  /**
+   * Copies `from` to `to` inside the bucket, server side (S3 CopyObject, which Spaces supports),
+   * keeping its content type. False if `from` doesn't exist.
+   */
+  copy(from: string, to: string): Promise<boolean>;
   head(key: string): Promise<{ contentType: string | undefined; byteSize: number } | null>;
   /** Up to `length` bytes from the start of the file, to check its magic bytes. */
   readStart(key: string, length: number): Promise<Uint8Array>;
@@ -46,6 +52,9 @@ export const createS3Storage = ({
     credentials: { accessKeyId, secretAccessKey },
   });
 
+  const notFound = (error: unknown) =>
+    error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404;
+
   return {
     async presignPut(key, { contentType, byteSize }, expiresIn) {
       const command = new PutObjectCommand({
@@ -61,13 +70,24 @@ export const createS3Storage = ({
       return { url, headers: { 'content-type': contentType, 'content-length': String(byteSize) } };
     },
 
+    async copy(from, to) {
+      try {
+        // CopySource is `bucket/key`, URL-encoded except for the slashes.
+        const source = `${bucket}/${from.split('/').map(encodeURIComponent).join('/')}`;
+        await client.send(new CopyObjectCommand({ Bucket: bucket, Key: to, CopySource: source }));
+        return true;
+      } catch (error) {
+        if (notFound(error)) return false;
+        throw error;
+      }
+    },
+
     async head(key) {
       try {
         const object = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
         return { contentType: object.ContentType, byteSize: object.ContentLength ?? 0 };
       } catch (error) {
-        if (error instanceof S3ServiceException && error.$metadata.httpStatusCode === 404)
-          return null;
+        if (notFound(error)) return null;
         throw error;
       }
     },

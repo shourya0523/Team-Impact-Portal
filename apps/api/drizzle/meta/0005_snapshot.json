@@ -778,6 +778,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "final_key": {
+          "name": "final_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "mime_type": {
           "name": "mime_type",
           "type": "text",
@@ -903,10 +909,22 @@
           "columns": [
             "storage_key"
           ]
+        },
+        "media_final_key_unique": {
+          "name": "media_final_key_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "final_key"
+          ]
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "media_ready_final_key_check": {
+          "name": "media_ready_final_key_check",
+          "value": "\"media\".\"status\" <> 'ready' or \"media\".\"final_key\" is not null"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.comments": {

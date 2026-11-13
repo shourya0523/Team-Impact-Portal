@@ -380,6 +380,7 @@ describe('erasing deleted accounts after 30 days', () => {
         status: 'ready',
         childId: mateo!.id,
         storageKey: 'child_photo/mateo',
+        finalKey: 'files/child_photo/mateo/1',
         mimeType: 'image/jpeg',
         sizeBytes: 1000,
       })
@@ -393,8 +394,9 @@ describe('erasing deleted accounts after 30 days', () => {
     const { storageKeys } = await eraseDeletedAccounts(db, {
       deleteFiles: async (keys) => void deleted.push(keys),
     });
-    expect(storageKeys).toEqual(['child_photo/mateo']);
-    expect(deleted).toEqual([['child_photo/mateo']]); // handed over for deletion, after commit
+    // The upload object and the served copy both go.
+    expect(storageKeys).toEqual(['child_photo/mateo', 'files/child_photo/mateo/1']);
+    expect(deleted).toEqual([storageKeys]); // handed over for deletion, after commit
     const left = await db.select({ name: schema.children.firstName }).from(schema.children);
     expect(left).toEqual([{ name: 'Ollie' }]);
   });

@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  check,
   index,
   integer,
   jsonb,
@@ -68,7 +69,12 @@ export const media = pgTable(
     status: mediaStatus('status').notNull().default('pending'),
     // Set for child photos; the access layer shows them only to the child's team and family.
     childId: uuid('child_id').references(() => children.id, { onDelete: 'cascade' }),
+    // Where the client PUTs the file. Its signed URL stays valid for minutes after the upload is
+    // complete, so this object can still change: it is never served.
     storageKey: text('storage_key').notNull().unique(),
+    // The server-side copy made on completion, at a key no signed URL ever pointed at. Its bytes
+    // are the ones that were checked, and it is the only key ever read. Set once, when ready.
+    finalKey: text('final_key').unique(),
     mimeType: text('mime_type').notNull(),
     sizeBytes: integer('size_bytes').notNull(),
     // When the uploader affirmed they have the right to share it. Required on every photo.
@@ -83,6 +89,7 @@ export const media = pgTable(
   (t) => [
     index('media_owner_user_id_idx').on(t.ownerUserId),
     index('media_child_id_idx').on(t.childId),
+    check('media_ready_final_key_check', sql`${t.status} <> 'ready' or ${t.finalKey} is not null`),
   ],
 );
 

@@ -11,6 +11,12 @@ export const createMemoryStorage = () => {
       url: `https://storage.test/${key}?signature=put`,
       headers: { 'content-type': contentType, 'content-length': String(byteSize) },
     }),
+    copy: async (from, to) => {
+      const object = objects.get(from);
+      if (!object) return false;
+      objects.set(to, { contentType: object.contentType, body: object.body.slice() });
+      return true;
+    },
     head: async (key) => {
       const object = objects.get(key);
       return object ? { contentType: object.contentType, byteSize: object.body.length } : null;

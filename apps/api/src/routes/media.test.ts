@@ -2,7 +2,7 @@
 // migration applied, and an in-memory bucket standing in for Spaces.
 import { eq } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { UploadResponse } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import {
@@ -116,6 +116,10 @@ afterAll(async () => {
   await testDb.close();
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 const as = (name: Person) => ({ cookie: cookies[name] });
 
 const requestUpload = (name: Person, payload: object) =>
@@ -149,6 +153,9 @@ const upload = async (name: Person, payload: object) => {
 
 const view = (name: Person, mediaId: string) =>
   app.inject({ method: 'GET', url: `/media/${mediaId}`, headers: as(name) });
+
+/** Every object in the bucket for this upload, at either key. */
+const objectsOf = (mediaId: string) => [...objects.keys()].filter((key) => key.includes(mediaId));
 
 describe('upload', () => {
   it('needs a signed-in user', async () => {
@@ -227,11 +234,14 @@ describe('completing an upload checks what landed in the bucket', () => {
     return complete('teammate', row.id);
   };
 
-  /** The upload was refused: the file is gone from the bucket and the upload is still pending. */
+  /**
+   * The upload was refused: the file is gone from the bucket (upload object and copy alike) and the
+   * upload is still pending, with no final key.
+   */
   const expectRefused = async (res: LightMyRequestResponse, row: Row) => {
     expect(res.statusCode).toBe(400);
-    expect(objects.has(row.storageKey)).toBe(false);
-    expect((await rowOf(row.id)).status).toBe('pending');
+    expect(objectsOf(row.id)).toEqual([]);
+    expect(await rowOf(row.id)).toMatchObject({ status: 'pending', finalKey: null });
     expect((await view('teammate', row.id)).statusCode).toBe(404);
   };
 
@@ -277,6 +287,129 @@ describe('completing an upload checks what landed in the bucket', () => {
     });
     expect((await complete('outsider', row.id)).statusCode).toBe(404);
     expect((await rowOf(row.id)).status).toBe('pending');
+  });
+});
+
+describe('only the checked copy is ever served', () => {
+  const resume = { purpose: 'resume', mimeType: 'application/pdf', sizeBytes: 3000 } as const;
+  type Row = typeof media.$inferSelect;
+  const original = sampleFile('application/pdf', 3000);
+  // Another file of the same type and size, which passes every check the original passed.
+  const swapped = sampleFile('application/pdf', 3000);
+  swapped.set(bytes('a different file'), 100);
+  const html = new Uint8Array(3000);
+  html.set(bytes('<!doctype html><script>alert(1)</script>'));
+
+  /** A PUT to the upload's signed URL, which stays valid for minutes after completing. */
+  const put = (row: Row, body: Uint8Array) =>
+    objects.set(row.storageKey, { contentType: row.mimeType, body });
+
+  /** The key GET /media/:id hands out a signed URL for. */
+  const servedKey = async (mediaId: string) => {
+    const res = await view('teammate', mediaId);
+    expect(res.statusCode).toBe(302);
+    return new URL(res.headers.location as string).pathname.slice(1);
+  };
+
+  it('copies the file to a final key no signed URL points at, and drops the upload object', async () => {
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+
+    const { finalKey } = await rowOf(row.id);
+    expect(finalKey).toMatch(new RegExp(`^files/resume/${row.id}/`));
+    expect(finalKey).not.toBe(row.storageKey);
+    expect(objectsOf(row.id)).toEqual([finalKey]);
+    expect(await servedKey(row.id)).toBe(finalKey);
+  });
+
+  it('serves the same bytes after a PUT to the upload key once complete', async () => {
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    const { finalKey } = await rowOf(row.id);
+
+    put(row, swapped);
+    const served = await servedKey(row.id);
+    expect(served).toBe(finalKey);
+    expect(objects.get(served)!.body).toEqual(original);
+  });
+
+  it('runs every check on the copy, not on the upload object', async () => {
+    const head = vi.spyOn(storage, 'head');
+    const readStart = vi.spyOn(storage, 'readStart');
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    const { finalKey } = await rowOf(row.id);
+    expect(head.mock.calls.map(([key]) => key)).toEqual([finalKey]);
+    expect(readStart.mock.calls.map(([key]) => key)).toEqual([finalKey]);
+  });
+
+  it('serves the checked bytes even if the upload object changes right after the copy', async () => {
+    const copy = storage.copy;
+    vi.spyOn(storage, 'copy').mockImplementationOnce(async (from, to) => {
+      const copied = await copy(from, to);
+      objects.set(from, { contentType: 'application/pdf', body: html });
+      return copied;
+    });
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    expect(objects.get(await servedKey(row.id))!.body).toEqual(original);
+  });
+
+  it('refuses a copy that fails the checks, even if the upload object would pass', async () => {
+    vi.spyOn(storage, 'copy').mockImplementationOnce(async (_from, to) => {
+      objects.set(to, { contentType: 'application/pdf', body: html });
+      return true;
+    });
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(400);
+    expect(objectsOf(row.id)).toEqual([]);
+    expect(await rowOf(row.id)).toMatchObject({ status: 'pending', finalKey: null });
+  });
+
+  it('completing again neither copies again nor changes the final key', async () => {
+    const copy = vi.spyOn(storage, 'copy');
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    const { finalKey } = await rowOf(row.id);
+
+    put(row, swapped);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    expect(copy).toHaveBeenCalledTimes(1);
+    expect((await rowOf(row.id)).finalKey).toBe(finalKey);
+    expect(objects.get(finalKey!)!.body).toEqual(original);
+  });
+
+  it('keeps one final copy when two completions race', async () => {
+    const row = await startUpload('teammate', resume);
+    put(row, original);
+    const results = await Promise.all([complete('teammate', row.id), complete('teammate', row.id)]);
+    expect(results.map((res) => res.statusCode)).toEqual([204, 204]);
+    const { finalKey } = await rowOf(row.id);
+    expect(objectsOf(row.id)).toEqual([finalKey]);
+  });
+
+  it('deletes both the upload object and the copy when the checks fail, and allows a retry', async () => {
+    const copy = vi.spyOn(storage, 'copy');
+    const row = await startUpload('teammate', resume);
+    put(row, html);
+    expect((await complete('teammate', row.id)).statusCode).toBe(400);
+    const [[, attempted]] = copy.mock.calls as [[string, string]];
+    expect(attempted).toMatch(new RegExp(`^files/resume/${row.id}/`));
+    expect(objects.has(attempted)).toBe(false);
+    expect(objects.has(row.storageKey)).toBe(false);
+    expect(await rowOf(row.id)).toMatchObject({ status: 'pending', finalKey: null });
+
+    put(row, original);
+    expect((await complete('teammate', row.id)).statusCode).toBe(204);
+    const { finalKey } = await rowOf(row.id);
+    expect(finalKey).not.toBe(attempted);
+    expect(objects.get(await servedKey(row.id))!.body).toEqual(original);
   });
 });
 
@@ -332,7 +465,8 @@ describe('staff takedown', () => {
       childId,
       ...photo,
     });
-    const [row] = await testDb.db.select().from(media).where(eq(media.id, mediaId));
+    const { finalKey } = await rowOf(mediaId);
+    expect(objects.has(finalKey!)).toBe(true);
     const res = await app.inject({
       method: 'POST',
       url: `/staff/media/${mediaId}/takedown`,
@@ -342,7 +476,8 @@ describe('staff takedown', () => {
 
     const [after] = await testDb.db.select().from(media).where(eq(media.id, mediaId));
     expect(after!.status).toBe('taken_down');
-    expect(objects.has(row!.storageKey)).toBe(false);
+    expect(objects.has(finalKey!)).toBe(false);
+    expect(objectsOf(mediaId)).toEqual([]);
     const [child] = await testDb.db.select().from(children).where(eq(children.id, childId));
     expect(child!.photoMediaId).toBeNull();
     expect((await view('parent', mediaId)).statusCode).toBe(404);

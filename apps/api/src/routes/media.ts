@@ -27,6 +27,7 @@ const baseType = (contentType: string | undefined) =>
 
 /**
  * The one upload path (TI-111): ask for a signed URL, PUT the file to the private bucket, confirm.
+ * Confirming copies the file to its final key and checks the copy; only that copy is ever served.
  * Reads go through GET /media/:id, the access layer, which hands out a short-lived signed URL.
  */
 export const mediaRoutes = async (
@@ -125,32 +126,60 @@ export const mediaRoutes = async (
       throw httpError(404, 'Upload not found');
     }
 
-    if (row.status === 'pending') {
-      const object = await storage.head(row.storageKey);
-      if (!object) throw httpError(409, 'The file has not been uploaded yet');
-      // The signed PUT pins type and size, but check what actually landed before trusting it, and
-      // that its bytes really are the type it claims. Anything else is deleted; the client may PUT
-      // again while the signed URL lasts.
-      const firstBytes =
-        object.byteSize > 0 ? await storage.readStart(row.storageKey, SIGNATURE_BYTES) : null;
-      if (
-        baseType(object.contentType) !== row.mimeType ||
-        object.byteSize !== row.sizeBytes ||
-        !firstBytes ||
-        !matchesSignature(row.mimeType, firstBytes)
-      ) {
-        await storage.delete(row.storageKey);
-        throw httpError(400, 'The uploaded file isn’t the file that was signed for');
+    // Already complete: nothing is copied again and the final key stays as it is.
+    if (row.status === 'ready') return reply.code(204).send();
+
+    // The signed PUT URL for storage_key stays valid for minutes after this, so the bytes there can
+    // still change. Copy them to a fresh key no signed URL ever pointed at, check the copy, and
+    // serve only the copy: what was checked is exactly what is served.
+    const finalKey = `files/${row.purpose}/${row.id}/${randomUUID()}`;
+    if (!(await storage.copy(row.storageKey, finalKey))) {
+      throw httpError(409, 'The file has not been uploaded yet');
+    }
+    // The signed PUT pins type and size, but check what actually landed before trusting it, and
+    // that its bytes really are the type it claims. Anything else is deleted (both copies); the
+    // upload stays pending, so the client may PUT again while the signed URL lasts.
+    const object = await storage.head(finalKey);
+    const firstBytes =
+      object && object.byteSize > 0 ? await storage.readStart(finalKey, SIGNATURE_BYTES) : null;
+    if (
+      !object ||
+      baseType(object.contentType) !== row.mimeType ||
+      object.byteSize !== row.sizeBytes ||
+      !firstBytes ||
+      !matchesSignature(row.mimeType, firstBytes)
+    ) {
+      await Promise.all([storage.delete(finalKey), storage.delete(row.storageKey)]);
+      throw httpError(400, 'The uploaded file isn’t the file that was signed for');
+    }
+
+    // Only a still-pending upload takes the key, so a concurrent completion can't replace it.
+    const completed = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(media)
+        .set({ status: 'ready', finalKey })
+        .where(and(eq(media.id, row.id), eq(media.status, 'pending')))
+        .returning({ id: media.id });
+      if (!updated) return false;
+      if (row.childId) {
+        await tx.update(children).set({ photoMediaId: row.id }).where(eq(children.id, row.childId));
       }
-      await db.transaction(async (tx) => {
-        await tx.update(media).set({ status: 'ready' }).where(eq(media.id, row.id));
-        if (row.childId) {
-          await tx
-            .update(children)
-            .set({ photoMediaId: row.id })
-            .where(eq(children.id, row.childId));
-        }
-      });
+      return true;
+    });
+    if (!completed) {
+      // Another request completed it (or staff took it down) first: drop this copy, keep theirs.
+      await storage.delete(finalKey);
+      const now = await findMedia(row.id);
+      if (now?.status !== 'ready') throw httpError(404, 'Upload not found');
+      return reply.code(204).send();
+    }
+
+    // The upload object is no longer needed. If deleting it fails the upload is still complete;
+    // account erasure deletes storage_key too, so nothing is left behind for good.
+    try {
+      await storage.delete(row.storageKey);
+    } catch (error) {
+      request.log.warn({ err: error, mediaId: row.id }, 'Could not delete the upload object');
     }
     return reply.code(204).send();
   });
@@ -159,10 +188,11 @@ export const mediaRoutes = async (
     const user = await currentUser(request);
     const row = await findMedia(request.params.id);
     // Pending, taken-down and off-limits files all look the same as missing ones.
-    if (!row || row.status !== 'ready' || !(await canView(user, row))) {
+    if (!row || row.status !== 'ready' || !row.finalKey || !(await canView(user, row))) {
       throw httpError(404, 'File not found');
     }
-    const url = await storage.presignGet(row.storageKey, READ_URL_TTL_SECONDS);
+    // Always the checked copy, never the upload key a signed PUT may still write to.
+    const url = await storage.presignGet(row.finalKey, READ_URL_TTL_SECONDS);
     return reply.redirect(url, 302);
   });
 
@@ -175,20 +205,28 @@ export const mediaRoutes = async (
       const row = await findMedia(request.params.id);
       if (!row) throw httpError(404, 'File not found');
 
+      // The final key as the update sees it, in case a completion landed since the read above.
+      let finalKey = row.finalKey;
       if (row.status !== 'taken_down') {
-        await db.transaction(async (tx) => {
-          await tx
+        finalKey = await db.transaction(async (tx) => {
+          const [updated] = await tx
             .update(media)
             .set({ status: 'taken_down', takenDownAt: new Date() })
-            .where(eq(media.id, row.id));
+            .where(eq(media.id, row.id))
+            .returning({ finalKey: media.finalKey });
           await tx
             .update(children)
             .set({ photoMediaId: null })
             .where(eq(children.photoMediaId, row.id));
+          return updated?.finalKey ?? null;
         });
       }
-      // Always delete, so retrying a takedown whose delete failed still removes the file.
-      await storage.delete(row.storageKey);
+      // Always delete, so retrying a takedown whose delete failed still removes the file. Both
+      // keys: the served copy, and the upload object a signed PUT may have written again.
+      await Promise.all([
+        storage.delete(row.storageKey),
+        ...(finalKey ? [storage.delete(finalKey)] : []),
+      ]);
       return reply.code(204).send();
     },
   );

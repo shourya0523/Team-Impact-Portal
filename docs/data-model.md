@@ -38,6 +38,14 @@ Event names and properties are defined once, in `packages/contracts/src/analytic
 - **Community shape.** Check constraints: a `team` community has a `team_id` and no other kind
   does; only `interest` and `medical` can be `private`; only an open `interest` community can be
   `official`. Interest and medical names are unique per kind, ignoring case.
+- **Uploads (TI-111).** A client PUTs to `media.storage_key` through a signed URL that stays valid
+  for 5 minutes. On `POST /uploads/:id/complete` the API copies that object server side to a fresh
+  `final_key` no signed URL ever pointed at, checks the copy (content type, size, magic bytes) and,
+  if it passes, records `final_key`, sets `status = ready` and deletes the upload object; if it
+  fails, both objects are deleted and the upload stays pending. Reads, staff takedown and account
+  erasure use `final_key` (the last two delete both keys), so a later PUT to the upload key never
+  changes what is served. Completing again is a no-op. A check constraint: `ready` needs a
+  `final_key`.
 - **Every foreign key has an index**; the users soft-delete (`deleted_at`) has a partial index for the
   30-day erasure job.
 - **Deletion.** Setting `users.deleted_at` hides an account at once; a scheduled job hard-deletes it
@@ -228,7 +236,8 @@ erDiagram
         enum purpose "card_photo, child_photo, post_image, resume"
         enum status "pending, ready, taken_down"
         uuid child_id FK "child photos only"
-        text storage_key UK "private bucket, read via GET /media/:id"
+        text storage_key UK "upload key: the signed PUT target, never served"
+        text final_key UK "checked copy: the only key read, via GET /media/:id"
         text mime_type
         int size_bytes
         timestamptz rights_affirmed_at "required on photos"

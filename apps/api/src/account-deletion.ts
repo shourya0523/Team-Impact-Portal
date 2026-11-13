@@ -138,8 +138,9 @@ export interface ErasureResult {
   /** How many accounts were erased. */
   count: number;
   /**
-   * Storage keys of the files those accounts owned (photos, resumes, children's photos). Their
-   * rows are gone; the files themselves are deleted by `deleteFiles` (the bucket, in server.ts).
+   * Storage keys of the files those accounts owned (photos, resumes, children's photos): each
+   * file's upload key and its final key. Their rows are gone; the files themselves are deleted by
+   * `deleteFiles` (the bucket, in server.ts).
    */
   storageKeys: string[];
 }
@@ -168,8 +169,9 @@ export const eraseDeletedAccounts = async (
 
     // Their own files, and every photo of their children (which go with them). Child photos are
     // owned by the parent who uploaded them, but match on the child too so none is left behind.
+    // Both keys: the served copy, and the upload object (a signed PUT may have written it again).
     const media = await tx
-      .select({ key: schema.media.storageKey })
+      .select({ uploadKey: schema.media.storageKey, finalKey: schema.media.finalKey })
       .from(schema.media)
       .where(
         or(
@@ -215,7 +217,10 @@ export const eraseDeletedAccounts = async (
     await tx.delete(schema.users).where(inArray(schema.users.id, ids));
     return {
       count: ids.length,
-      storageKeys: media.map((m) => m.key),
+      // Files from before the upload path have one key for both.
+      storageKeys: [
+        ...new Set(media.flatMap((m) => (m.finalKey ? [m.uploadKey, m.finalKey] : [m.uploadKey]))),
+      ],
     };
   });
   // After the commit: a file deleted for a rolled-back erase couldn't be brought back.
