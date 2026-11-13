@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Id } from './common';
 import { SharedContact } from './contacts';
 import { Team, TeamMember } from './teams';
+import { UserSummary } from './users';
 
 /**
  * Coach team management (PRD P0): the roster, removing members, and what a coach needs to run the
@@ -39,6 +40,25 @@ export const TeamRoster = z.object({
   pendingRequestCount: z.number().int().nonnegative().nullable(),
 });
 export type TeamRoster = z.infer<typeof TeamRoster>;
+
+/**
+ * One athlete's contact details as their team's families see them (PRD §6, F4): only the channels
+ * the athlete chose to share with families. `{}` when they share none yet, or their card isn't
+ * published.
+ */
+export const FamilyVisibleAthlete = z.object({
+  athlete: UserSummary,
+  contact: SharedContact,
+});
+export type FamilyVisibleAthlete = z.infer<typeof FamilyVisibleAthlete>;
+
+/**
+ * `GET /teams/:id/athlete-contacts`: for approved parents on the team only; anyone else gets 403
+ * (404 off the team). It is its own route, not a field on the roster, so the roster everyone reads
+ * (teens included) never carries an athlete's contact details at all.
+ */
+export const TeamAthleteContacts = z.array(FamilyVisibleAthlete);
+export type TeamAthleteContacts = z.infer<typeof TeamAthleteContacts>;
 
 export const TeamMemberParams = z.object({ id: Id, userId: Id });
 export type TeamMemberParams = z.infer<typeof TeamMemberParams>;
