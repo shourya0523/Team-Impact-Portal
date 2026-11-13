@@ -26,6 +26,7 @@ import { AthleteCard, sampleAthlete } from '@team-impact/ui-primitives/web';
   palette={storedPalette} // optional: skip photo colour sampling
   tilt // optional, default true: tilt + holo shine (always off under Reduce Motion)
   dealIn // optional, default true: card-reveal on mount (a fade under Reduce Motion)
+  reduceMotion={useReducedMotion()} // native only, required: the app's live hook (apps/athlete src/ui)
 />;
 
 // One flat, motion-free face (no flip, tilt, shine, deal-in or shadow), for PNG export.

@@ -8,7 +8,7 @@ import { toCardData } from '@/components/cardData';
 import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { shortDate } from '@/components/format';
 import { useApi } from '@/hooks/useApi';
-import { Badge, Button, Card, Icon, Text, type IconName } from '@/ui';
+import { Badge, Button, Card, Icon, Text, useReducedMotion, type IconName } from '@/ui';
 
 /** Widest the card gets on tablets and web. */
 const MAX_CARD_WIDTH = 360;
@@ -44,6 +44,7 @@ function Row({
  */
 export default function CardHome() {
   const { width } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const { state, reload } = useApi(() => api.myCard());
   const [error, setError] = useState<string | null>(null);
   const cardWidth = Math.min(width - spacing.md * 2, MAX_CARD_WIDTH);
@@ -95,7 +96,11 @@ export default function CardHome() {
                   <Badge label={`Season ${card.season} · updated ${shortDate(card.updatedAt)}`} />
                 </View>
                 <View style={styles.cardWrap}>
-                  <AthleteCard athlete={toCardData(card, card.contact)} width={cardWidth} />
+                  <AthleteCard
+                    athlete={toCardData(card, card.contact)}
+                    width={cardWidth}
+                    reduceMotion={reduceMotion}
+                  />
                 </View>
                 <Text variant="small" color="secondary" style={styles.center}>
                   Tap or swipe the card to see the back.

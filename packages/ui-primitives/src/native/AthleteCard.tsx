@@ -18,7 +18,6 @@ import Animated, {
   useAnimatedSensor,
   useAnimatedStyle,
   useDerivedValue,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
@@ -88,6 +87,13 @@ export interface AthleteCardProps {
   gyro?: boolean;
   /** Deal the card in on mount (card-reveal motion; a fade under Reduce Motion). Default on. */
   dealIn?: boolean;
+  /**
+   * The OS Reduce Motion setting, live: pass the app's `useReducedMotion()` (apps/athlete
+   * `src/ui`), which follows the setting while the app runs. Reanimated's own hook reads it once at
+   * start-up, so a change made in Settings would be missed until a restart. Required, so no screen
+   * can forget it. True means no tilt, gyro or shine; the deal is a fade and flips are instant.
+   */
+  reduceMotion: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -135,12 +141,12 @@ export const AthleteCard = ({
   tilt = true,
   gyro = true,
   dealIn = true,
+  reduceMotion,
   style,
 }: AthleteCardProps) => {
   const { card, palette, front, back, styles } = useCardModel(athlete, width, paletteOverride);
   const height = cardHeightFor(width);
   const [isFlipped, setFlipped] = useFlipState(flipped, defaultFlipped, onFlippedChange);
-  const reduceMotion = useReducedMotion();
   const tiltOn = tilt && !reduceMotion;
 
   const angle = useSharedValue(isFlipped ? 180 : 0);
@@ -169,7 +175,8 @@ export const AthleteCard = ({
     deal.set(withTiming(1, { duration: cardMotion.dealDuration, easing: dealEasing }));
   }, [deal]);
 
-  // Reduce Motion switched on mid-tilt: drop straight back to flat, with no shine.
+  // Reduce Motion switched on while the card is shown (the prop is live): drop straight back to
+  // flat, with no shine.
   useEffect(() => {
     if (tiltOn) return;
     tiltX.set(0);
