@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_THRESHOLDS } from './moderation';
 
 /** Only for local mock runs, where nothing real is signed. */
 const DEV_SESSION_SECRET = 'mock-api-session-secret-not-for-real-use';
@@ -44,6 +45,14 @@ const EnvSchema = z
     TRUST_PROXY: z.coerce.number().int().min(0).optional(),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
+    /** Screens new content with OpenAI moderation. Without it, everything waits for staff. */
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    /**
+     * OpenAI category scores (0 to 1). Content OpenAI flags, or scoring `MODERATION_HOLD_AT` or
+     * more, is held for staff; flagged content scoring `MODERATION_BLOCK_AT` or more is blocked.
+     */
+    MODERATION_HOLD_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.holdAt),
+    MODERATION_BLOCK_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.blockAt),
   })
   .superRefine((env, ctx) => {
     if (!env.MOCK_API && !env.DATABASE_URL) {
@@ -51,6 +60,13 @@ const EnvSchema = z
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });
+    }
+    if (env.MODERATION_HOLD_AT > env.MODERATION_BLOCK_AT) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MODERATION_HOLD_AT'],
+        message: 'Must not be above MODERATION_BLOCK_AT',
+      });
     }
     if (env.DEV_OUTBOX && env.NODE_ENV === 'production') {
       ctx.addIssue({ code: 'custom', path: ['DEV_OUTBOX'], message: 'Never in production' });

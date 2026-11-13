@@ -23,6 +23,7 @@ import {
   type TrackedEvent,
 } from '@team-impact/contracts';
 import { eventRow } from '../events-log';
+import { holdEverything, type Screen } from '../moderation';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
 import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
@@ -121,12 +122,18 @@ export class MockWorld {
 
   /** Whether `/dev/outbox` is served and sent email printed (DEV_OUTBOX, `./outbox.ts`). */
   readonly devOutbox: boolean;
+  /**
+   * Screens each new post, comment, event and community (`../moderation.ts`). By default nothing
+   * is screened and everything waits for staff.
+   */
+  readonly screen: Screen;
 
   constructor(
     readonly flags: FeatureFlags,
-    { devOutbox = false }: { devOutbox?: boolean } = {},
+    { devOutbox = false, screen = holdEverything }: { devOutbox?: boolean; screen?: Screen } = {},
   ) {
     this.devOutbox = devOutbox;
+    this.screen = screen;
     this.consentRecords.push(...fx.fixtureConsent().map((r) => ({ ...r, value: true })));
   }
 

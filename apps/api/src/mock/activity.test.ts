@@ -178,6 +178,11 @@ describe('posts: held for moderation (P5)', () => {
       text: 'Applications for spring draft day are open.',
     });
     expect(created.body).toMatchObject({ kind: 'post', official: false, moderation: 'approved' });
+    // Staff content is exempt from screening: no ticket.
+    const tickets = (await staff.get('/staff/moderation/tickets')).body;
+    expect(ids(tickets.map((t: { target: { id: string } }) => t.target))).not.toContain(
+      created.body.id,
+    );
     for (const role of ['teen', 'recruiter'] as const) {
       const reader = await as(role);
       expect(ids((await reader.get('/feed')).body.items), role).toContain(created.body.id);

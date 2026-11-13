@@ -60,26 +60,40 @@ export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole
       const ticket = world.tickets.find((t) => t.id === request.params.id);
       if (!ticket) throw httpError(404, 'No such ticket');
       const { resolution, authorAction, note } = request.body;
+      // A decided ticket stays decided; it's reopened only to act on the author (e.g. of what the
+      // screen blocked), which must not log a second decision on the item.
+      const decided = ticket.status === 'resolved';
+      if (decided && ticket.resolution !== resolution) {
+        throw httpError(409, 'This ticket is already decided');
+      }
+      // A retried request must not warn or suspend the author a second time from this ticket.
+      const action =
+        authorAction &&
+        !world.staffTools.log.some((e) => e.ticketId === ticket.id && e.action === authorAction)
+          ? authorAction
+          : undefined;
       // Check the author action first, so a refused suspension leaves the ticket untouched.
-      const author = authorAction ? authorOf(world, ticket.target) : null;
+      const author = action ? authorOf(world, ticket.target) : null;
       if (author && 'status' in author) throw httpError(author.status, author.message);
-      if (author && authorAction === 'suspend') {
+      if (author && action === 'suspend') {
         const refused = cannotSuspend(world, author);
         if (refused) throw httpError(refused.status, refused.message);
       }
-      ticket.status = 'resolved';
-      ticket.resolution = resolution;
-      // Remove takes the item down; keep approves anything still held for review.
-      applyResolution(world, ticket.target, resolution);
-      logAction(
-        world,
-        staff,
-        resolution === 'remove' ? 'remove' : 'keep',
-        { ...ticket.target, label: ticket.preview },
-        { ticketId: ticket.id, note: note ?? null },
-      );
-      if (author && authorAction === 'warn') warn(world, staff, author, ticket, note ?? null);
-      if (author && authorAction === 'suspend') {
+      if (!decided) {
+        ticket.status = 'resolved';
+        ticket.resolution = resolution;
+        // Remove takes the item down; keep approves anything still held for review.
+        applyResolution(world, ticket.target, resolution);
+        logAction(
+          world,
+          staff,
+          resolution === 'remove' ? 'remove' : 'keep',
+          { ...ticket.target, label: ticket.preview },
+          { ticketId: ticket.id, note: note ?? null },
+        );
+      }
+      if (author && action === 'warn') warn(world, staff, author, ticket, note ?? null);
+      if (author && action === 'suspend') {
         suspend(world, staff, author, { reason: note ?? null, ticketId: ticket.id });
       }
       return ticket;

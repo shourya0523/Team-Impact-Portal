@@ -107,7 +107,7 @@ export default function CreateCommunity() {
                 </Text>
               </View>
               <Text variant="small" color="secondary">
-                Team Impact reviews the name and description before others can find it.
+                The name and description are checked before others can find it.
               </Text>
               {error && <ErrorText>{error}</ErrorText>}
               <Button

@@ -4,12 +4,20 @@ import { loadEnv } from './env';
 import { scheduleAccountErasure } from './account-deletion';
 import { scheduleEventsLogRetention } from './events-log';
 import { createSmtpMailer } from './identity/mailer';
+import { openAiScreen } from './moderation';
 
 const env = loadEnv();
 // env.ts requires DATABASE_URL unless MOCK_API is on. The real API runs on the database with real
 // sign-in; the mock API runs on fixtures and keeps its dev sign-in. One pool serves both.
 const database = env.MOCK_API || !env.DATABASE_URL ? null : createDb(env.DATABASE_URL);
 const db = database?.db;
+const screen = env.OPENAI_API_KEY
+  ? openAiScreen({
+      apiKey: env.OPENAI_API_KEY,
+      thresholds: { holdAt: env.MODERATION_HOLD_AT, blockAt: env.MODERATION_BLOCK_AT },
+      onError: (err) => app.log.warn({ err }, 'Moderation screen failed; holding for staff'),
+    })
+  : undefined;
 const app = await buildApp({
   sessionSecret: env.SESSION_SECRET,
   corsOrigins: env.CORS_ORIGINS,
@@ -29,6 +37,7 @@ const app = await buildApp({
         production: env.NODE_ENV === 'production',
       }
     : undefined,
+  screen,
   flags: {
     identitySearch: env.FLAG_IDENTITY_SEARCH,
     medicalCommunities: env.FLAG_MEDICAL_COMMUNITIES,
@@ -38,6 +47,7 @@ const app = await buildApp({
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');
 if (env.MOCK_API && env.DEV_OUTBOX)
   app.log.warn('DEV_OUTBOX is on: /dev/outbox serves invite links');
+if (!screen) app.log.warn('OPENAI_API_KEY is not set: all new content waits for staff review');
 if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
 // Accounts deleted 30 days ago are erased daily. Uploaded files join in once storage exists (#8).
 if (db) scheduleAccountErasure(db, { log: app.log });

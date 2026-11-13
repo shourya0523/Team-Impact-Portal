@@ -16,6 +16,7 @@ import { registerAuthRoutes } from './identity/routes';
 import { type Authenticate, sessionAuth } from './identity/session';
 import { type LogStream, loggerOptions } from './logging';
 import { registerMockRoutes } from './mock/routes';
+import type { Screen } from './moderation';
 import { MockWorld } from './mock/world';
 import { httpError, useZodContracts } from './zod';
 
@@ -44,7 +45,8 @@ export interface AppOptions {
     Partial<Pick<AuthConfig, 'mailer'>>;
   /**
    * The mock data to serve, for tests that seed it; a fresh fixture world by default. Its own flags
-   * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees.
+   * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees. Its
+   * own screen and dev outbox setting win over `screen` and `devOutbox` too.
    */
   world?: MockWorld;
   /**
@@ -52,6 +54,8 @@ export interface AppOptions {
    * the outbox hands out invite links without sign-in.
    */
   devOutbox?: boolean;
+  /** Screens new content (`./moderation.ts`). Without one, everything waits for staff. */
+  screen?: Screen;
 }
 
 declare module 'fastify' {
@@ -76,6 +80,7 @@ export const buildApp = async ({
   devOutbox = false,
   identity,
   world,
+  screen,
 }: AppOptions) => {
   const app = useZodContracts(
     Fastify({
@@ -145,7 +150,7 @@ export const buildApp = async ({
       : async () => null);
 
   if (mock) {
-    registerMockRoutes(app, world ?? new MockWorld(flags, { devOutbox }));
+    registerMockRoutes(app, world ?? new MockWorld(flags, { devOutbox, screen }));
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {
