@@ -5,6 +5,7 @@ import { scheduleAccountErasure } from './account-deletion';
 import { scheduleEventsLogRetention } from './events-log';
 import { createSmtpMailer } from './identity/mailer';
 import { openAiScreen } from './moderation';
+import { resumeConfigFromEnv } from './resume';
 
 const env = loadEnv();
 // env.ts requires DATABASE_URL unless MOCK_API is on. The real API runs on the database with real
@@ -42,6 +43,7 @@ const app = await buildApp({
     identitySearch: env.FLAG_IDENTITY_SEARCH,
     medicalCommunities: env.FLAG_MEDICAL_COMMUNITIES,
   },
+  resume: resumeConfigFromEnv(env),
 });
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');

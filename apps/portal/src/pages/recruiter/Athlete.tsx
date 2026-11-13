@@ -117,7 +117,7 @@ const Row = ({
     </div>
   ) : null;
 
-/** R5: an athlete's Baseball Card with the contacts they chose to share with recruiters. */
+/** R5: an athlete's Impact Card with the contacts they chose to share with recruiters. */
 export const AthletePage = () => {
   const { id = '' } = useParams();
   const { state } = useApi(() => api.card(id), [id]);

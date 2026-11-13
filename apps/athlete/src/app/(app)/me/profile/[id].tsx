@@ -18,7 +18,7 @@ import { ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
-import { Avatar, Badge, Card, Icon, TeamAvatar, Text } from '@/ui';
+import { Avatar, Badge, Card, Icon, TeamAvatar, Text, useReducedMotion } from '@/ui';
 
 const MAX_CARD_WIDTH = 360;
 
@@ -63,6 +63,7 @@ function OnlyTeam({ children }: { children: string }) {
 
 function Person({ p }: { p: PersonProfile }) {
   const { width } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const channels = [
     p.contact.email && { channel: 'email' as const, label: 'Email', value: p.contact.email },
     p.contact.phone && { channel: 'phone' as const, label: 'Phone', value: p.contact.phone },
@@ -101,6 +102,7 @@ function Person({ p }: { p: PersonProfile }) {
           <AthleteCard
             athlete={toCardData(p.card, p.contact)}
             width={Math.min(width - spacing.md * 2, MAX_CARD_WIDTH)}
+            reduceMotion={reduceMotion}
           />
         </View>
       )}

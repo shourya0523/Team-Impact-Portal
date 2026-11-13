@@ -10,7 +10,7 @@ const surfaces = [
       'Sign up by role, with age rules and per-role house rules',
       'Join a team by request or coach QR code, ending in the Signed stamp',
       'Feed, events, affinity groups, roster and coach tools',
-      'Resume upload to a published Baseball Card',
+      'Resume upload to a published Impact Card',
       'Recruiter swipe review and shared lists',
     ],
   },

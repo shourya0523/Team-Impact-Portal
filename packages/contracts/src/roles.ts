@@ -18,8 +18,8 @@ export const ROLES = [
 export const Role = z.enum(ROLES);
 export type Role = z.infer<typeof Role>;
 
-/** Only athletes (current or alumni) have a Baseball Card; everyone else has a plain profile. */
-export const hasBaseballCard = (role: Role): boolean =>
+/** Only athletes (current or alumni) have an Impact Card; everyone else has a plain profile. */
+export const hasImpactCard = (role: Role): boolean =>
   role === 'athlete' || role === 'alumni_athlete';
 
 /** Roles anyone can sign up as. Coaches and staff are invited; recruiters sign up on the portal. */

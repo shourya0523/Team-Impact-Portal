@@ -15,7 +15,7 @@ in production.
 | `teams.ts`         | Teams, coach invites, members                               |
 | `join-requests.ts` | Team join requests (athlete, parent, teen)                  |
 | `qr-codes.ts`      | Team join QR codes                                          |
-| `cards.ts`         | Baseball Card fields, audience views, resume ingest         |
+| `cards.ts`         | Impact Card fields, audience views, resume ingest           |
 | `contacts.ts`      | Contact details and who they're shared with                 |
 | `posts.ts`         | Posts, announcements, sponsor opportunities, comments       |
 | `events.ts`        | Events and RSVPs                                            |

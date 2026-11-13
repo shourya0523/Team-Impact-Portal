@@ -404,7 +404,7 @@ export default function CardEditor() {
   const { me } = useRole();
   const { state } = useApi(() => api.myCard());
   return (
-    <Screen eyebrow="Baseball Card" title="Edit card" back>
+    <Screen eyebrow="Impact Card" title="Edit card" back>
       <Async state={state}>
         {(s) => (
           <Editor

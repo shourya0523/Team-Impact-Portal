@@ -8,7 +8,12 @@
 import { createHash } from 'node:crypto';
 import { faker } from '@faker-js/faker';
 import type { PgTable } from 'drizzle-orm/pg-core';
-import { QR_SHORT_CODE_ALPHABET, type Role, type TrackedEvent } from '@team-impact/contracts';
+import {
+  CURRENT_TERMS_VERSION,
+  QR_SHORT_CODE_ALPHABET,
+  type Role,
+  type TrackedEvent,
+} from '@team-impact/contracts';
 import { eventRow } from '../../events-log';
 import * as schema from '../schema';
 import {
@@ -140,7 +145,7 @@ const addUser = (
     userId: user.id,
     flag: 'terms',
     value: true,
-    termsVersion: 'v2.0',
+    termsVersion: CURRENT_TERMS_VERSION,
     createdAt,
   });
   if (userType === 'teen') {
@@ -149,7 +154,7 @@ const addUser = (
       userId: user.id,
       flag: 'parent_agreed',
       value: true,
-      termsVersion: 'v2.0',
+      termsVersion: CURRENT_TERMS_VERSION,
       createdAt,
     });
   }
@@ -477,7 +482,7 @@ const addAthlete = (
     userId: user.id,
     flag: 'recruiter_visible',
     value: true,
-    termsVersion: 'v2.0',
+    termsVersion: CURRENT_TERMS_VERSION,
     createdAt: daysAgo(int(200, 400)),
   });
   if (chance(0.15)) {
@@ -487,7 +492,7 @@ const addAthlete = (
       userId: user.id,
       flag: 'recruiter_visible',
       value: false,
-      termsVersion: 'v2.0',
+      termsVersion: CURRENT_TERMS_VERSION,
       createdAt: daysAgo(int(1, 199)),
     });
   }

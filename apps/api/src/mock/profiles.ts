@@ -7,16 +7,18 @@ import {
   consentFlags,
   EXTRACTABLE_CARD_FIELDS,
   ExperienceEntry,
-  hasBaseballCard,
+  hasImpactCard,
   MAX_EXPERIENCE_ENTRIES,
   type MyCardState,
   type MySettings,
   type Profile,
   type ProfileCommunity,
+  RESUME_FAIL_REASONS,
   type ResumeExtraction,
   type SharedContact,
   type UpdateCardRequest,
 } from '@team-impact/contracts';
+import type { ResumeReading } from '../resume';
 import * as fx from './fixtures';
 import type { MockCard, MockUser } from './fixtures';
 import { actorOf, cardFacts } from './policy';
@@ -185,7 +187,7 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     )
     .map(world.teamSummary);
 
-  const withContact = hasBaseballCard(t.role) ? world.cardFor(t.id, u) : null;
+  const withContact = hasImpactCard(t.role) ? world.cardFor(t.id, u) : null;
   let card = null;
   let contact: SharedContact = {};
   if (withContact) {
@@ -221,7 +223,7 @@ export const cardOf = (world: MockWorld, athleteId: string) =>
   world.cards.find((c) => c.face.athleteId === athleteId);
 
 /**
- * Renaming yourself (`PATCH /me`) renames your Baseball Card too: the live card face, and any name
+ * Renaming yourself (`PATCH /me`) renames your Impact Card too: the live card face, and any name
  * waiting in an unpublished draft, so publishing it later doesn't bring the old name back. Earlier
  * published versions in the history keep the name they were published with.
  */
@@ -236,7 +238,7 @@ export const renameCard = (world: MockWorld, u: MockUser) => {
 };
 
 export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
-  const holder = hasBaseballCard(u.role);
+  const holder = hasImpactCard(u.role);
   const card = holder ? cardOf(world, u.id) : undefined;
   const published = !!card?.visibility.published;
   const reason = !canBeOpenToRecruiting(u.role)
@@ -244,7 +246,7 @@ export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
       ? 'Teens can’t be open to recruiting.'
       : 'Only athletes can be open to recruiting.'
     : !published
-      ? 'Publish your Baseball Card first.'
+      ? 'Publish your Impact Card first.'
       : null;
   return {
     contact: card ? card.contact : null,
@@ -294,7 +296,7 @@ export const myCardState = (world: MockWorld, u: MockUser): MyCardState => {
  * Returns an error message, or null.
  */
 export const publishCard = (world: MockWorld, u: MockUser, now: string): string | null => {
-  if (!hasBaseballCard(u.role)) return 'Only athletes have a Baseball Card.';
+  if (!hasImpactCard(u.role)) return 'Only athletes have an Impact Card.';
   const existing = cardOf(world, u.id);
   const draft = world.profiles.drafts.get(u.id) ?? {};
   const face = existing?.face as Record<string, unknown> | undefined;
@@ -372,7 +374,7 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
  */
 export const unpublishCard = (world: MockWorld, u: MockUser, now: string): string | null => {
   const card = cardOf(world, u.id);
-  if (!card) return 'You have no Baseball Card yet.';
+  if (!card) return 'You have no Impact Card yet.';
   card.visibility.published = false;
   world.recordConsent(u.id, consentFlags.openToRecruiting, card.visibility.openToRecruiting, false);
   card.visibility.openToRecruiting = false;
@@ -483,8 +485,36 @@ export const extractResume = (
     status: 'unconfirmed',
     fileName: clean(fileName),
     failed: keys.length === 0,
+    failReason: keys.length === 0 ? 'nothing_found' : null,
     fields: fields as ResumeExtraction['fields'],
     needsReview: [...keys],
+    // Labelled lines are unambiguous, so nothing is flagged.
+    check: [],
+    checkEntries: [],
     createdAt: now,
   };
 };
+
+/**
+ * A real reading of an uploaded file (src/resume) as the pending extraction. The file itself was
+ * only ever in memory and is gone once this returns.
+ */
+export const extractionFromReading = (
+  world: MockWorld,
+  reading: ResumeReading,
+  fileName: string,
+  now: string,
+): ResumeExtraction => ({
+  id: world.newId(),
+  status: 'unconfirmed',
+  fileName: clean(fileName),
+  failed: reading.failed,
+  failReason: !reading.failed
+    ? null
+    : (RESUME_FAIL_REASONS.find((r) => r === reading.reason) ?? 'nothing_found'),
+  fields: reading.fields,
+  needsReview: reading.needsReview,
+  check: reading.check,
+  checkEntries: reading.checkEntries,
+  createdAt: now,
+});

@@ -1,12 +1,26 @@
-import { DevSignInRequest, Me, SignOutRequest, UpdateMeRequest } from '@team-impact/contracts';
+import {
+  AcceptTermsRequest,
+  CONSENT_FLAGS,
+  CURRENT_TERMS_VERSION,
+  DevSignInRequest,
+  Me,
+  mustAcceptTerms,
+  SignOutRequest,
+  TermsStatus,
+  UpdateMeRequest,
+} from '@team-impact/contracts';
 import { prefsOf } from '../activity';
 import { renameCard } from '../profiles';
 import type { ZodApp } from '../../zod';
 import { NEWCOMERS, SIGN_IN_AS } from '../fixtures';
+import { latestTermsVersion } from '../signup';
 import type { MockWorld } from '../world';
 import { httpError, SESSION_COOKIE, type Guards } from './context';
 
-/** Session: dev sign-in, sign-out, the signed-in user and editing their plain profile. */
+/**
+ * Session: dev sign-in, sign-out, the signed-in user, editing their plain profile and the terms
+ * they've accepted.
+ */
 export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   app.post(
     '/auth/dev-sign-in',
@@ -39,6 +53,39 @@ export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }:
 
   app.get('/me', { schema: { response: { 200: Me } } }, async (request) =>
     world.me(viewer(request)),
+  );
+
+  const termsStatus = (userId: string): TermsStatus => {
+    const accepted = latestTermsVersion(world.signup, userId);
+    return { current: CURRENT_TERMS_VERSION, accepted, mustAccept: mustAcceptTerms(accepted) };
+  };
+
+  /** Whether the legal text changed since this account last accepted it (TI-107). */
+  app.get('/me/terms', { schema: { response: { 200: TermsStatus } } }, async (request) =>
+    termsStatus(viewer(request).id),
+  );
+
+  /** Accepting the current text again, recorded like a sign-up's acceptance. */
+  app.post(
+    '/me/terms',
+    { schema: { body: AcceptTermsRequest, response: { 200: TermsStatus } } },
+    async (request) => {
+      const u = viewer(request);
+      // The mock keeps no birth dates, so the teen role decides (it is set from age at sign-up).
+      const teen = u.role === 'teen';
+      if (teen && request.body.parentAgreed !== true) {
+        throw httpError(400, 'Confirm a parent or guardian agreed to the new terms.');
+      }
+      const row = {
+        userId: u.id,
+        value: true,
+        termsVersion: CURRENT_TERMS_VERSION,
+        createdAt: new Date().toISOString(),
+      };
+      world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.terms });
+      if (teen) world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.parentAgreed });
+      return termsStatus(u.id);
+    },
   );
 
   /**

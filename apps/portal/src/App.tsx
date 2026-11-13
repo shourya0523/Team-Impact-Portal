@@ -10,6 +10,7 @@ import { SignInPage } from './pages/SignIn';
 import { AnnouncementsPage } from './pages/staff/Announcements';
 import { CollegesPage } from './pages/staff/Colleges';
 import { SignUpPage } from './pages/SignUp';
+import { TermsUpdatePage } from './pages/TermsUpdate';
 import { CommunitiesPage } from './pages/staff/Communities';
 import { CompaniesPage } from './pages/staff/Companies';
 import { EventsPage } from './pages/staff/Events';
@@ -20,17 +21,21 @@ import { TeamsPage } from './pages/staff/Teams';
 import { homeFor, isPortalRole, SessionProvider, useSession } from './session';
 
 /**
- * Signed out → sign-in; a role outside `allow` → its own home. The API refuses those calls too;
- * this only keeps people off pages that would fail.
+ * Signed out → sign-in; a role outside `allow` → its own home; terms changed since they agreed →
+ * the new terms first. The API refuses those calls too; this only keeps people off pages that
+ * would fail.
  */
 const Guard = ({ allow, children }: { allow: Role[]; children: ReactNode }) => {
-  const { me } = useSession();
+  const { me, mustAcceptTerms } = useSession();
   const location = useLocation();
   if (me === undefined) return null;
   if (!me || !isPortalRole(me.role)) {
     return <Navigate to="/sign-in" replace state={{ from: location.pathname }} />;
   }
   if (!allow.includes(me.role)) return <Navigate to={homeFor(me.role)} replace />;
+  if (mustAcceptTerms === undefined) return null;
+  // The legal text changed since they last agreed: nothing else until they accept it (TI-107).
+  if (mustAcceptTerms) return <TermsUpdatePage />;
   return children;
 };
 

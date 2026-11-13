@@ -1,7 +1,7 @@
-// Baseball Card: start -> upload -> reading -> review (inline edit) -> card (flip/tilt, publish, open to recruiting) -> export; editor; history.
+// Impact Card: start -> upload -> reading -> review (inline edit) -> card (flip/tilt, publish, open to recruiting) -> export; editor; history.
 import { useEffect, useRef, useState } from 'react';
 import { useWorld } from '../../shared/store';
-import { BaseballCard, Field, Icon, SwitchRow } from '../../shared/ui';
+import { ImpactCard, Field, Icon, SwitchRow } from '../../shared/ui';
 import { BackBtn, Err, Head, ModalBar, Screen, Title } from '../parts';
 import { patchAthlete } from '../model';
 import { useApp, type CardFields } from '../state';
@@ -160,7 +160,7 @@ function MyCard() {
         <span className={'pill ' + (a.published ? 'pill-ok' : 'pill-gray')}>{badge}</span>
       </div>
       <div className="deal" style={{ display: 'flex', justifyContent: 'center' }}>
-        <BaseballCard a={a} team={{ ...team, color: 'var(--red)' }} />
+        <ImpactCard a={a} team={{ ...team, color: 'var(--red)' }} />
       </div>
       <div className="tiny" style={{ textAlign: 'center' }}>
         Tap the card to flip it
