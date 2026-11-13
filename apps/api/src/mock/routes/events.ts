@@ -9,7 +9,7 @@ import {
   RsvpRequest,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { holdForReview } from '../activity';
+import { BLOCKED_MESSAGE, screenNew, settleScreen, statusOf } from '../activity';
 import { summaryOf } from '../fixtures';
 import type { MockEvent } from '../fixtures';
 import { hiddenFor } from '../safety';
@@ -17,7 +17,7 @@ import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 import { seenCommunity } from './posts';
 
-/** Creating events (held for moderation), RSVPs, and the organizer's attendee list. */
+/** Creating events (screened before they appear, except staff's), RSVPs, and the organizer's attendee list. */
 export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   /** An event the viewer can read: approved in a community they read, or their own held one. */
   const readableEvent = (request: FastifyRequest, eventId: string) => {
@@ -27,7 +27,10 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
     if (!e || !c || !world.readsCommunity(c, u)) throw httpError(404, 'No such event');
     const visible =
       e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id);
-    if (!visible || hiddenFor(world, u, { id: e.id, authorId: e.hostId })) {
+    if (
+      !visible ||
+      hiddenFor(world, u, { id: e.id, authorId: e.hostId, communityId: e.communityId })
+    ) {
       throw httpError(404, 'No such event');
     }
     return { u, e, c };
@@ -45,6 +48,9 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
         throw httpError(403, 'You can’t create events in this community');
       }
       const { title, details, startsAt, endsAt, location } = request.body;
+      const verdict = await screenNew(world, u, {
+        text: [title, details, location].filter(Boolean).join('\n'),
+      });
       const now = new Date().toISOString();
       const created: MockEvent = {
         id: world.newId(),
@@ -57,12 +63,13 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
         communityId: c.id,
         // The host is RSVP'd going.
         goingCount: 1,
-        moderation: 'in_review',
+        moderation: statusOf(verdict),
         createdAt: now,
       };
       world.events.push(created);
       world.rsvps.push({ eventId: created.id, userId: u.id, status: 'going', respondedAt: now });
-      holdForReview(world, { kind: 'event', id: created.id }, `${title} · ${location}`);
+      settleScreen(world, { kind: 'event', id: created.id }, `${title} · ${location}`, verdict);
+      if (verdict.outcome === 'block') throw httpError(422, BLOCKED_MESSAGE);
       return reply.status(201).send(world.calendarEvent(created, c, u));
     },
   );

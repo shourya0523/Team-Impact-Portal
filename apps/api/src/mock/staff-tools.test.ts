@@ -153,6 +153,35 @@ describe('moderation actions', () => {
     expect(JSON.stringify(items[0])).not.toContain(SPAM_POST);
   });
 
+  it('acts on the author once when the same decision is sent again', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const chris = await as('alumni_mentor');
+    const decide = (authorAction: 'warn' | 'suspend') =>
+      staff.post(`/staff/moderation/tickets/${SPAM_TICKET}/resolve`, {
+        resolution: 'remove',
+        authorAction,
+        note: 'Spam',
+      });
+    const actions = async () =>
+      ((await staff.get('/staff/moderation/log')).body as { action: string }[])
+        .map((e) => e.action)
+        .reverse();
+
+    expect((await decide('warn')).status).toBe(200);
+    // A retry (double click, network retry) is answered but warns nobody again.
+    expect((await decide('warn')).status).toBe(200);
+    expect((await chris.get('/notifications')).body.items).toHaveLength(1);
+    expect(await actions()).toEqual(['remove', 'warn']);
+
+    // A different action on the same ticket still goes through, once.
+    expect((await decide('suspend')).status).toBe(200);
+    expect((await staff.post(`/staff/users/${USERS.chris.id}/unsuspend`)).status).toBe(200);
+    expect((await decide('suspend')).status).toBe(200);
+    expect((await chris.get('/me')).status).toBe(200);
+    expect(await actions()).toEqual(['remove', 'warn', 'suspend', 'unsuspend']);
+  });
+
   it('suspends the author: 403 everywhere and their content gone from feeds, until unsuspended', async () => {
     const { as } = await world();
     const staff = await as('staff');

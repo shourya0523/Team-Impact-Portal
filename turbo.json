@@ -8,7 +8,7 @@
     "dev": {
       "cache": false,
       "persistent": true,
-      "passThroughEnv": ["MOCK_API", "FLAG_*"]
+      "passThroughEnv": ["MOCK_API", "DEV_OUTBOX", "FLAG_*"]
     },
     "lint": {},
     "typecheck": {},

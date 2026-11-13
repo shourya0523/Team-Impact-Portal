@@ -133,7 +133,7 @@ export default function CreateEvent() {
                 textAlignVertical="top"
               />
               <Text variant="small" color="secondary">
-                Members see your name and role on the event. Team Impact reviews it first.
+                Members see your name and role on the event. It’s checked before it appears.
               </Text>
               {error && <ErrorText>{error}</ErrorText>}
               <Button

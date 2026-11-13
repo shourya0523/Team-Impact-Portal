@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEFAULT_THRESHOLDS } from './moderation';
 
 /** Only for local mock runs, where nothing real is signed. */
 const DEV_SESSION_SECRET = 'mock-api-session-secret-not-for-real-use';
@@ -25,6 +26,11 @@ const EnvSchema = z
       // The portal (Vite) and the athlete app on web (Expo).
       .default('http://localhost:5173,http://localhost:8081')
       .transform((value) => value.split(',').map((origin) => origin.trim())),
+    /**
+     * Mock only: serve `GET /dev/outbox` and print sent email, invite links included, so they can
+     * be opened locally. Off unless asked for (`pnpm dev:mock` sets it), and refused in production.
+     */
+    DEV_OUTBOX: z.stringbool().default(false),
     // Auth (TI-101). Where the API is reached: emailed links point here first.
     API_URL: z.url().optional(),
     // Where those links land afterwards: recruiters and staff on the portal, everyone else the app.
@@ -45,6 +51,14 @@ const EnvSchema = z
     S3_BUCKET: z.string().min(1).optional(),
     S3_ACCESS_KEY_ID: z.string().min(1).optional(),
     S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+    /** Screens new content with OpenAI moderation. Without it, everything waits for staff. */
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    /**
+     * OpenAI category scores (0 to 1). Content OpenAI flags, or scoring `MODERATION_HOLD_AT` or
+     * more, is held for staff; flagged content scoring `MODERATION_BLOCK_AT` or more is blocked.
+     */
+    MODERATION_HOLD_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.holdAt),
+    MODERATION_BLOCK_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.blockAt),
   })
   .superRefine((env, ctx) => {
     if (!env.MOCK_API && !env.DATABASE_URL) {
@@ -62,6 +76,16 @@ const EnvSchema = z
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });
+    }
+    if (env.MODERATION_HOLD_AT > env.MODERATION_BLOCK_AT) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['MODERATION_HOLD_AT'],
+        message: 'Must not be above MODERATION_BLOCK_AT',
+      });
+    }
+    if (env.DEV_OUTBOX && env.NODE_ENV === 'production') {
+      ctx.addIssue({ code: 'custom', path: ['DEV_OUTBOX'], message: 'Never in production' });
     }
     // Verification and reset emails must really go out; the log mailer is for development.
     if (env.NODE_ENV === 'production' && !env.MOCK_API && !env.SMTP_URL) {

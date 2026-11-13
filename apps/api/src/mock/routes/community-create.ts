@@ -6,7 +6,7 @@ import {
   IdParams,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { holdForReview } from '../activity';
+import { BLOCKED_MESSAGE, screenNew, settleScreen, statusOf } from '../activity';
 import type { MockCommunity } from '../fixtures';
 import { actorOf } from '../policy';
 import type { MockWorld } from '../world';
@@ -37,18 +37,25 @@ export const registerCommunityCreateRoutes = (
         throw httpError(403, 'You can’t create this kind of community');
       }
       // Names are unique per kind, ignoring case; held names count, removed ones don't.
-      const taken = world.communities.some(
-        (c) => c.kind === kind && c.moderation !== 'removed' && sameName(c.name, name),
-      );
-      if (taken) throw httpError(409, 'A community with that name already exists');
+      const refuseTaken = () => {
+        const taken = world.communities.some(
+          (c) => c.kind === kind && c.moderation !== 'removed' && sameName(c.name, name),
+        );
+        if (taken) throw httpError(409, 'A community with that name already exists');
+      };
+      // Checked before screening, so a taken name isn't sent out, and again after it: another
+      // request may have taken the name while this one waited on the screen.
+      refuseTaken();
+      const verdict = await screenNew(world, u, { text: `${name}\n${about}` });
+      refuseTaken();
       const now = new Date().toISOString();
       const userMade = {
         id: world.newId(),
         name,
         about,
-        // Name and description pass moderation like posts; until then only staff and the
-        // creator see it.
-        moderation: 'in_review' as const,
+        // Name and description are screened like posts; while held, only staff and the
+        // creator see it. Staff's own skip the screen and publish at once (`screenNew`).
+        moderation: statusOf(verdict),
         createdAt: now,
         createdById: u.id,
         private: request.body.private,
@@ -60,7 +67,8 @@ export const registerCommunityCreateRoutes = (
           ? { ...userMade, kind: 'interest', official: false }
           : { ...userMade, kind: 'medical' };
       world.communities.push(created);
-      holdForReview(world, { kind: 'community', id: created.id }, `${name}: ${about}`);
+      settleScreen(world, { kind: 'community', id: created.id }, `${name}: ${about}`, verdict);
+      if (verdict.outcome === 'block') throw httpError(422, BLOCKED_MESSAGE);
       return reply.status(201).send(world.community(created, u));
     },
   );

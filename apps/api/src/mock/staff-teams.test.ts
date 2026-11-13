@@ -12,7 +12,7 @@ import { useZodContracts } from '../zod';
 import { id, USERS } from './fixtures';
 import { registerMockRoutes } from './routes';
 import { suspend } from './staff-tools';
-import { INVITE_TOKENS, QR_TOKENS } from './team';
+import { hashInviteToken, INVITE_TOKENS, QR_TOKENS } from './team';
 import { MockWorld } from './world';
 
 const TUFTS = id(701);
@@ -67,8 +67,13 @@ const setup = async () => {
     expect((await c.post('/auth/dev-sign-in', { role, newcomer })).status).toBe(200);
     return c;
   };
-  /** An invite's link: only ever emailed, never returned by the API. */
-  const tokenOf = (inviteId: string) => world.coachInvites.find((i) => i.id === inviteId)!.token;
+  /** An invite's token: only ever emailed, so it's read back from the outbox by its hash. */
+  const tokenOf = (inviteId: string) => {
+    const { tokenHash } = world.coachInvites.find((i) => i.id === inviteId)!;
+    return world.outbox
+      .map((e) => e.link?.split('/').pop() ?? '')
+      .find((t) => hashInviteToken(t) === tokenHash)!;
+  };
   /** Opens an invite link signed out and creates the coach's account; they stay signed in. */
   const acceptAsNewCoach = async (token: string, firstName = 'Alex', lastName = 'Moore') => {
     const c = client();
@@ -1114,6 +1119,26 @@ describe('a team’s coaches and invites', () => {
         properties: { teamId: LACROSSE, inviteId: res.body.id, replacesInviteId: LACROSSE_INVITE },
       }),
     ]);
+  });
+
+  it('resending emails a new link, and the old emailed link stops working', async () => {
+    const w = await setup();
+    const staff = await w.as('staff');
+    const email = 'robin.assistant@tufts.edu';
+    const sent = await staff.post(`/staff/teams/${SOCCER}/coach-invites`, { email });
+    expect(sent.status).toBe(201);
+    const oldToken = w.tokenOf(sent.body.id);
+
+    const res = await staff.post(`/staff/coach-invites/${sent.body.id}/resend`);
+    expect(res.status).toBe(201);
+    const newToken = w.tokenOf(res.body.id);
+    // Both links exist only in the two emails; the invite rows hold hashes.
+    expect(w.world.outbox.filter((e) => e.to === email)).toHaveLength(2);
+    expect(newToken).not.toBe(oldToken);
+
+    const anon = w.client();
+    expect((await anon.get(`/invites/${oldToken}`)).status).toBe(410);
+    expect((await anon.get(`/invites/${newToken}`)).status).toBe(200);
   });
 
   it('resends an invite that expired, leaving the old one expired', async () => {

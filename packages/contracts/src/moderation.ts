@@ -4,7 +4,7 @@ import { Id, Timestamp } from './common';
 /**
  * Every post, comment and event is checked before it appears. `in_review` is held for staff (or
  * a recruiter opportunity awaiting approval); only `approved` items are shown to anyone but the
- * author. `removed` is a staff decision.
+ * author. `removed` is a staff decision, or the automated screen blocking it.
  */
 export const MODERATION_STATUSES = ['in_review', 'approved', 'removed'] as const;
 export const ModerationStatus = z.enum(MODERATION_STATUSES);
@@ -35,8 +35,10 @@ export type TicketStatus = z.infer<typeof TicketStatus>;
 
 /**
  * Staff only. Reports on the same item collect into one ticket on the moderation page. New posts,
- * comments, events and communities are held here too, as tickets with no reasons and no reports:
- * `dismiss` ("keep") approves them, `remove` takes them down.
+ * comments, events and communities the automated screen holds wait here too, as tickets with no
+ * reasons and no reports: `dismiss` ("keep") approves them, `remove` takes them down. What the
+ * screen blocks arrives already resolved as `remove`, so staff can still see it and act on the
+ * author. Team Impact staff content is never screened or held.
  */
 export const ModerationTicket = z.object({
   id: Id,
@@ -46,6 +48,11 @@ export const ModerationTicket = z.object({
   /** Empty for new content held for its first review. */
   reasons: z.array(ReportReason),
   reportCount: z.number().int().nonnegative(),
+  /**
+   * Categories the automated screen flagged (OpenAI moderation names, e.g. `harassment`,
+   * `violence/graphic`). Empty for reports, and for items held because the screen couldn't run.
+   */
+  flags: z.array(z.string()),
   status: TicketStatus,
   /** Set once resolved. `remove` takes the item down; `dismiss` leaves it up. */
   resolution: z.enum(['remove', 'dismiss']).nullable(),

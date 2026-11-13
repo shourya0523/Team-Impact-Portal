@@ -42,13 +42,15 @@ export const blockedBetween = (world: MockWorld, a: string, b: string) =>
 
 /**
  * Whether `u` shouldn't see an item: they reported it (hidden for the reporter straight away), or
- * its author and `u` blocked each other. Official Team Impact posts can't be blocked. A suspended
- * author's content is hidden from everyone until staff restore them (staff can't be suspended).
+ * its author and `u` blocked each other. Official Team Impact posts, and staff content in Team
+ * Impact's community, can't be blocked. A suspended author's content is hidden from everyone until
+ * staff restore them (staff can't be suspended). `communityId` is where the item lives (a
+ * comment's is its post's).
  */
 export const hiddenFor = (
   world: MockWorld,
   u: MockUser,
-  item: { id: string; authorId: string; official?: boolean },
+  item: { id: string; authorId: string; communityId: string; official?: boolean },
 ) => !can(actorOf(world, u), 'content.read', contentFacts(world, u, item));
 
 /**
@@ -115,6 +117,7 @@ export const fileReport = (
       preview,
       reasons: [body.reason],
       reportCount: 1,
+      flags: [],
       status: 'open',
       resolution: null,
       createdAt: now,
@@ -207,6 +210,8 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.qrCodes, (q) => gone(q.createdById));
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
+  // Coaches they added stay on the team; who added them is no longer recorded (data model: set null).
+  for (const m of world.teamMembers) if (m.addedById && gone(m.addedById)) m.addedById = null;
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
   removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));

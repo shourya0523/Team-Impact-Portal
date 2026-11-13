@@ -170,6 +170,7 @@ describe('parent roster: athletes’ family contacts (F4)', () => {
       userId: USERS.rosa.id,
       joinedVia: 'join_request',
       joinedAt: new Date().toISOString(),
+      addedById: null,
     });
     const rosa = await as('parent', true);
     expect((await rosa.get(`/teams/${BASKETBALL}/athlete-contacts`)).status).toBe(200);

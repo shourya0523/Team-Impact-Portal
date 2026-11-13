@@ -4,7 +4,7 @@ import type { Post } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton, type ReportAction } from '@/components/Report';
+import { blockable, ReportButton, type ReportAction } from '@/components/Report';
 import { useRole } from '@/navigation/role';
 import { monogram } from '@/theme';
 import { Avatar, Badge, Card, Icon, Text } from '@/ui';
@@ -147,11 +147,7 @@ export function PostCard({
         {reportable(post, me?.id) && (
           <ReportButton
             target={{ kind: 'post', id: post.id }}
-            author={
-              post.author.role === 'staff'
-                ? undefined
-                : { id: post.author.id, name: post.author.firstName }
-            }
+            author={blockable(post.author, post.community.kind)}
             onDone={(action) => onRemove?.(removedBy(post, action))}
           />
         )}

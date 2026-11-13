@@ -186,19 +186,30 @@ export const TEAM_MEMBERS: {
   userId: string;
   joinedVia: 'coach_invite' | 'join_request' | 'qr_code';
   joinedAt: string;
+  /** Who added them: set when staff or a coach invited a coach (data model: memberships.added_by). */
+  addedById: string | null;
 }[] = [
-  { teamId: soccer.id, userId: USERS.coach.id, joinedVia: 'coach_invite', joinedAt: at(1) },
+  // Staff invited the soccer team's first coach.
+  {
+    teamId: soccer.id,
+    userId: USERS.coach.id,
+    joinedVia: 'coach_invite',
+    joinedAt: at(1),
+    addedById: USERS.staff.id,
+  },
   ...[USERS.jordan, USERS.sam, USERS.riley, USERS.ava].map((u) => ({
     teamId: soccer.id,
     userId: u.id,
     joinedVia: 'qr_code' as const,
     joinedAt: at(2),
+    addedById: null,
   })),
   ...[USERS.lisa, USERS.mark, USERS.noah].map((u) => ({
     teamId: soccer.id,
     userId: u.id,
     joinedVia: 'join_request' as const,
     joinedAt: at(3),
+    addedById: null,
   })),
 ];
 
@@ -664,6 +675,7 @@ export const TICKETS: ModerationTicket[] = [
     preview: 'Make $5,000 a week from your dorm!!! DM me',
     reasons: ['spam'],
     reportCount: 2,
+    flags: [],
     status: 'open',
     resolution: null,
     createdAt: at(12, 15),
@@ -674,6 +686,7 @@ export const TICKETS: ModerationTicket[] = [
     preview: 'Crypto riches fast',
     reasons: ['spam', 'other'],
     reportCount: 1,
+    flags: [],
     status: 'open',
     resolution: null,
     createdAt: at(11, 18),
@@ -684,6 +697,7 @@ export const TICKETS: ModerationTicket[] = [
     preview: 'Chris Doyle',
     reasons: ['impersonation'],
     reportCount: 1,
+    flags: [],
     status: 'resolved',
     resolution: 'dismiss',
     createdAt: at(8),
