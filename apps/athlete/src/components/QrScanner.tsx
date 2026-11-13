@@ -29,7 +29,9 @@ export function QrScanner({
     handled.current = true;
     onScan(codeFromScan(data));
   };
-  if (!permission) return <ActivityIndicator color={colors.brand} />;
+  if (!permission) {
+    return <ActivityIndicator color={colors.brand} accessibilityLabel="Checking camera access" />;
+  }
   if (!permission.granted) {
     const canOpenSettings = !permission.canAskAgain && Platform.OS !== 'web';
     return (
