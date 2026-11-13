@@ -5,7 +5,7 @@ import {
   ConsentHistory,
   consentFlags,
   type ContactSharing,
-  hasBaseballCard,
+  hasImpactCard,
   IdParams,
   MySettings,
   Profile,
@@ -78,15 +78,15 @@ export const registerProfileRoutes = (
             : 'Only athletes can be open to recruiting',
         );
       }
-      if ((touchesCard || searchable?.length) && !hasBaseballCard(u.role)) {
-        throw httpError(403, 'Only athletes share contacts through a Baseball Card');
+      if ((touchesCard || searchable?.length) && !hasImpactCard(u.role)) {
+        throw httpError(403, 'Only athletes share contacts through an Impact Card');
       }
       const card = cardOf(world, u.id);
       if ((touchesCard || openToRecruiting !== undefined) && !card) {
-        throw httpError(400, 'Create your Baseball Card first');
+        throw httpError(400, 'Create your Impact Card first');
       }
       if (openToRecruiting && !card?.visibility.published) {
-        throw httpError(400, 'Publish your Baseball Card first');
+        throw httpError(400, 'Publish your Impact Card first');
       }
       // Check every opt-in before applying any, so a refused request changes and records nothing.
       const findable = (searchable ?? []).map((s) => {

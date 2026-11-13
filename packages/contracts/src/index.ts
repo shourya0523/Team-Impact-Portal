@@ -29,3 +29,4 @@ export * from './staff-tools';
 export * from './consent';
 export * from './policy';
 export * from './uploads';
+export * from './legal';

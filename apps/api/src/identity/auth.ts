@@ -15,6 +15,7 @@
 // auth_accounts and auth_verifications (db/schema/auth.ts). Everything stays in our Postgres.
 // =============================================================================================
 import { expo } from '@better-auth/expo';
+import { CURRENT_TERMS_VERSION } from '@team-impact/contracts';
 import argon2 from 'argon2';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
@@ -30,8 +31,11 @@ const MINUTE = 60;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
 
-/** Matches the seed data. Bump when the Terms change; consent records keep the version accepted. */
-export const TERMS_VERSION = 'v2.0';
+/**
+ * The legal bundle a sign-up accepts (TI-107), as the seed data records it. Bumped in contracts'
+ * `legal.ts` when the text changes; consent records keep the version accepted.
+ */
+export const TERMS_VERSION = CURRENT_TERMS_VERSION;
 
 /** argon2id, 64 MiB / 3 passes / 4 lanes: what CLAUDE.md specifies and the seed's hashes use. */
 const ARGON2 = { type: argon2.argon2id, memoryCost: 65_536, timeCost: 3, parallelism: 4 } as const;

@@ -1,7 +1,7 @@
 import type { HTMLAttributes } from 'react';
 
 export type CardProps = HTMLAttributes<HTMLDivElement> & {
-  /** `plain` is the surface card; `dark` is the Baseball Card base (card.surface, 18 radius). */
+  /** `plain` is the surface card; `dark` is the Impact Card base (card.surface, 18 radius). */
   variant?: 'plain' | 'dark';
 };
 

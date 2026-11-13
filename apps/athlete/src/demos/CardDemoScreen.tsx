@@ -4,7 +4,7 @@ import { ScrollView } from 'react-native-gesture-handler';
 import * as ImagePicker from 'expo-image-picker';
 import { AthleteCard, sampleAthlete } from '@team-impact/ui-primitives/native';
 import { colors, spacing } from '@team-impact/ui-tokens';
-import { Button, Text } from '@/ui';
+import { Button, Text, useReducedMotion } from '@/ui';
 
 /** Widest the card gets on tablets and web. */
 const MAX_CARD_WIDTH = 360;
@@ -12,6 +12,7 @@ const MAX_CARD_WIDTH = 360;
 /** Demo of the flippable athlete card with a photo picked from the device library. */
 export const CardDemoScreen = () => {
   const { width } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [flipped, setFlipped] = useState(false);
 
@@ -45,6 +46,7 @@ export const CardDemoScreen = () => {
         width={Math.min(width - spacing.xl * 2, MAX_CARD_WIDTH)}
         flipped={flipped}
         onFlippedChange={setFlipped}
+        reduceMotion={reduceMotion}
         style={styles.card}
       />
 

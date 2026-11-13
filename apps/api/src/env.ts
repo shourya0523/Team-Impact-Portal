@@ -51,7 +51,10 @@ const EnvSchema = z
     S3_BUCKET: z.string().min(1).optional(),
     S3_ACCESS_KEY_ID: z.string().min(1).optional(),
     S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
-    /** Screens new content with OpenAI moderation. Without it, everything waits for staff. */
+    /**
+     * OpenAI key. Its presence turns on moderation screening of new content (without it, everything
+     * waits for staff). Resumes only go to OpenAI when `RESUME_LLM=openai` too.
+     */
     OPENAI_API_KEY: z.string().min(1).optional(),
     /**
      * OpenAI category scores (0 to 1). Content OpenAI flags, or scoring `MODERATION_HOLD_AT` or
@@ -59,6 +62,16 @@ const EnvSchema = z
      */
     MODERATION_HOLD_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.holdAt),
     MODERATION_BLOCK_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.blockAt),
+    /**
+     * Resume reading (TI-113). The open-source layout reader always runs. `openai` adds a grounded
+     * LLM pass, which sends resume text (contacts stripped) to OpenAI: off unless Team Impact opts in.
+     */
+    RESUME_LLM: z.enum(['off', 'openai']).default('off'),
+    RESUME_LLM_MODEL: z.string().min(1).optional(),
+    OPENAI_BASE_URL: z.url().optional(),
+    /** docling-serve sidecar for photos and scans; without it they fall back to typing the card in. */
+    DOCLING_URL: z.url().optional(),
+    DOCLING_API_KEY: z.string().min(1).optional(),
   })
   .superRefine((env, ctx) => {
     if (!env.MOCK_API && !env.DATABASE_URL) {
@@ -73,6 +86,13 @@ const EnvSchema = z
       if (!env.MOCK_API && !env[key]) {
         ctx.addIssue({ code: 'custom', path: [key], message: 'Required unless MOCK_API' });
       }
+    }
+    if (env.RESUME_LLM === 'openai' && !env.OPENAI_API_KEY) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OPENAI_API_KEY'],
+        message: 'Required when RESUME_LLM=openai',
+      });
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });

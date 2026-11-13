@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { Role } from '@team-impact/contracts';
+import { CURRENT_TERMS_VERSION, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { id, USERS } from './fixtures';
 import { authorOf, isSuspended, suspend } from './staff-tools';
@@ -72,6 +72,7 @@ describe('recruiter approvals', () => {
         firstName: 'Casey',
         lastName: 'New',
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
     });
     expect(signup.statusCode).toBe(202);

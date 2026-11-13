@@ -1,5 +1,7 @@
 import { Redirect } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
+import { useEffect, useState } from 'react';
+import { api } from '@/api';
 import { useRole } from '@/navigation/role';
 import { TABS_BY_ROLE, type TabName } from '@/navigation/tabs';
 import { colors, spacing, typography } from '@team-impact/ui-tokens';
@@ -19,9 +21,13 @@ const ALL_TABS: { name: TabName; title: string; icon: IconName }[] = [
 
 /** The signed-in tab bar. `(app)` is a group, so its screens keep clean URLs like /home. */
 export default function AppTabs() {
-  const { role, ready } = useRole();
+  const { role, me, ready } = useRole();
+  const mustAcceptTerms = useMustAcceptTerms(me?.id ?? role);
   if (!ready) return null; // still asking the API whether there's a session
   if (!role) return <Redirect href="/welcome" />; // not signed in → back to the landing page
+  if (mustAcceptTerms === null) return null; // still asking whether the terms changed
+  // The legal text changed since they last agreed: nothing else until they accept it (TI-107).
+  if (mustAcceptTerms) return <Redirect href="/terms-update" />;
 
   const allowed = TABS_BY_ROLE[role] ?? [];
   return (
@@ -63,4 +69,25 @@ export default function AppTabs() {
       ))}
     </Tabs>
   );
+}
+
+/**
+ * Asks the API, once per signed-in account, whether the terms changed since they accepted them.
+ * Null while asking. If the API can't say (offline, or an older mock), the app carries on: the
+ * API still refuses a stale version where one is sent.
+ */
+function useMustAcceptTerms(account: string | null): boolean | null {
+  const [answer, setAnswer] = useState<{ account: string; must: boolean } | null>(null);
+  useEffect(() => {
+    if (!account) return;
+    let live = true;
+    api.termsStatus().then(
+      (status) => live && setAnswer({ account, must: status.mustAccept }),
+      () => live && setAnswer({ account, must: false }),
+    );
+    return () => {
+      live = false;
+    };
+  }, [account]);
+  return answer && answer.account === account ? answer.must : null;
 }

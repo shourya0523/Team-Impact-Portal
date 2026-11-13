@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View, type ViewProps } from 'react-native';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 
 export type CardProps = ViewProps & {
-  /** `plain` is the surface card; `dark` is the Baseball Card base (card.surface, 18 radius). */
+  /** `plain` is the surface card; `dark` is the Impact Card base (card.surface, 18 radius). */
   variant?: 'plain' | 'dark';
   /** Makes the whole card a button. Don't nest other buttons inside one. */
   onPress?: () => void;

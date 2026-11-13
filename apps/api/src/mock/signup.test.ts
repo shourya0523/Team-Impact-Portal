@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import type { JoinRequest, Role } from '@team-impact/contracts';
+import { CURRENT_TERMS_VERSION, type JoinRequest, type Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { id, summaryOf, USERS } from './fixtures';
 import { applyJoinDecision, INVITE_TOKENS, QR_TOKENS } from './team';
@@ -52,6 +52,7 @@ const signup = (over: object = {}) => ({
   birthDate: bornYearsAgo(20),
   role: 'athlete',
   acceptTerms: true,
+  termsVersion: CURRENT_TERMS_VERSION,
   ...over,
 });
 
@@ -287,6 +288,7 @@ describe('coach invites', () => {
         lastName: 'Nguyen',
         password: 'correct horse battery',
         acceptTerms: true,
+        termsVersion: CURRENT_TERMS_VERSION,
       },
     });
     expect(accepted.status).toBe(200);
@@ -316,6 +318,7 @@ describe('recruiter sign-up', () => {
     firstName: 'Robin',
     lastName: 'Hale',
     acceptTerms: true,
+    termsVersion: CURRENT_TERMS_VERSION,
   });
 
   it('waits in pending with no session until staff approve', async () => {

@@ -10,7 +10,7 @@ export const TABS_BY_ROLE: Partial<Record<Role, TabName[]>> = {
   teen: ['home', 'events', 'team', 'me'],
   coach: ['home', 'events', 'team', 'me'],
   // The wireframe has no alumni tab bar. Assumption: alumni athletes keep a Card (contracts'
-  // hasBaseballCard includes them, and "claim your pre-built card" lands in card review).
+  // hasImpactCard includes them, and "claim your pre-built card" lands in card review).
   alumni_athlete: ['home', 'events', 'card', 'me'],
   alumni_mentor: ['home', 'events', 'me'],
   // The wireframe's recruiter bar is Review · Lists; Me is added so recruiters can sign out.

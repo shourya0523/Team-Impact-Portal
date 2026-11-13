@@ -2,6 +2,7 @@
 // every account type can sign up, verify its email and hold a session; under-13s are refused;
 // 13 to 17 become teens who confirm a parent agreed; recruiters need a registered company domain;
 // suspensions and deletions take effect at once; password reset signs out everywhere.
+import { CURRENT_TERMS_VERSION } from '@team-impact/contracts';
 import { eq, sql } from 'drizzle-orm';
 import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -23,7 +24,7 @@ let app: Awaited<ReturnType<typeof buildApp>>;
 const mailer = createMemoryMailer();
 
 beforeAll(async () => {
-  ({ db, close: closeDb } = await freshTestDatabase());
+  ({ db, close: closeDb } = await freshTestDatabase('auth'));
   app = await buildApp({
     sessionSecret: 's'.repeat(32),
     corsOrigins: [PORTAL],
@@ -130,7 +131,7 @@ describe('sign-up', () => {
       .select({ flag: schema.consentRecords.flag, version: schema.consentRecords.termsVersion })
       .from(schema.consentRecords)
       .where(eq(schema.consentRecords.userId, user!.id));
-    expect(consents).toEqual([{ flag: 'terms', version: 'v2.0' }]);
+    expect(consents).toEqual([{ flag: 'terms', version: CURRENT_TERMS_VERSION }]);
 
     const link = linkTo('maya@tufts.edu');
     expect(link.pathname).toBe('/api/auth/verify-email');

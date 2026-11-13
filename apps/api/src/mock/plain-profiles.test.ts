@@ -62,7 +62,7 @@ describe('plain profiles: the owner edits theirs', () => {
     expect(onRoster.user).toMatchObject({ firstName: 'Elisa', lastName: 'Moreno' });
   });
 
-  it('renames the athlete’s Baseball Card too, and a pending draft, but not past seasons', async () => {
+  it('renames the athlete’s Impact Card too, and a pending draft, but not past seasons', async () => {
     const { as } = await world();
     const jordan = await as('athlete');
     const cardId = (await jordan.get('/cards/me')).body.card.id;
@@ -140,7 +140,7 @@ describe('plain profiles: recruiters sit under their company', () => {
   });
 });
 
-describe('plain profiles: only athletes and alumni athletes show a Baseball Card', () => {
+describe('plain profiles: only athletes and alumni athletes show an Impact Card', () => {
   it('every other profile is plain, even to staff, who may see every card', async () => {
     const { as } = await world();
     const staff = await as('staff');

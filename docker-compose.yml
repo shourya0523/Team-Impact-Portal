@@ -22,6 +22,13 @@ services:
       - '9000:9000'
     volumes:
       - s3data:/data
+  # OCR for resume photos and scans (TI-113): `docker compose --profile ocr up -d`, then set
+  # DOCLING_URL=http://localhost:5001. CPU only, about 4.4 GB. Pinned to a release; bump on purpose.
+  docling:
+    image: ghcr.io/docling-project/docling-serve-cpu:v1.38.2
+    profiles: [ocr]
+    ports:
+      - '5001:5001'
 volumes:
   pgdata:
   s3data:

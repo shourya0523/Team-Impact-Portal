@@ -17,6 +17,7 @@ import { type Authenticate, sessionAuth } from './identity/session';
 import { type LogStream, loggerOptions } from './logging';
 import { registerMockRoutes } from './mock/routes';
 import type { Screen } from './moderation';
+import type { ResumeReaderConfig } from './resume';
 import { MockWorld } from './mock/world';
 import { mediaRoutes } from './routes/media';
 import type { Storage } from './storage';
@@ -39,6 +40,8 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
+  /** How uploaded resumes are read: OCR sidecar and the optional LLM pass (TI-113). */
+  resume?: ResumeReaderConfig;
   /**
    * Real sign-in (Better Auth, TI-101), when the API runs on the database. Off on the mock API,
    * which keeps its dev sign-in. Without a mailer, emails go to the log.
@@ -84,6 +87,7 @@ export const buildApp = async ({
   trustProxy = 0,
   flags = DEFAULT_FLAGS,
   mock = false,
+  resume = {},
   devOutbox = false,
   identity,
   storage,
@@ -160,7 +164,7 @@ export const buildApp = async ({
       : async () => null);
 
   if (mock) {
-    registerMockRoutes(app, world ?? new MockWorld(flags, { devOutbox, screen }));
+    registerMockRoutes(app, world ?? new MockWorld(flags, { devOutbox, screen }), { resume });
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

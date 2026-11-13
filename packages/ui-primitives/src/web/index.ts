@@ -1,2 +1,8 @@
-export { AthleteCard, type AthleteCardProps } from './AthleteCard';
+export {
+  AthleteCard,
+  AthleteCardFace,
+  type AthleteCardFaceProps,
+  type AthleteCardProps,
+  type CardSide,
+} from './AthleteCard';
 export * from '../index';

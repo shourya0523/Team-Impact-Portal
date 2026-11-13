@@ -199,7 +199,7 @@ export default function Request() {
             )}
             {role === 'athlete' && (
               <Text variant="small" color="secondary">
-                That’s all the coach needs. No resume yet; you’ll build your Baseball Card after
+                That’s all the coach needs. No resume yet; you’ll build your Impact Card after
                 you’re signed.
               </Text>
             )}

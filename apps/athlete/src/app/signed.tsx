@@ -84,7 +84,7 @@ export default function Signed() {
   // What's next, by role (the mockup's Signed board).
   const welcome =
     role === 'athlete'
-      ? `You’re on the roster${first ? `, ${first}` : ''}. Next up: build your Baseball Card.`
+      ? `You’re on the roster${first ? `, ${first}` : ''}. Next up: build your Impact Card.`
       : role === 'parent'
         ? 'You’re on the team with your child. Say hi to the roster and see what’s coming up.'
         : role === 'teen'
@@ -129,7 +129,7 @@ export default function Signed() {
           <View style={styles.actions}>
             {role === 'athlete' && (
               <Button
-                label="Make your Baseball Card"
+                label="Make your Impact Card"
                 variant="onBrand"
                 size="lg"
                 onPress={() => router.replace('/card')}

@@ -65,7 +65,7 @@ export const SearchPage = () => {
     <>
       <PageHeader
         title="Search athletes"
-        subtitle="Athletes with a published Baseball Card who are open to recruiting."
+        subtitle="Athletes with a published Impact Card who are open to recruiting."
       />
       <div style={{ display: 'flex', gap: spacing.lg, alignItems: 'flex-start' }}>
         <Card style={{ width: 248, flexShrink: 0 }}>

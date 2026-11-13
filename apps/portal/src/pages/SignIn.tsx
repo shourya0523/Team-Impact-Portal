@@ -10,7 +10,7 @@ const CHOICES: { role: Role; title: string; who: string; detail: string }[] = [
     role: 'recruiter',
     title: 'Recruiter',
     who: 'Elena Ward · Northbeam Capital',
-    detail: 'Search athletes, open Baseball Cards, keep shared lists.',
+    detail: 'Search athletes, open Impact Cards, keep shared lists.',
   },
   {
     role: 'staff',
