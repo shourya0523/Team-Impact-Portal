@@ -57,7 +57,8 @@ whose company is suspended, is refused at once. A deleted account reads as "no s
   `auth_accounts.password`. 12 to 128 characters.
 - **Only the endpoints we use are on.** Better Auth's update-user, change-email, delete-user,
   revoke-session, update-session and the social sign-in endpoints are switched off
-  (`disabledPaths`). Profile edits and account deletion are our own routes, with our rules.
+  (`disabledPaths`). Profile edits and account deletion are our own routes, with our rules
+  (account deletion: `docs/account-deletion.md`).
 - **No session token ever appears in a response body**, only in the HttpOnly cookie, so a script
   injected into a page can't read it. The Expo client stores the session from the Set-Cookie header.
 - **Links can't be turned into phishing links:** any `callbackURL` or `redirectTo` must point at
