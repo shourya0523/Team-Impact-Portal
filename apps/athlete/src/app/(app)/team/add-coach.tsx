@@ -94,7 +94,7 @@ export default function AddCoach() {
           </Gutter>
           <SectionLabel>Waiting to accept</SectionLabel>
           <Gutter gap="sm">
-            <Async state={invites.state}>
+            <Async state={invites.state} onRetry={invites.reload}>
               {(list) =>
                 list && list.length ? (
                   list.map((i) => (

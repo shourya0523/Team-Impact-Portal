@@ -16,13 +16,22 @@ export const actorOf = (world: MockWorld, u: MockUser): Actor => ({
   companyId: u.companyId ?? null,
 });
 
-export const cardFacts = (world: MockWorld, card: MockCard): CardFacts => ({
+/**
+ * `viewer`: who is looking, for the block between them and the card's owner. Null for checks
+ * about the card itself, with nobody in particular looking (`recruiterVisible`).
+ */
+export const cardFacts = (
+  world: MockWorld,
+  card: MockCard,
+  viewer: MockUser | null,
+): CardFacts => ({
   athleteId: card.face.athleteId,
   ownerRole: world.user(card.face.athleteId)?.role ?? 'athlete',
   teamId: card.face.teamId,
   published: card.visibility.published,
   openToRecruiting: card.visibility.openToRecruiting,
   ownerSuspended: isSuspended(world, card.face.athleteId),
+  blocked: viewer ? blockedBetween(world, viewer.id, card.face.athleteId) : false,
 });
 
 export const communityFacts = (
@@ -48,10 +57,13 @@ export const communityFacts = (
 export const contentFacts = (
   world: MockWorld,
   u: MockUser,
-  item: { id: string; authorId: string; official?: boolean },
+  item: { id: string; authorId: string; communityId: string; official?: boolean },
 ): ContentFacts => ({
   authorId: item.authorId,
   official: item.official,
+  staffInTeamImpact:
+    world.user(item.authorId)?.role === 'staff' &&
+    world.communities.find((c) => c.id === item.communityId)?.kind === 'team_impact',
   blocked: blockedBetween(world, u.id, item.authorId),
   reportedByActor: world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id),
   authorSuspended: isSuspended(world, item.authorId),

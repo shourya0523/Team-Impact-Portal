@@ -10,7 +10,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "expo export --platform web --output-dir dist",
+    "test": "vitest run && expo export --platform web --output-dir dist",
     "lint": "eslint ."
   },
   "dependencies": {
@@ -20,12 +20,15 @@
     "@team-impact/ui-primitives": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
     "expo": "~57.0.26",
+    "expo-camera": "~57.0.6",
     "expo-constants": "~57.0.21",
+    "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
     "expo-image-manipulator": "~57.0.21",
     "expo-image-picker": "~57.0.20",
     "expo-linking": "~57.0.12",
     "expo-router": "~57.0.26",
+    "expo-sharing": "~57.0.24",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",
@@ -41,6 +44,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "vitest": "^5.0.3"
   }
 }

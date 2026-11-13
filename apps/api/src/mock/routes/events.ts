@@ -17,7 +17,7 @@ import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 import { seenCommunity } from './posts';
 
-/** Creating events (screened before they appear), RSVPs, and the organizer's attendee list. */
+/** Creating events (screened before they appear, except staff's), RSVPs, and the organizer's attendee list. */
 export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   /** An event the viewer can read: approved in a community they read, or their own held one. */
   const readableEvent = (request: FastifyRequest, eventId: string) => {
@@ -27,7 +27,10 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
     if (!e || !c || !world.readsCommunity(c, u)) throw httpError(404, 'No such event');
     const visible =
       e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id);
-    if (!visible || hiddenFor(world, u, { id: e.id, authorId: e.hostId })) {
+    if (
+      !visible ||
+      hiddenFor(world, u, { id: e.id, authorId: e.hostId, communityId: e.communityId })
+    ) {
       throw httpError(404, 'No such event');
     }
     return { u, e, c };
@@ -39,6 +42,8 @@ export const registerEventRoutes = (app: ZodApp, world: MockWorld, { viewer }: G
     async (request, reply) => {
       const u = viewer(request);
       const c = seenCommunity(world, u, request.params.id);
+      // Only its creator and staff see a held community, so saying so gives nothing away.
+      if (c.moderation !== 'approved') throw httpError(409, 'This community is waiting for review');
       if (!world.readsCommunity(c, u) || !canCreateEventIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t create events in this community');
       }

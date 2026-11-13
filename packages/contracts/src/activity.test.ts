@@ -49,6 +49,24 @@ describe('posting permissions (PRD §5)', () => {
     expect(canPostIn('athlete', { ...team, myMembership: null })).toBe(false);
   });
 
+  it('lets nobody post or host in a community waiting for review, its creator included', () => {
+    const member: Community = {
+      ...base,
+      kind: 'interest',
+      official: false,
+      private: false,
+      myJoinRequest: null,
+      createdBy: official.createdBy,
+      moderation: 'in_review',
+      myMembership: { ...joined, recruiterSearchOptIn: false },
+    };
+    expect(canPostIn('athlete', member)).toBe(false);
+    expect(canPostIn('staff', member)).toBe(false);
+    expect(canCreateEventIn('athlete', member)).toBe(false);
+    expect(canPostIn('athlete', { ...member, moderation: 'approved' })).toBe(true);
+    expect(canCreateEventIn('athlete', { ...member, moderation: 'approved' })).toBe(true);
+  });
+
   it('keeps recruiters out of comments and teens inside their team', () => {
     expect(canCommentIn('recruiter', 'team_impact')).toBe(false);
     expect(canCommentIn('parent', 'interest')).toBe(true);

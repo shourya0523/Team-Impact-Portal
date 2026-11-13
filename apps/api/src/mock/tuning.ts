@@ -120,6 +120,7 @@ export const tuningWorld = (now = TUNING_NOW, seed = 20261020): MockWorld => {
       userId: u.id,
       joinedVia: 'join_request',
       joinedAt: '2026-09-02T12:00:00.000Z',
+      addedById: null,
     });
   }
 

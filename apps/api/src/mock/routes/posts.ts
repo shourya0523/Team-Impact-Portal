@@ -29,7 +29,7 @@ export const seenCommunity = (world: MockWorld, u: MockUser, id: string) => {
   return c;
 };
 
-/** Posts, comments and rallies. Everything new is screened before it appears (P5). */
+/** Posts, comments and rallies. Everything new is screened before it appears (P5), except staff's. */
 export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   const postView = (c: MockCommunity, u: MockUser, postId: string) => {
     const p = world.posts.find((x) => x.id === postId);
@@ -62,21 +62,24 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request, reply) => {
       const u = viewer(request);
       const c = seenCommunity(world, u, request.params.id);
+      // Only its creator and staff see a held community, so saying so gives nothing away.
+      if (c.moderation !== 'approved') throw httpError(409, 'This community is waiting for review');
       if (!canPostIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t post in this community');
       }
-      // Staff posts in Team Impact's community are its announcements (TI-146).
-      const announcement = u.role === 'staff' && c.kind === 'team_impact';
+      // Always a plain post, staff's in Team Impact too: announcements come only from the portal
+      // (`POST /staff/announcements`, TI-146). Not official either: staff posts skip review, so
+      // they can still be reported, and blocked outside Team Impact (`content.read`).
       const { text, imageUrl = null } = request.body;
       const verdict = await screenNew(world, u, { text, imageUrl });
       const created = {
         id: world.newId(),
-        kind: announcement ? ('announcement' as const) : ('post' as const),
+        kind: 'post' as const,
         authorId: u.id,
         communityId: c.id,
         text,
         imageUrl,
-        official: u.role === 'staff',
+        official: false,
         likeCount: 0,
         commentCount: 0,
         moderation: statusOf(verdict),

@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import {
+  CalendarEvent,
   CoachInvite,
   College,
   Company,
+  consentFlags,
   CreateAnnouncementRequest,
   CreateCompanyRequest,
   CreateTeamRequest,
@@ -19,7 +21,7 @@ import {
   type TrackedEvent,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { summaryOf, type MockPost } from '../fixtures';
+import { announce } from '../activity';
 import { toPost } from '../safety';
 import { isSuspended } from '../staff-tools';
 import {
@@ -27,6 +29,7 @@ import {
   changedTeamFields,
   coachInviteView,
   createCoachInvite,
+  memberView,
   resendCoachInvite,
   renameTeamCommunity,
   restoreTeam,
@@ -271,12 +274,10 @@ export const registerStaffAdminRoutes = (
       staffOnly(request);
       const team = findTeam(request.params.id);
       return {
-        coaches: coachesOf(team.id).map((m) => ({
-          user: summaryOf(world.user(m.userId)!),
-          joinedVia: m.joinedVia,
-          joinedAt: m.joinedAt,
-          suspended: isSuspended(world, m.userId),
-        })),
+        coaches: coachesOf(team.id).flatMap((m) => {
+          const v = memberView(world, m);
+          return v ? [{ ...v, suspended: isSuspended(world, m.userId) }] : [];
+        }),
         invites: world.coachInvites
           .filter((i) => i.teamId === team.id)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
@@ -419,6 +420,13 @@ export const registerStaffAdminRoutes = (
         throw httpError(400, 'A private community can only merge into another private one');
       }
       for (const m of from.members) {
+        // The old community goes away, and with it any opt-in to being findable through it.
+        world.recordConsent(
+          m.userId,
+          consentFlags.findableIn(from.id),
+          m.recruiterSearchOptIn ?? false,
+          false,
+        );
         if (into.members.some((x) => x.userId === m.userId)) continue;
         // Being findable through a community is its own opt-in; it never carries over.
         into.members.push({ userId: m.userId, joinedAt: m.joinedAt, recruiterSearchOptIn: false });
@@ -446,7 +454,7 @@ export const registerStaffAdminRoutes = (
     return reply.status(204).send();
   });
 
-  // Announcements (S1) ---------------------------------------------------------------------------
+  // Team Impact's voice (S1): announcements, posts and events -----------------------------------
 
   app.get(
     '/staff/announcements',
@@ -460,32 +468,48 @@ export const registerStaffAdminRoutes = (
     },
   );
 
+  /**
+   * Approved, in a community `u` reads (`community.read`): a member, not removed, not medical while
+   * switched off. Being staff isn't enough, or private and medical content (and who's in a medical
+   * community) would reach staff who aren't members.
+   */
+  const listable = (item: { communityId: string; moderation: string }, u: MockUser) => {
+    const c = world.communities.find((x) => x.id === item.communityId);
+    return !!c && item.moderation === 'approved' && world.readsCommunity(c, u) ? c : undefined;
+  };
+
+  // Every staff member's plain posts and events in communities the viewer is in, newest first, so
+  // staff see what the team has put out, not just their own.
+  app.get('/staff/posts', { schema: { response: { 200: z.array(Post) } } }, async (request) => {
+    const u = staffOnly(request);
+    return world.posts
+      .filter((p) => p.kind === 'post' && world.user(p.authorId)?.role === 'staff')
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+      .flatMap((p) => (listable(p, u) && toPost(world, p, u)) || []);
+  });
+
+  app.get(
+    '/staff/events',
+    { schema: { response: { 200: z.array(CalendarEvent) } } },
+    async (request) => {
+      const u = staffOnly(request);
+      return world.events
+        .filter((e) => world.user(e.hostId)?.role === 'staff')
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .flatMap((e) => {
+          const c = listable(e, u);
+          return c ? [world.calendarEvent(e, c, u)] : [];
+        });
+    },
+  );
+
   app.post(
     '/staff/announcements',
     { schema: { body: CreateAnnouncementRequest, response: { 201: Post } } },
     async (request, reply) => {
       const u = staffOnly(request);
-      const c = findCommunity(request.body.communityId, u);
-      if (c.kind !== 'team_impact' && c.kind !== 'team') {
-        throw httpError(400, 'Announcements go to Team Impact’s community or a team’s');
-      }
-      const post: MockPost = {
-        id: world.newId(),
-        kind: 'announcement',
-        authorId: u.id,
-        communityId: c.id,
-        text: request.body.text,
-        official: true,
-        likeCount: 0,
-        commentCount: 0,
-        // Staff wrote it, so it skips the review queue.
-        moderation: 'approved',
-        createdAt: new Date().toISOString(),
-      };
-      world.posts.push(post);
-      world.track(u.id, {
-        name: 'post.created',
-        properties: { postId: post.id, kind: 'announcement' },
+      const post = announce(world, u, world.teamImpact(), request.body, {
+        push: request.body.sendPush,
       });
       return reply.status(201).send(toPost(world, post, u)!);
     },

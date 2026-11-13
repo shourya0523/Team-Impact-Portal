@@ -36,7 +36,6 @@ const addUser = async (userType: (typeof users.userType.enumValues)[number] = 'a
     .insert(users)
     .values({
       email: `${randomUUID()}@example.com`,
-      passwordHash: 'x',
       firstName: 'Test',
       lastName: 'User',
       dob: '2004-05-06',
