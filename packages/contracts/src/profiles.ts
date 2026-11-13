@@ -8,6 +8,7 @@ import {
   UpdateCardRequest,
 } from './cards';
 import { Id, PersonName, Timestamp } from './common';
+import { CompanySummary } from './companies';
 import {
   ContactDetails,
   ContactSharing,
@@ -51,6 +52,8 @@ export const PersonProfile = z.object({
   card: CardFace.nullable(),
   /** Only the channels shared with the viewer. Always empty for teen viewers. */
   contact: SharedContact,
+  /** Recruiters only: the company they recruit for. A recruiter's profile sits under it (PRD §2). */
+  company: CompanySummary.nullable(),
 });
 export type PersonProfile = z.infer<typeof PersonProfile>;
 
@@ -201,6 +204,8 @@ export const MyCardState = z.object({
   /** Unpublished edits. Only the athlete sees them; publishing makes them the card. */
   draft: UpdateCardRequest.nullable(),
   pendingResume: ResumeExtraction.nullable(),
+  /** The season a save or publish goes into, known even before the first card. */
+  currentSeason: z.number().int(),
 });
 export type MyCardState = z.infer<typeof MyCardState>;
 

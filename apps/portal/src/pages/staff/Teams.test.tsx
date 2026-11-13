@@ -83,6 +83,7 @@ const coach = (user: UserSummary, suspended = false) => ({
   user,
   joinedVia: 'coach_invite' as const,
   joinedAt: '2026-10-01T12:00:00.000Z',
+  addedBy: null,
   suspended,
 });
 

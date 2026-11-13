@@ -4,8 +4,10 @@ import { StyleSheet, View } from 'react-native';
 import { canPostIn } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { CommunityPicker } from '@/components/activity';
 import { Async, ErrorText, Gutter, Screen } from '@/components/ui';
+import { markPostsChanged } from '@/hooks/postsChanged';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { Button, Input, Text } from '@/ui';
@@ -46,8 +48,12 @@ export default function Compose() {
                 ...(imageUrl.trim() ? { imageUrl: imageUrl.trim() } : {}),
               })
               .then(
-                (p) => router.replace({ pathname: '/home/posts/[id]', params: { id: p.id } }),
-                (e: Error) => setError(e.message),
+                (p) => {
+                  // Home and the community page refresh when you go back, so the post shows there.
+                  markPostsChanged();
+                  router.replace({ pathname: '/home/posts/[id]', params: { id: p.id } });
+                },
+                (e: Error) => setError(describeError(e)),
               )
               .finally(() => setBusy(false));
           };
@@ -85,8 +91,8 @@ export default function Compose() {
                 placeholder="https://"
               />
               <Text variant="small" color="secondary">
-                Team Impact reviews every post before others see it. Yours shows as “Waiting for
-                review” until then.
+                Every post is checked before others see it. If yours needs a closer look, it shows
+                as “Waiting for review” until Team Impact checks it.
               </Text>
               {error && <ErrorText>{error}</ErrorText>}
               <View style={styles.row}>

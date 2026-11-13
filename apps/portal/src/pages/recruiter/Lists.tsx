@@ -16,12 +16,13 @@ import {
   Table,
 } from '../../ui';
 import { useApi } from '../../useApi';
+import { canManage } from './List';
 import { LIST_COLORS } from './listColors';
 
 /** The list's own colour dot (runtime data, chosen by the recruiter). */
 const DOT = spacing.md;
 
-/** R6: the recruiter's own lists and the ones colleagues shared with them. */
+/** R6: every list at the recruiter's company, shared with all their colleagues. */
 export const ListsPage = () => {
   const { me } = useSession();
   const { state, reload } = useApi(() => api.lists());
@@ -47,7 +48,7 @@ export const ListsPage = () => {
     <>
       <PageHeader
         title="Lists"
-        subtitle="Your shortlists and the ones colleagues shared with you."
+        subtitle="Every shortlist at your company. Colleagues see the same lists and notes."
         action={<Button label="New list" onClick={() => setCreating(true)} />}
       />
       <FormError>{remove.error}</FormError>
@@ -81,18 +82,14 @@ export const ListsPage = () => {
                 ),
               },
               { header: 'Note', cell: (l) => l.note ?? '—' },
-              { header: 'Owner', cell: (l) => fullName(l.owner) },
-              {
-                header: 'Shared with',
-                cell: (l) => l.sharedWith.map(fullName).join(', ') || 'Only you',
-              },
+              { header: 'Owner', cell: (l) => (l.owner ? fullName(l.owner) : 'No owner') },
               { header: 'Athletes', cell: (l) => l.athleteCount, align: 'right' },
               { header: 'Updated', cell: (l) => formatDate(l.updatedAt) },
               {
                 header: '',
                 align: 'right',
                 cell: (l) =>
-                  l.owner.id === me?.id ? (
+                  canManage(l, me?.id) ? (
                     <Button
                       label="Delete"
                       variant="quiet"

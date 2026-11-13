@@ -56,6 +56,31 @@ export type PendingChild = z.infer<typeof PendingChild>;
 export const QrCodeParams = z.object({ code: z.union([Token, QrShortCode]) });
 export type QrCodeParams = z.infer<typeof QrCodeParams>;
 
+/**
+ * The code inside a scanned QR or a pasted link. A coach's QR is a link to `/scan?code=XXXXXXXX`,
+ * but a bare token or short code works too, typed any way (`abcd-2345`). Anything else, like a
+ * website's QR, is null.
+ */
+const SCANNED_TOKEN = /^[A-Za-z0-9_-]+$/;
+
+export const codeFromScan = (data: string): string | null => {
+  const value = data.trim();
+  const fromLink = /[?&]code=([^&#]+)/.exec(value)?.[1];
+  if (fromLink === undefined && value.includes('://')) return null;
+  let candidate = value;
+  if (fromLink !== undefined) {
+    try {
+      candidate = decodeURIComponent(fromLink);
+    } catch {
+      return null; // a broken %-escape
+    }
+  }
+  const short = QrShortCode.safeParse(candidate);
+  if (short.success) return short.data;
+  // Tokens are URL-safe base64. Other text (a Wi-Fi QR, a note) never reaches the API.
+  return SCANNED_TOKEN.test(candidate) && Token.safeParse(candidate).success ? candidate : null;
+};
+
 /** Scanning a live code is the fast lane: the scanner is on the team straight away. */
 export const QrJoinResult = z.object({
   team: TeamSummary,

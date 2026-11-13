@@ -24,6 +24,7 @@ const card = (over: Partial<CardFacts> = {}): CardFacts => ({
   published: true,
   openToRecruiting: true,
   ownerSuspended: false,
+  blocked: false,
   ...over,
 });
 
@@ -47,7 +48,7 @@ const content = (over: Partial<ContentFacts> = {}): ContentFacts => ({
 });
 
 describe('child profiles', () => {
-  const child = { parentId: 'parent', teamId: 't1' };
+  const child = { parentId: 'parent', teamId: 't1', parentBlocked: false };
 
   it('are readable by the parent and the team', () => {
     expect(can(actor('parent'), 'child.read', child)).toBe(true);
@@ -62,14 +63,14 @@ describe('child profiles', () => {
   });
 
   it('stay with the family once off a team', () => {
-    const solo = { parentId: 'parent', teamId: null };
+    const solo = { parentId: 'parent', teamId: null, parentBlocked: false };
     expect(can(actor('parent'), 'child.read', solo)).toBe(true);
     expect(can(actor('coach', ['t1']), 'child.read', solo)).toBe(false);
   });
 });
 
 describe('teen profiles', () => {
-  const teen = { id: 'teen', teamIds: ['t1'] };
+  const teen = { id: 'teen', teamIds: ['t1'], blocked: false };
   const asPerson = { ...teen, role: 'teen' as const, card: null, sharesOpenCommunity: true };
 
   it('are readable by the teen and their team only', () => {
@@ -107,6 +108,24 @@ describe('contacts', () => {
     );
   });
 
+  it('athletes’ family contacts go to approved parents on the team, never across a block', () => {
+    const parent = actor('parent', ['t1']);
+    expect(can(parent, 'team.athleteContacts', { teamId: 't1', blocked: false })).toBe(true);
+    expect(can(parent, 'team.athleteContacts', { teamId: 't1', blocked: true })).toBe(false);
+    expect(
+      can(actor('parent', ['t2']), 'team.athleteContacts', { teamId: 't1', blocked: false }),
+    ).toBe(false);
+    expect(can(actor('parent'), 'team.athleteContacts', { teamId: 't1', blocked: false })).toBe(
+      false,
+    );
+    for (const role of ['teen', 'athlete', 'coach', 'staff', 'recruiter'] as const) {
+      expect(
+        can(actor(role, ['t1']), 'team.athleteContacts', { teamId: 't1', blocked: false }),
+        role,
+      ).toBe(false);
+    }
+  });
+
   it('family contacts on a roster go to the team’s coaches only', () => {
     expect(can(actor('coach', ['t1']), 'team.familyContacts', { teamId: 't1' })).toBe(true);
     expect(can(actor('coach', ['t2']), 'team.familyContacts', { teamId: 't1' })).toBe(false);
@@ -133,6 +152,7 @@ describe('recruiters', () => {
       role: 'athlete' as const,
       teamIds: [],
       sharesOpenCommunity: false,
+      blocked: false,
     };
     expect(can(r, 'person.read', { ...person, card: card() })).toBe(true);
     expect(can(r, 'person.read', { ...person, card: card({ openToRecruiting: false }) })).toBe(
@@ -148,6 +168,7 @@ describe('recruiters', () => {
       teamIds: [],
       card: null,
       sharesOpenCommunity: false,
+      blocked: false,
     };
     expect(can(r, 'person.read', { ...other, companyId: 'acme' })).toBe(true);
     expect(can(r, 'person.read', { ...other, companyId: 'globex' })).toBe(false);
@@ -187,6 +208,22 @@ describe('communities', () => {
     expect(can(actor('staff'), 'community.see', pending)).toBe(true);
   });
 
+  it('creating follows the role, and medical needs its switch on', () => {
+    const create = (role: Role, kind: 'interest' | 'medical', medicalEnabled = true) =>
+      can(actor(role), 'community.create', { kind, medicalEnabled });
+    expect(create('athlete', 'interest')).toBe(true);
+    expect(create('athlete', 'medical')).toBe(true);
+    expect(create('athlete', 'medical', false)).toBe(false);
+    expect(create('athlete', 'interest', false)).toBe(true);
+    expect(create('parent', 'medical')).toBe(true);
+    expect(create('parent', 'medical', false)).toBe(false);
+    expect(create('parent', 'interest')).toBe(false);
+    for (const role of ['teen', 'recruiter'] as const) {
+      expect(create(role, 'interest'), role).toBe(false);
+      expect(create(role, 'medical'), role).toBe(false);
+    }
+  });
+
   it('teens are listed only in their team community', () => {
     const teen = { memberId: 'teen', memberRole: 'teen' as const, blocked: false };
     expect(can(actor('athlete'), 'community.listMember', { ...teen, kind: 'team' })).toBe(true);
@@ -217,6 +254,13 @@ describe('blocks', () => {
 
   it('official Team Impact content can’t be blocked', () => {
     expect(can(me, 'content.read', content({ blocked: true, official: true }))).toBe(true);
+  });
+
+  it('a blocked staff member’s content stays visible in Team Impact only', () => {
+    expect(can(me, 'content.read', content({ blocked: true, staffInTeamImpact: true }))).toBe(true);
+    expect(can(me, 'content.read', content({ blocked: true, staffInTeamImpact: false }))).toBe(
+      false,
+    );
   });
 
   it('reported or suspended content is hidden', () => {

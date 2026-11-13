@@ -1,13 +1,10 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
-import {
-  canCreateCommunity,
-  CREATABLE_COMMUNITY_KINDS,
-  type CreatableCommunityKind,
-} from '@team-impact/contracts';
+import type { CreatableCommunityKind } from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { creatableKinds } from '@/components/format';
 import { Async, ErrorText, Gutter, Screen, Segmented } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -28,12 +25,12 @@ type Access = 'open' | 'private';
 
 /**
  * "/me/communities/new": an interest or medical community, open or private (set now, for good).
- * Who can make which follows PRD §5 (`canCreateCommunity`): parents make medical ones only; teens
+ * Who can make which follows PRD §5 (`community.create`): parents make medical ones only; teens
  * and recruiters make neither medical nor interest. The medical kind is gone entirely when its
  * switch is off. Name and description wait for review; names are unique per kind.
  */
 export default function CreateCommunity() {
-  const { role } = useRole();
+  const { me } = useRole();
   const { state } = useApi(() => api.flags());
   const [picked, setPicked] = useState<CreatableCommunityKind | null>(null);
   const [access, setAccess] = useState<Access>('open');
@@ -46,12 +43,7 @@ export default function CreateCommunity() {
     <Screen eyebrow="Communities" title="Create community" back>
       <Async state={state}>
         {(flags) => {
-          const kinds = CREATABLE_COMMUNITY_KINDS.filter(
-            (k) =>
-              !!role &&
-              canCreateCommunity(role, k) &&
-              (k !== 'medical' || flags.medicalCommunities),
-          );
+          const kinds = creatableKinds(me, flags);
           const kind = picked && kinds.includes(picked) ? picked : (kinds[0] ?? null);
           if (!kind) {
             return (
@@ -115,7 +107,7 @@ export default function CreateCommunity() {
                 </Text>
               </View>
               <Text variant="small" color="secondary">
-                Team Impact reviews the name and description before others can find it.
+                The name and description are checked before others can find it.
               </Text>
               {error && <ErrorText>{error}</ErrorText>}
               <Button

@@ -7,14 +7,20 @@ import {
   mustAcceptTerms,
   SignOutRequest,
   TermsStatus,
+  UpdateMeRequest,
 } from '@team-impact/contracts';
+import { prefsOf } from '../activity';
+import { renameCard } from '../profiles';
 import type { ZodApp } from '../../zod';
 import { NEWCOMERS, SIGN_IN_AS } from '../fixtures';
 import { latestTermsVersion } from '../signup';
 import type { MockWorld } from '../world';
 import { httpError, SESSION_COOKIE, type Guards } from './context';
 
-/** Session: dev sign-in, sign-out, the signed-in user and the terms they've accepted. */
+/**
+ * Session: dev sign-in, sign-out, the signed-in user, editing their plain profile and the terms
+ * they've accepted.
+ */
 export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   app.post(
     '/auth/dev-sign-in',
@@ -79,6 +85,26 @@ export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }:
       world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.terms });
       if (teen) world.signup.consents.push({ ...row, flag: CONSENT_FLAGS.parentAgreed });
       return termsStatus(u.id);
+    },
+  );
+
+  /**
+   * The owner edits their plain profile (name; the photo comes with uploads). Role, team and
+   * company aren't editable here: the contract doesn't accept them, so they can't be changed.
+   */
+  app.patch(
+    '/me',
+    { schema: { body: UpdateMeRequest, response: { 200: Me } } },
+    async (request) => {
+      const u = viewer(request);
+      const { firstName, lastName, notificationPrefs } = request.body;
+      if (firstName !== undefined) u.firstName = firstName;
+      if (lastName !== undefined) u.lastName = lastName;
+      if (firstName !== undefined || lastName !== undefined) renameCard(world, u);
+      if (notificationPrefs) {
+        world.notificationPrefs.set(u.id, { ...prefsOf(world, u.id), ...notificationPrefs });
+      }
+      return world.me(u);
     },
   );
 };

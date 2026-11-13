@@ -4,7 +4,6 @@
 //
 // Fields the schema has no column for yet are noted where they're dropped; the real route layer
 // adds them as it needs them.
-import { createHash } from 'node:crypto';
 import { CURRENT_TERMS_VERSION, type ModerationStatus } from '@team-impact/contracts';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { COMMENTS } from '../../mock/activity';
@@ -18,7 +17,6 @@ type Row<T extends PgTable> = T['$inferInsert'];
 export const DEV_PASSWORD_HASH =
   '$argon2id$v=19$m=65536,t=3,p=4$kwOXDCSVp3jrLCRhtryvcw$3F8TXsfX3cZ6DhEoMEoYr1C1B20F0TTfGItSyp1tal4';
 
-const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');
 const date = (iso: string) => new Date(iso);
 
 type DbEnum<E extends { enumValues: readonly string[] }> = E['enumValues'][number];
@@ -54,10 +52,10 @@ export const fixtureRows = (now = Date.now()) => {
       id: u.id,
       userType: u.role,
       email: u.email,
-      passwordHash: DEV_PASSWORD_HASH,
       firstName: u.firstName,
       lastName: u.lastName,
       dob: DOB[u.role] ?? '1998-03-01',
+      emailVerified: true,
       emailVerifiedAt: date(u.createdAt),
       createdAt: date(u.createdAt),
       openToRecruiting: card?.visibility.openToRecruiting ?? false,
@@ -73,6 +71,15 @@ export const fixtureRows = (now = Date.now()) => {
     };
   });
 
+  // Every seeded account signs in with email and password (Better Auth's "credential" account).
+  const authAccounts: Row<typeof schema.authAccounts>[] = fx.ALL_USERS.map((u) => ({
+    userId: u.id,
+    accountId: u.id,
+    providerId: 'credential',
+    password: DEV_PASSWORD_HASH,
+    createdAt: date(u.createdAt),
+  }));
+
   const consentRecords: Row<typeof schema.consentRecords>[] = fx.ALL_USERS.flatMap((u) => [
     {
       userId: u.id,
@@ -85,6 +92,15 @@ export const fixtureRows = (now = Date.now()) => {
       ? [{ userId: u.id, flag: 'parent_agreed', value: true, termsVersion: CURRENT_TERMS_VERSION }]
       : []),
   ]);
+  // The fixtures' sharing, open-to-recruiting and findable opt-ins, as the mock records them.
+  for (const r of fx.fixtureConsent()) {
+    consentRecords.push({
+      userId: r.userId,
+      flag: r.flag,
+      value: true,
+      createdAt: date(r.recordedAt),
+    });
+  }
 
   const orgs: Row<typeof schema.orgs>[] = fx.COMPANIES.map((c) => ({
     id: c.id,
@@ -141,6 +157,7 @@ export const fixtureRows = (now = Date.now()) => {
       joinedAt: date(m.joinedAt),
       source: MEMBERSHIP_SOURCE[m.joinedVia],
       joinCodeId: m.joinedVia === 'qr_code' ? liveCode.id : null,
+      addedBy: m.addedById,
     })),
     ...fx.COMMUNITIES.flatMap((c) =>
       c.members.map((m) => ({
@@ -191,7 +208,7 @@ export const fixtureRows = (now = Date.now()) => {
     id: i.id,
     teamId: i.teamId,
     email: i.email,
-    tokenHash: sha256(i.token),
+    tokenHash: i.tokenHash,
     invitedBy: i.invitedById,
     expiresAt: date(i.expiresAt),
     acceptedAt: i.acceptedAt ? date(i.acceptedAt) : null,
@@ -326,6 +343,7 @@ export const fixtureRows = (now = Date.now()) => {
     [schema.orgs, orgs],
     [schema.orgDomains, orgDomains],
     [schema.users, users],
+    [schema.authAccounts, authAccounts],
     [schema.consentRecords, consentRecords],
     [schema.teams, teams],
     [schema.coachInvites, coachInvites],

@@ -3,6 +3,7 @@ import type {
   CardVersion,
   ChildProfile,
   ConfirmResumeRequest,
+  ConsentHistory,
   MyCardState,
   MySettings,
   Profile,
@@ -25,6 +26,8 @@ export const profiles = {
 
   settings: () => request<MySettings>('/me/settings'),
   updateSettings: (body: UpdateMySettingsRequest) => put<MySettings>('/me/settings', body),
+  /** Every privacy choice the user made, newest first (each settings change is a consent record). */
+  consentHistory: () => request<ConsentHistory>('/me/consent-history'),
 
   myCard: () => request<MyCardState>('/cards/me'),
   saveCardDraft: (body: UpdateCardRequest) => put<MyCardState>('/cards/me', body),

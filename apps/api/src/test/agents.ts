@@ -17,9 +17,9 @@ import type { TestDb } from './db';
  *     const parent = await signInAs(app, 'parent');
  *     const res = await parent.get('/me');
  *
- * Real login (argon2 + signed cookies) isn't built yet, so on the mock API `signInAs` uses dev
- * sign-in: the fixture user for `role`, with the same signed session cookie real sign-in will set.
- * On the database app, `dbUserAs` inserts a user of that role and the app reads who is signed in
+ * The mock API keeps its dev sign-in, so there `signInAs` signs in as the fixture user for `role`
+ * with the mock's signed session cookie. On the database app, `dbUserAs` inserts a user of that
+ * role (no password: they never sign in through Better Auth) and the app reads who is signed in
  * from a test-only header (passed through `buildApp`'s `currentUserId`, never in production).
  */
 
@@ -123,7 +123,6 @@ export const dbUserAs = async (
     .insert(users)
     .values({
       email: `${randomUUID()}@example.com`,
-      passwordHash: 'x',
       firstName: 'Test',
       lastName: userType,
       dob: userType === 'teen' ? '2011-05-01' : '2000-05-06',

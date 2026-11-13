@@ -48,8 +48,8 @@ export const registerSafetyRoutes = (app: ZodApp, world: MockWorld, { viewer }: 
       const other = world.user(request.params.userId);
       if (!other) throw httpError(404, 'No such person');
       if (other.id === u.id) throw httpError(400, 'You can’t block yourself');
-      // Team Impact's own posts can't be blocked; report one instead.
-      if (other.role === 'staff') throw httpError(400, 'Team Impact staff can’t be blocked');
+      // Staff can be blocked like anyone (PRD §5, v2.4). Their announcements, and what they post
+      // in Team Impact's own community, stay visible anyway (`content.read`).
       const existing = world.blocks.find((b) => b.blockerId === u.id && b.blockedId === other.id);
       const block = existing ?? {
         blockerId: u.id,

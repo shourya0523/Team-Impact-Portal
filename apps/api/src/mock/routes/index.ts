@@ -6,6 +6,7 @@ import { registerCardRoutes } from './cards';
 import { registerCommunityRoutes } from './communities';
 import { registerCommunityMemberRoutes } from './community-members';
 import { guards } from './context';
+import { registerDevRoutes } from './dev';
 import { registerEventRoutes } from './events';
 import { registerJoinRoutes } from './join';
 import { registerListRoutes } from './lists';
@@ -61,4 +62,7 @@ export const registerMockRoutes = (
   ]) {
     register(app, world, g);
   }
+  // `/dev/outbox` hands out invite links without sign-in, so only when asked for (DEV_OUTBOX=1,
+  // which env.ts refuses in production).
+  if (world.devOutbox) registerDevRoutes(app, world);
 };
