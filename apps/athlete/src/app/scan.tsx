@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { codeFromScan, type QrCodePreview } from '@team-impact/contracts';
 import { colors, spacing } from '@team-impact/ui-tokens';
@@ -75,21 +75,32 @@ export default function ScanQR() {
   /** How the code comes in. The camera is the default; typing is the fallback, and the only way
    *  in when the camera is blocked or missing. */
   const [mode, setMode] = useState<'camera' | 'typing'>('camera');
+  /**
+   * Counts lookups, so only the latest one's answer is used: an older, slower response (a link's
+   * code, then a scan) must not replace a newer one. Starting over or a bad scan counts too.
+   */
+  const lookups = useRef(0);
 
   const lookUp = (value = typed) => {
     if (!value.trim()) return;
+    const run = ++lookups.current;
     const found = codeFromScan(value);
     setPreview(null);
-    if (!found) return setProblem(NOT_A_CODE);
+    if (!found) {
+      setBusy(false);
+      return setProblem(NOT_A_CODE);
+    }
     setBusy(true);
     setProblem(null);
     api.qrPreview(found).then(
       (p) => {
+        if (run !== lookups.current) return;
         setCode(found);
         setPreview(p);
         setBusy(false);
       },
       (e: unknown) => {
+        if (run !== lookups.current) return;
         setProblem(qrProblem(e));
         setBusy(false);
       },
@@ -101,7 +112,10 @@ export default function ScanQR() {
    * goes into `typed`, so "Try again" (which re-reads `typed`) works after a scan too.
    */
   const onScan = (found: string | null) => {
-    if (!found) return setProblem(NOT_A_CODE);
+    if (!found) {
+      lookups.current++;
+      return setProblem(NOT_A_CODE);
+    }
     setTyped(found);
     lookUp(found);
   };
@@ -132,6 +146,7 @@ export default function ScanQR() {
   };
 
   const startOver = () => {
+    lookups.current++;
     setPreview(null);
     setCode(null);
     setProblem(null);
