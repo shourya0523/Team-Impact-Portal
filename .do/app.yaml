@@ -1,0 +1,102 @@
+# DigitalOcean App Platform spec. Create the app with:
+#   doctl apps create --spec .do/app.yaml
+# and update it after edits with:
+#   doctl apps update <app-id> --spec .do/app.yaml
+# Secrets (SESSION_SECRET) are set in the App Platform dashboard, never here.
+name: team-impact
+region: nyc
+
+# One domain for everything: the portal at /, the API at /api (prefix stripped),
+# so the portal's relative `/api/*` calls and session cookies work with no CORS setup.
+ingress:
+  rules:
+    - match:
+        path:
+          prefix: /api
+      component:
+        name: api
+        preserve_path_prefix: false
+    - match:
+        path:
+          prefix: /
+      component:
+        name: portal
+
+services:
+  - name: api
+    github:
+      repo: shourya0523/Team-Impact-Portal
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    environment_slug: node-js
+    build_command: pnpm install --frozen-lockfile && pnpm --filter @team-impact/api build
+    run_command: pnpm --filter @team-impact/api start
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /health
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+      - key: SESSION_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: APP_VERSION
+        scope: RUN_TIME
+        value: ${_self.COMMIT_HASH}
+      # The athlete app on web, if it is hosted elsewhere. The portal is same-origin and needs no entry.
+      - key: CORS_ORIGINS
+        scope: RUN_TIME
+        value: https://team-impact.ondigitalocean.app
+      # Kill switches (PRD §11).
+      - key: FLAG_IDENTITY_SEARCH
+        scope: RUN_TIME
+        value: 'true'
+      - key: FLAG_MEDICAL_COMMUNITIES
+        scope: RUN_TIME
+        value: 'true'
+
+static_sites:
+  - name: portal
+    github:
+      repo: shourya0523/Team-Impact-Portal
+      branch: main
+      deploy_on_push: true
+    source_dir: /
+    environment_slug: node-js
+    build_command: pnpm install --frozen-lockfile && pnpm --filter @team-impact/portal build
+    output_dir: apps/portal/dist
+    # Single-page app: unknown paths load index.html so client-side routes work on refresh.
+    catchall_document: index.html
+
+jobs:
+  # Applies Drizzle migrations before each new API version goes live; a failure stops the deploy.
+  - name: migrate
+    kind: PRE_DEPLOY
+    github:
+      repo: shourya0523/Team-Impact-Portal
+      branch: main
+    source_dir: /
+    environment_slug: node-js
+    build_command: pnpm install --frozen-lockfile
+    run_command: pnpm --filter @team-impact/api db:migrate
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        value: ${db.DATABASE_URL}
+
+databases:
+  # Attaches the Managed Postgres cluster created beforehand in the dashboard.
+  - name: db
+    engine: PG
+    version: '17'
+    production: true
+    cluster_name: team-impact-db
+    db_name: team_impact
+    db_user: team_impact
