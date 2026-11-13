@@ -17,6 +17,8 @@ export interface Storage {
     expiresInSeconds: number,
   ): Promise<{ url: string; headers: Record<string, string> }>;
   head(key: string): Promise<{ contentType: string | undefined; byteSize: number } | null>;
+  /** Up to `length` bytes from the start of the file, to check its magic bytes. */
+  readStart(key: string, length: number): Promise<Uint8Array>;
   presignGet(key: string, expiresInSeconds: number): Promise<string>;
   delete(key: string): Promise<void>;
 }
@@ -68,6 +70,13 @@ export const createS3Storage = ({
           return null;
         throw error;
       }
+    },
+
+    async readStart(key, length) {
+      const object = await client.send(
+        new GetObjectCommand({ Bucket: bucket, Key: key, Range: `bytes=0-${length - 1}` }),
+      );
+      return object.Body ? await object.Body.transformToByteArray() : new Uint8Array();
     },
 
     presignGet: (key, expiresIn) =>

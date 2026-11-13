@@ -6,6 +6,7 @@ import type { Db } from '../db/client';
 import { children, communities, media, memberships } from '../db/schema';
 import type { Authenticate, SessionUser } from '../identity/session';
 import type { Storage } from '../storage';
+import { matchesSignature, SIGNATURE_BYTES } from '../storage/sniff';
 import { httpError, type ZodTypeProvider } from '../zod';
 
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
@@ -19,6 +20,10 @@ export interface MediaRoutesOptions {
 }
 
 type MediaRow = typeof media.$inferSelect;
+
+/** `image/JPEG; charset=…` and `image/jpeg` are the same type. */
+const baseType = (contentType: string | undefined) =>
+  contentType?.split(';')[0]?.trim().toLowerCase();
 
 /**
  * The one upload path (TI-111): ask for a signed URL, PUT the file to the private bucket, confirm.
@@ -121,8 +126,21 @@ export const mediaRoutes = async (
     }
 
     if (row.status === 'pending') {
-      if (!(await storage.head(row.storageKey))) {
-        throw httpError(409, 'The file has not been uploaded yet');
+      const object = await storage.head(row.storageKey);
+      if (!object) throw httpError(409, 'The file has not been uploaded yet');
+      // The signed PUT pins type and size, but check what actually landed before trusting it, and
+      // that its bytes really are the type it claims. Anything else is deleted; the client may PUT
+      // again while the signed URL lasts.
+      const firstBytes =
+        object.byteSize > 0 ? await storage.readStart(row.storageKey, SIGNATURE_BYTES) : null;
+      if (
+        baseType(object.contentType) !== row.mimeType ||
+        object.byteSize !== row.sizeBytes ||
+        !firstBytes ||
+        !matchesSignature(row.mimeType, firstBytes)
+      ) {
+        await storage.delete(row.storageKey);
+        throw httpError(400, 'The uploaded file isn’t the file that was signed for');
       }
       await db.transaction(async (tx) => {
         await tx.update(media).set({ status: 'ready' }).where(eq(media.id, row.id));

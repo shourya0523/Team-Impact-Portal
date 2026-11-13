@@ -18,6 +18,7 @@ import {
 import { createMemoryMailer } from '../identity/mailer';
 import { createMemoryStorage } from '../storage/memory';
 import { createTestDb } from '../test/db';
+import { bytes, sampleFile } from '../test/files';
 
 const PORTAL = 'http://localhost:5173';
 // argon2id hash of "team-impact-dev", the seed data's shared password.
@@ -135,10 +136,13 @@ const startUpload = async (name: Person, payload: object) => {
   return rowOf(UploadResponse.parse(res.json()).mediaId);
 };
 
-/** Requests an upload, "PUTs" the file into the fake bucket and completes it. */
+/** Requests an upload, "PUTs" a real file of the signed type and size, and completes it. */
 const upload = async (name: Person, payload: object) => {
   const row = await startUpload(name, payload);
-  objects.set(row.storageKey, { contentType: row.mimeType, byteSize: row.sizeBytes });
+  objects.set(row.storageKey, {
+    contentType: row.mimeType,
+    body: sampleFile(row.mimeType as 'image/jpeg', row.sizeBytes),
+  });
   expect((await complete(name, row.id)).statusCode).toBe(204);
   return row.id;
 };
@@ -210,6 +214,69 @@ describe('upload', () => {
     });
     const { mediaId } = UploadResponse.parse(res.json());
     expect((await complete('teammate', mediaId)).statusCode).toBe(409);
+  });
+});
+
+describe('completing an upload checks what landed in the bucket', () => {
+  const resume = { purpose: 'resume', mimeType: 'application/pdf', sizeBytes: 3000 } as const;
+  type Row = typeof media.$inferSelect;
+
+  /** Puts `body` in the bucket for `row` as `contentType`, then tries to complete it. */
+  const land = async (row: Row, body: Uint8Array, contentType: string = row.mimeType) => {
+    objects.set(row.storageKey, { contentType, body });
+    return complete('teammate', row.id);
+  };
+
+  /** The upload was refused: the file is gone from the bucket and the upload is still pending. */
+  const expectRefused = async (res: LightMyRequestResponse, row: Row) => {
+    expect(res.statusCode).toBe(400);
+    expect(objects.has(row.storageKey)).toBe(false);
+    expect((await rowOf(row.id)).status).toBe('pending');
+    expect((await view('teammate', row.id)).statusCode).toBe(404);
+  };
+
+  it('accepts a file of the signed type and size whose bytes are that type', async () => {
+    const row = await startUpload('teammate', resume);
+    const res = await land(row, sampleFile('application/pdf', 3000), 'application/PDF');
+    expect(res.statusCode).toBe(204);
+    expect((await rowOf(row.id)).status).toBe('ready');
+    expect((await view('teammate', row.id)).statusCode).toBe(302);
+  });
+
+  it('refuses a file stored with a different content type, and deletes it', async () => {
+    const row = await startUpload('teammate', resume);
+    await expectRefused(await land(row, sampleFile('application/pdf', 3000), 'text/html'), row);
+  });
+
+  it('refuses a file of a different size, and deletes it', async () => {
+    const row = await startUpload('teammate', resume);
+    await expectRefused(await land(row, sampleFile('application/pdf', 2999)), row);
+  });
+
+  it('refuses a file whose bytes are not the claimed type, and deletes it', async () => {
+    const row = await startUpload('teammate', { purpose: 'post_image', ...photo });
+    const html = new Uint8Array(2000);
+    html.set(bytes('<!doctype html><script>alert(1)</script>'));
+    await expectRefused(await land(row, html), row);
+
+    const pngAsJpeg = await startUpload('teammate', { purpose: 'post_image', ...photo });
+    await expectRefused(await land(pngAsJpeg, sampleFile('image/png', 2000)), pngAsJpeg);
+  });
+
+  it('lets the client upload again after a refused file', async () => {
+    const row = await startUpload('teammate', resume);
+    await expectRefused(await land(row, new Uint8Array(3000)), row);
+    expect((await land(row, sampleFile('application/pdf', 3000))).statusCode).toBe(204);
+  });
+
+  it('only lets the uploader complete it', async () => {
+    const row = await startUpload('teammate', resume);
+    objects.set(row.storageKey, {
+      contentType: row.mimeType,
+      body: sampleFile('application/pdf', 3000),
+    });
+    expect((await complete('outsider', row.id)).statusCode).toBe(404);
+    expect((await rowOf(row.id)).status).toBe('pending');
   });
 });
 
