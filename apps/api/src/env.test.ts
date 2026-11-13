@@ -22,11 +22,33 @@ describe('env', () => {
       API_URL: 'https://api.teamimpact.org',
       PORTAL_URL: 'https://portal.teamimpact.org',
       ATHLETE_APP_URL: 'https://app.teamimpact.org',
+      TRUST_PROXY: '1',
     };
     expect(loadEnv(prod).PORTAL_URL).toBe('https://portal.teamimpact.org');
     for (const key of ['SMTP_URL', 'API_URL', 'PORTAL_URL', 'ATHLETE_APP_URL'] as const) {
       expect(() => loadEnv({ ...prod, [key]: undefined })).toThrow(new RegExp(key));
     }
+  });
+
+  it('refuses to start in production unless the proxy in front is trusted', () => {
+    const prod = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://db.test/app',
+      SESSION_SECRET: 's'.repeat(32),
+      SMTP_URL: 'smtp://mail.test',
+      API_URL: 'https://api.teamimpact.org',
+      PORTAL_URL: 'https://portal.teamimpact.org',
+      ATHLETE_APP_URL: 'https://app.teamimpact.org',
+    };
+    // Unset or 0 would rate-limit every caller as the proxy's one IP.
+    expect(() => loadEnv(prod)).toThrow(/TRUST_PROXY/);
+    expect(() => loadEnv({ ...prod, TRUST_PROXY: '0' })).toThrow(/TRUST_PROXY/);
+    expect(loadEnv({ ...prod, TRUST_PROXY: '1' }).TRUST_PROXY).toBe(1);
+  });
+
+  it('trusts no proxy by default in development', () => {
+    const env = loadEnv({ DATABASE_URL: 'postgres://db.test/app', SESSION_SECRET: 's'.repeat(32) });
+    expect(env.TRUST_PROXY).toBe(0);
   });
 
   it('points emailed links at localhost in development', () => {

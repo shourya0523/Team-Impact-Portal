@@ -35,7 +35,8 @@ const EnvSchema = z
     MAIL_FROM: z.string().min(3).default('Team Impact <no-reply@localhost>'),
     // Proxies in front of the API (1 on DigitalOcean App Platform). Rate limits key on the caller's
     // IP, so it must come from our proxy, not from a header anyone can send. 0 when reached directly.
-    TRUST_PROXY: z.coerce.number().int().min(0).default(0),
+    // Required in production (see below).
+    TRUST_PROXY: z.coerce.number().int().min(0).optional(),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
   })
@@ -56,6 +57,16 @@ const EnvSchema = z
         if (!env[key])
           ctx.addIssue({ code: 'custom', path: [key], message: 'Required in production' });
       }
+      // Behind App Platform's proxy every request arrives from the proxy's address. Trusting no
+      // hops would put every caller on one IP, and the sign-in limit would lock out everyone.
+      if (!env.TRUST_PROXY) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['TRUST_PROXY'],
+          message:
+            'Required in production: the number of proxies in front of the API (1 on App Platform)',
+        });
+      }
     }
   })
   .transform((env) => ({
@@ -64,6 +75,7 @@ const EnvSchema = z
     API_URL: env.API_URL ?? DEV_URLS.API_URL,
     PORTAL_URL: env.PORTAL_URL ?? DEV_URLS.PORTAL_URL,
     ATHLETE_APP_URL: env.ATHLETE_APP_URL ?? DEV_URLS.ATHLETE_APP_URL,
+    TRUST_PROXY: env.TRUST_PROXY ?? 0,
   }));
 
 export type Env = z.infer<typeof EnvSchema>;
