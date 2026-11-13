@@ -9,7 +9,7 @@ Sprint board.
 - pnpm workspaces + Turborepo monorepo, TypeScript everywhere (TS 6.0; typescript-eslint doesn't support 7 yet)
 - `apps/athlete`: Expo SDK 57. Read `apps/athlete/AGENTS.md` first. Add native deps with `npx expo install`, never `pnpm add`
 - `apps/portal`: React 19 + Vite
-- `apps/api`: Fastify 5 + Drizzle + postgres-js. Auth is ours (argon2, signed cookies), no auth provider
+- `apps/api`: Fastify 5 + Drizzle + postgres-js. Auth is Better Auth (TI-101): an open-source library running inside the API, with all data in our Postgres (`users` plus `auth_*` tables), argon2 passwords and HttpOnly cookie sessions. No hosted auth provider. Our product rules (age gate, recruiter domains, suspensions) live in its hooks in `apps/api/src/identity`
 - `packages/contracts`: Zod 4 schemas shared by API and clients. No OpenAPI or codegen
 - `packages/ui-tokens`: plain numbers/hex only, must work on native, RN Web and the portal. Primitives (Button, Input, Card, Avatar, Badge, Sheet) are NOT here: they need RN or the DOM, so they live in `apps/athlete/src/ui` and `apps/portal/src/ui`, built only from these tokens (matches Notion TI-12)
 - Hosting: DigitalOcean (App Platform, Managed Postgres, Valkey, Spaces). No provider-specific primitives
@@ -29,7 +29,8 @@ Run typecheck, lint and test before pushing.
 - Athletes without open-to-recruiting don't appear on the employer portal at all
 - Identity search (official-community filter) sits behind one feature flag, is opt-in, and every such search is logged. Only official interest communities are filters; team, medical and private communities never are
 - Extracted resume text is untrusted data; nothing extracted is shown until the athlete confirms it
-- Every post, comment and event goes through moderation before it appears
+- Team Impact staff posts, comments, events and communities skip pre-publication moderation and publish at once (PRD §5, v2.4); staff content outside Team Impact's own community stays reportable and blockable
+- Everyone else's posts, comments, events and communities are screened by OpenAI moderation before they appear: flagged with high confidence → blocked, never published; flagged with lower confidence → held for staff review (`in_review`); not flagged → published at once. A screen error, timeout or missing API key holds for review (never auto-publishes), and a `sexual/minors` flag always blocks. Thresholds are the `MODERATION_*` env settings (docs/moderation.md)
 
 ## Design system (Signing Day, TI-72)
 

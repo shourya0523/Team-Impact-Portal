@@ -4,6 +4,7 @@ import {
   CardFields,
   type CardVersion,
   type ChildProfile,
+  consentFlags,
   EXTRACTABLE_CARD_FIELDS,
   ExperienceEntry,
   hasBaseballCard,
@@ -19,6 +20,7 @@ import {
 import * as fx from './fixtures';
 import type { MockCard, MockUser } from './fixtures';
 import { actorOf, cardFacts } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 import type { MockChild } from './team';
 
@@ -98,7 +100,11 @@ export const createProfileState = (cards: MockCard[]): ProfileState => {
 
 /** Team and family only: the parent, and accounts on the child's team. Recruiters never. */
 export const canSeeChild = (world: MockWorld, child: MockChild, u: MockUser) =>
-  can(actorOf(world, u), 'child.read', { parentId: child.parentId, teamId: child.teamId });
+  can(actorOf(world, u), 'child.read', {
+    parentId: child.parentId,
+    teamId: child.teamId,
+    parentBlocked: blockedBetween(world, u.id, child.parentId),
+  });
 
 export const childProfile = (world: MockWorld, child: MockChild): ChildProfile => ({
   kind: 'child',
@@ -139,7 +145,8 @@ const canSeePerson = (world: MockWorld, t: MockUser, u: MockUser) => {
     role: t.role,
     teamIds: world.teamIdsOf(t.id),
     companyId: t.companyId ?? null,
-    card: card ? cardFacts(world, card) : null,
+    card: card ? cardFacts(world, card, u) : null,
+    blocked: blockedBetween(world, u.id, t.id),
     // Fellow members of an open interest community (never medical or private ones).
     sharesOpenCommunity: world.communities.some(
       (c) =>
@@ -194,13 +201,39 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     communities: profileCommunities(world, t, u),
     card,
     contact,
+    company: companyOf(world, t),
   };
+};
+
+/**
+ * A recruiter's company, shown on their profile (PRD §2). Everyone who may open a recruiter's
+ * profile at all (colleagues and staff, per `person.read`) may see who they recruit for.
+ */
+const companyOf = (world: MockWorld, t: MockUser) => {
+  if (t.role !== 'recruiter' || !t.companyId) return null;
+  const company = world.companies.find((c) => c.id === t.companyId);
+  return company ? { id: company.id, name: company.name } : null;
 };
 
 // Settings -----------------------------------------------------------------------------------------
 
 export const cardOf = (world: MockWorld, athleteId: string) =>
   world.cards.find((c) => c.face.athleteId === athleteId);
+
+/**
+ * Renaming yourself (`PATCH /me`) renames your Baseball Card too: the live card face, and any name
+ * waiting in an unpublished draft, so publishing it later doesn't bring the old name back. Earlier
+ * published versions in the history keep the name they were published with.
+ */
+export const renameCard = (world: MockWorld, u: MockUser) => {
+  const card = cardOf(world, u.id);
+  if (!card) return;
+  card.face.firstName = u.firstName;
+  card.face.lastName = u.lastName;
+  const draft = world.profiles.drafts.get(u.id);
+  if (draft?.firstName !== undefined) draft.firstName = u.firstName;
+  if (draft?.lastName !== undefined) draft.lastName = u.lastName;
+};
 
 export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
   const holder = hasBaseballCard(u.role);
@@ -251,6 +284,7 @@ export const myCardState = (world: MockWorld, u: MockUser): MyCardState => {
       : null,
     draft: world.profiles.drafts.get(u.id) ?? null,
     pendingResume: world.profiles.resumes.get(u.id) ?? null,
+    currentSeason: CURRENT_SEASON,
   };
 };
 
@@ -301,13 +335,20 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
       recruitersSee: { email: true, phone: false, linkedin: false },
     },
   };
-  if (!existing) world.cards.push(card);
+  if (!existing) {
+    world.cards.push(card);
+    // A new card shares email by default; those choices are consents too (PRD §6).
+    for (const flag of fx.sharingFlagsOn(card.visibility))
+      world.recordConsent(u.id, flag, false, true);
+  }
   // A card from an earlier season stays in the history as it was; this one starts the new season.
   if (card.face.season < CURRENT_SEASON) {
     card.face.id = world.newId();
     card.face.season = CURRENT_SEASON;
   }
   Object.assign(card.face, parsed.data);
+  // The photo isn't a card field (CardFields strips it), so it's carried over from the draft here.
+  if (draft.photoUrl !== undefined) card.face.photoUrl = draft.photoUrl;
   card.visibility.published = true;
   world.profiles.drafts.delete(u.id);
   world.profiles.updatedAt.set(u.id, now);
@@ -333,6 +374,7 @@ export const unpublishCard = (world: MockWorld, u: MockUser, now: string): strin
   const card = cardOf(world, u.id);
   if (!card) return 'You have no Baseball Card yet.';
   card.visibility.published = false;
+  world.recordConsent(u.id, consentFlags.openToRecruiting, card.visibility.openToRecruiting, false);
   card.visibility.openToRecruiting = false;
   world.profiles.updatedAt.set(u.id, now);
   return null;

@@ -79,6 +79,7 @@ export const textPairs: readonly ColorPair[] = [
   text('accent text on surface', colors.accent.text, colors.surface),
   text('accent text on ground', colors.accent.text, colors.ground),
   text('success text on success bg', colors.success.text, colors.success.bg),
+  text('success text on surface (code found)', colors.success.text, colors.surface),
   text('success text on surface (invite sent)', colors.success.text, colors.surface),
   text('success text on ground (request decided)', colors.success.text, colors.ground),
   text('danger on surface', colors.danger, colors.surface),

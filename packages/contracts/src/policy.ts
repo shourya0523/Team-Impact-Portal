@@ -1,4 +1,9 @@
-import { canJoinCommunity, type CommunityKind } from './communities';
+import {
+  canCreateCommunity,
+  canJoinCommunity,
+  type CommunityKind,
+  type CreatableCommunityKind,
+} from './communities';
 import type { ModerationStatus } from './moderation';
 import type { Role } from './roles';
 
@@ -26,6 +31,11 @@ export interface CardFacts {
   published: boolean;
   openToRecruiting: boolean;
   ownerSuspended: boolean;
+  /**
+   * The actor and the card's owner blocked each other (PRD §9). Blocks cut both ways: neither
+   * sees the other's card. False when there's no particular actor (e.g. `recruiterVisible`).
+   */
+  blocked: boolean;
 }
 
 export interface CommunityFacts {
@@ -46,6 +56,11 @@ export interface ContentFacts {
   authorId: string;
   /** Official Team Impact content can't be blocked. */
   official?: boolean;
+  /**
+   * Staff content in Team Impact's own community, which a block doesn't hide either. Staff content
+   * anywhere else stays blockable (PRD §5, v2.4).
+   */
+  staffInTeamImpact?: boolean;
   /** Either the actor or the author blocked the other. */
   blocked: boolean;
   reportedByActor: boolean;
@@ -53,9 +68,12 @@ export interface ContentFacts {
 }
 
 interface Targets {
-  /** An under-13 profile, run by `parentId`. */
-  'child.read': { parentId: string; teamId: string | null };
-  'teen.read': { id: string; teamIds: readonly string[] };
+  /**
+   * An under-13 profile, run by `parentId`. `parentBlocked`: the actor and the parent blocked
+   * each other, which hides the family's child too.
+   */
+  'child.read': { parentId: string; teamId: string | null; parentBlocked: boolean };
+  'teen.read': { id: string; teamIds: readonly string[]; blocked: boolean };
   /** Any other account's plain profile. */
   'person.read': {
     id: string;
@@ -65,6 +83,8 @@ interface Targets {
     card: CardFacts | null;
     /** Both are members of an open, approved interest community. */
     sharesOpenCommunity: boolean;
+    /** The actor and this person blocked each other. */
+    blocked: boolean;
   };
   'card.read': CardFacts;
   /** Any of the card's contact details. */
@@ -72,6 +92,8 @@ interface Targets {
   'community.see': CommunityFacts;
   'community.read': CommunityFacts;
   'community.join': { kind: CommunityKind };
+  /** Starting a community of a kind; `medicalEnabled` is the medical switch (PRD §11). */
+  'community.create': { kind: CreatableCommunityKind; medicalEnabled: boolean };
   'community.members': CommunityFacts;
   /** One person appearing in a community's member list. */
   'community.listMember': {
@@ -81,8 +103,18 @@ interface Targets {
     blocked: boolean;
   };
   'team.roster': { teamId: string };
+  /**
+   * One member (with their children, for a parent) appearing on the team's roster. `blocked`:
+   * the actor and the member blocked each other.
+   */
+  'team.listMember': { teamId: string; memberId: string; blocked: boolean };
   'team.manage': { teamId: string };
   'team.familyContacts': { teamId: string };
+  /**
+   * One athlete's family-shared contacts on the team's Athletes list (PRD §6, F4). `blocked`: the
+   * actor and that athlete blocked each other. Pass false to ask about the list as a whole.
+   */
+  'team.athleteContacts': { teamId: string; blocked: boolean };
   'content.read': ContentFacts;
   'content.reply': ContentFacts;
 }
@@ -144,18 +176,23 @@ const canSeeCommunity = (a: Actor, c: CommunityFacts) => {
 };
 
 const canReadContent = (a: Actor, x: ContentFacts) =>
-  !x.reportedByActor && !(!x.official && x.blocked) && !x.authorSuspended;
+  !x.reportedByActor && !(x.blocked && !x.official && !x.staffInTeamImpact) && !x.authorSuspended;
 
 const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
-  // Team and family only: the parent, and accounts on the child's team. Recruiters never.
-  'child.read': (a, t) => a.role !== 'recruiter' && (a.id === t.parentId || onTeam(a, t.teamId)),
+  // Team and family only: the parent, and accounts on the child's team. Recruiters never, and
+  // not someone who blocked the parent (or was blocked by them).
+  'child.read': (a, t) =>
+    a.role !== 'recruiter' && (a.id === t.parentId || (onTeam(a, t.teamId) && !t.parentBlocked)),
 
-  // Their own team (and themselves); recruiters never.
-  'teen.read': (a, t) => a.id === t.id || (a.role !== 'recruiter' && sharesTeam(a, t.teamIds)),
+  // Their own team (and themselves); recruiters never; not across a block.
+  'teen.read': (a, t) =>
+    a.id === t.id || (a.role !== 'recruiter' && !t.blocked && sharesTeam(a, t.teamIds)),
 
   'person.read': (a, t) => {
     if (t.role === 'teen') return RULES['teen.read'](a, t);
     if (t.id === a.id || a.role === 'staff' || t.role === 'staff') return true;
+    // Blocks cut both ways (PRD §9). Staff are never blocked, so they're unaffected above.
+    if (t.blocked) return false;
     if (a.role === 'recruiter') {
       // Athletes without open-to-recruiting don't exist on the employer side; colleagues do.
       if (t.role === 'recruiter') return !!a.companyId && t.companyId === a.companyId;
@@ -169,6 +206,7 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
 
   'card.read': (a, card) => {
     if (a.id === card.athleteId) return true;
+    if (card.blocked && a.role !== 'staff') return false;
     if (!card.published) return false;
     if (a.role === 'recruiter') return recruiterVisible(card);
     if (a.role === 'staff') return true;
@@ -188,6 +226,10 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
 
   'community.join': (a, t) => canJoinCommunity(a.role, t.kind),
 
+  // What PRD §5 lets the role make; with the switch off the medical kind doesn't exist (PRD §11).
+  'community.create': (a, t) =>
+    (t.kind !== 'medical' || t.medicalEnabled) && canCreateCommunity(a.role, t.kind),
+
   'community.members': (a, c) => membersDenial(a, c) === null,
 
   // A teen's name only appears in their own team's community; blocks cut both ways.
@@ -196,11 +238,20 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
 
   'team.roster': (a, t) => a.role === 'staff' || onTeam(a, t.teamId),
 
+  // A block hides the member from the actor's roster, except from the people who run the team:
+  // its coaches and staff still see everyone, so a block can't hide anyone from being managed.
+  'team.listMember': (a, t) =>
+    a.id === t.memberId || !t.blocked || RULES['team.manage'](a, { teamId: t.teamId }),
+
   // Approve, remove, edit, make codes and invite coaches.
   'team.manage': (a, t) => a.role === 'staff' || (a.role === 'coach' && onTeam(a, t.teamId)),
 
   // The team's own coaches only. Staff manage the team but don't need a family's phone.
   'team.familyContacts': (a, t) => a.role === 'coach' && onTeam(a, t.teamId),
+
+  // Approved parents on the team; never across a block (PRD §9), whichever side made it. Teens
+  // are never parents, so they never see athletes' contacts this way.
+  'team.athleteContacts': (a, t) => a.role === 'parent' && onTeam(a, t.teamId) && !t.blocked,
 
   'content.read': canReadContent,
 

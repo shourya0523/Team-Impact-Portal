@@ -32,7 +32,8 @@ export type MyReport = z.infer<typeof MyReport>;
 
 /**
  * Someone the viewer blocked. Neither sees the other's posts, comments or events from then on,
- * and they can't reply to each other. Team Impact's official posts can't be blocked.
+ * and they can't reply to each other. Team Impact's official posts, and staff content in Team
+ * Impact's own community, stay visible.
  */
 export const Block = z.object({
   user: UserSummary,
@@ -55,9 +56,9 @@ export type TeamCoaches = z.infer<typeof TeamCoaches>;
 export const ListAthleteParams = z.object({ id: Id, athleteId: Id });
 export type ListAthleteParams = z.infer<typeof ListAthleteParams>;
 
-/** The owner shares a list with one colleague at the same company. */
-export const ShareListRequest = z.object({ userId: Id });
-export type ShareListRequest = z.infer<typeof ShareListRequest>;
+/** One entry on a list, by its own id: a "no longer available" one has no athlete to name. */
+export const ListEntryParams = z.object({ id: Id, entryId: Id });
+export type ListEntryParams = z.infer<typeof ListEntryParams>;
 
 /** The company's note on an athlete, written from a list. Notes are company-wide. */
 export const SetListNoteRequest = z.object({

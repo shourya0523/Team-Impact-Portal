@@ -9,6 +9,7 @@ import {
   type RosterChild,
   type StaffUpdateTeamRequest,
   type Team,
+  type TeamAthleteContacts,
   type TeamMember,
   type TeamQrCode,
   type TeamRoster,
@@ -20,6 +21,7 @@ import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
 import { sendEmail } from './outbox';
 import { actorOf } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
 /**
@@ -326,6 +328,14 @@ const childrenOf = (world: MockWorld, parentId: string, teamId: string): RosterC
     .filter((c) => c.parentId === parentId && c.teamId === teamId)
     .map(({ id: childId, firstName }) => ({ id: childId, firstName }));
 
+/** Whether `memberId` shows on `viewer`'s roster of `teamId`, blocks included. */
+const listsMember = (world: MockWorld, viewer: MockUser, teamId: string, memberId: string) =>
+  can(actorOf(world, viewer), 'team.listMember', {
+    teamId,
+    memberId,
+    blocked: blockedBetween(world, viewer.id, memberId),
+  });
+
 export const roster = (world: MockWorld, teamId: string, viewer: MockUser): TeamRoster | null => {
   const t = team(world, teamId);
   if (!t) return null;
@@ -337,8 +347,11 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
+      // A block hides the member (and a parent's children with them) from the viewer, unless the
+      // viewer runs the team (PRD §9; `team.listMember`).
+      if (!u || !listsMember(world, viewer, teamId, u.id)) return [];
       const member = memberView(world, m);
-      return u && member ? [{ u, member }] : [];
+      return member ? [{ u, member }] : [];
     })
     .sort((a, b) => a.u.firstName.localeCompare(b.u.firstName));
   const byRole = (role: MockUser['role']) =>
@@ -363,6 +376,34 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     canManage: manage,
     pendingRequestCount: manage ? pendingRequests(world, teamId).length : null,
   };
+};
+
+/**
+ * The team's athletes with what each shares with families (PRD §6, F4), for an approved parent on
+ * the team; null for anyone else (the route answers 403). Both go through `team.athleteContacts`:
+ * an athlete across a block from the parent, whoever blocked whom, is left out. Contacts read
+ * through `cardFor`, the rule the athlete's profile already uses, so the two can't disagree: only
+ * the athlete's family channels, and nothing while their card is unpublished.
+ */
+export const athleteContacts = (
+  world: MockWorld,
+  teamId: string,
+  viewer: MockUser,
+): TeamAthleteContacts | null => {
+  const actor = actorOf(world, viewer);
+  if (!can(actor, 'team.athleteContacts', { teamId, blocked: false })) return null;
+  return world.teamMembers
+    .filter((m) => m.teamId === teamId)
+    .flatMap((m) => {
+      const athlete = world.user(m.userId);
+      if (athlete?.role !== 'athlete') return [];
+      const blocked = blockedBetween(world, viewer.id, athlete.id);
+      if (!can(actor, 'team.athleteContacts', { teamId, blocked })) return [];
+      return [
+        { athlete: summaryOf(athlete), contact: world.cardFor(athlete.id, viewer)?.contact ?? {} },
+      ];
+    })
+    .sort((a, b) => a.athlete.firstName.localeCompare(b.athlete.firstName));
 };
 
 /**

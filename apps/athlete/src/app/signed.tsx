@@ -80,6 +80,16 @@ export default function Signed() {
   const team = roster.state.status === 'ready' ? roster.state.data : null;
   const teamLabel = team ? `${team.college.name.split(' ')[0]} ${team.name}` : params.teamName;
   const date = shortDate(new Date().toISOString()).toUpperCase();
+  const first = me?.firstName;
+  // What's next, by role (the mockup's Signed board).
+  const welcome =
+    role === 'athlete'
+      ? `You’re on the roster${first ? `, ${first}` : ''}. Next up: build your Baseball Card.`
+      : role === 'parent'
+        ? 'You’re on the team with your child. Say hi to the roster and see what’s coming up.'
+        : role === 'teen'
+          ? `You’re on the team${first ? `, ${first}` : ''}. Post to your team and say hi.`
+          : 'You’re on the roster. The team feed, roster and events are open to you now.';
 
   const next = () => {
     if (!role) return router.replace('/sign-up');
@@ -105,9 +115,7 @@ export default function Signed() {
                 {teamLabel ? `Welcome to ${teamLabel}` : 'Welcome to the team'}
               </Text>
               <Text color="onBrandSecondary" style={styles.center}>
-                {team
-                  ? `You’re on the roster at ${team.college.name}. The team feed, roster and events are open to you now.`
-                  : 'You’re on the roster. The team feed, roster and events are open to you now.'}
+                {welcome}
               </Text>
               {roster.state.status === 'error' && (
                 <Text weight="semibold" color="onBrand" accessibilityRole="alert">
