@@ -41,7 +41,14 @@ export const qrCodeLifetime = pgEnum('qr_code_lifetime', ['tonight', 'day', 'wee
 
 // Card and media
 export const cardStatus = pgEnum('card_status', ['draft', 'published', 'unclaimed', 'archived']);
-export const mediaKind = pgEnum('media_kind', ['photo', 'resume']);
+export const mediaPurpose = pgEnum('media_purpose', [
+  'card_photo',
+  'child_photo',
+  'post_image',
+  'resume',
+]);
+// `pending` until the client confirms the upload landed; `taken_down` by staff, file deleted.
+export const mediaStatus = pgEnum('media_status', ['pending', 'ready', 'taken_down']);
 // Extracted resume text is untrusted: nothing in parsed_payload is shown until it is `confirmed`.
 export const parseStatus = pgEnum('parse_status', ['pending', 'parsed', 'confirmed', 'failed']);
 export const ingestedStatus = pgEnum('ingested_status', [

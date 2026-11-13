@@ -19,6 +19,8 @@ import { registerMockRoutes } from './mock/routes';
 import type { Screen } from './moderation';
 import type { ResumeReaderConfig } from './resume';
 import { MockWorld } from './mock/world';
+import { mediaRoutes } from './routes/media';
+import type { Storage } from './storage';
 import { httpError, useZodContracts } from './zod';
 
 export interface AppOptions {
@@ -46,6 +48,11 @@ export interface AppOptions {
    */
   identity?: Omit<AuthConfig, 'mailer' | 'onMailError' | 'trustedOrigins'> &
     Partial<Pick<AuthConfig, 'mailer'>>;
+  /**
+   * The private uploads bucket (TI-111). With `identity` and off the mock API, it serves the upload,
+   * read and takedown routes, signed in through the real session.
+   */
+  storage?: Storage;
   /**
    * The mock data to serve, for tests that seed it; a fresh fixture world by default. Its own flags
    * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees. Its
@@ -83,6 +90,7 @@ export const buildApp = async ({
   resume = {},
   devOutbox = false,
   identity,
+  storage,
   world,
   screen,
 }: AppOptions) => {
@@ -144,6 +152,8 @@ export const buildApp = async ({
         if (refusal) throw httpError(...refusal);
         return reply.status(204).send();
       });
+
+      if (storage) await app.register(mediaRoutes, { db: identity.db, storage, authenticate });
     }
   }
 

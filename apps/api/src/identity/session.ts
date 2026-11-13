@@ -1,9 +1,8 @@
 // =============================================================================================
 // "Who is making this request?" for every real (non-mock) route.
 //
-// `Authenticate` is the seam the rest of the API uses. It has the same shape as the stand-in in the
-// uploads PR (#8, `devHeaderAuth`), so routes written against that work unchanged once they use
-// this instead: a signed-in, allowed account, or null (answer 401).
+// `Authenticate` is the seam the rest of the API uses (the upload routes, DELETE /me, …): a
+// signed-in, allowed account, or null (answer 401). There is no dev-header or other stand-in.
 //
 // The session comes from Better Auth (cookie in browsers, the Expo app's stored cookie on phones),
 // then the account is re-checked against the database, so a suspension, a deletion or a recruiter's

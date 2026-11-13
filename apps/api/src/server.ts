@@ -6,12 +6,23 @@ import { scheduleEventsLogRetention } from './events-log';
 import { createSmtpMailer } from './identity/mailer';
 import { openAiScreen } from './moderation';
 import { resumeConfigFromEnv } from './resume';
+import { createS3Storage } from './storage';
 
 const env = loadEnv();
 // env.ts requires DATABASE_URL unless MOCK_API is on. The real API runs on the database with real
 // sign-in; the mock API runs on fixtures and keeps its dev sign-in. One pool serves both.
 const database = env.MOCK_API || !env.DATABASE_URL ? null : createDb(env.DATABASE_URL);
 const db = database?.db;
+// The private uploads bucket. env.ts requires its settings unless MOCK_API is on.
+const storage = database
+  ? createS3Storage({
+      endpoint: env.S3_ENDPOINT!,
+      region: env.S3_REGION,
+      bucket: env.S3_BUCKET!,
+      accessKeyId: env.S3_ACCESS_KEY_ID!,
+      secretAccessKey: env.S3_SECRET_ACCESS_KEY!,
+    })
+  : undefined;
 const screen = env.OPENAI_API_KEY
   ? openAiScreen({
       apiKey: env.OPENAI_API_KEY,
@@ -38,6 +49,7 @@ const app = await buildApp({
         production: env.NODE_ENV === 'production',
       }
     : undefined,
+  storage,
   screen,
   flags: {
     identitySearch: env.FLAG_IDENTITY_SEARCH,
@@ -51,8 +63,17 @@ if (env.MOCK_API && env.DEV_OUTBOX)
   app.log.warn('DEV_OUTBOX is on: /dev/outbox serves invite links');
 if (!screen) app.log.warn('OPENAI_API_KEY is not set: all new content waits for staff review');
 if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
-// Accounts deleted 30 days ago are erased daily. Uploaded files join in once storage exists (#8).
-if (db) scheduleAccountErasure(db, { log: app.log });
+// Accounts deleted 30 days ago are erased daily, and the files they owned go from the bucket.
+if (db) {
+  scheduleAccountErasure(db, {
+    log: app.log,
+    deleteFiles: storage
+      ? async (keys) => {
+          for (const key of keys) await storage.delete(key);
+        }
+      : undefined,
+  });
+}
 
 // App Platform sends SIGTERM before replacing an instance: finish requests, then close the pool.
 for (const signal of ['SIGTERM', 'SIGINT'] as const) {

@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { loadEnv } from './env';
 
+/** The uploads bucket, required on the real API. */
+const BUCKET = {
+  S3_ENDPOINT: 'https://nyc3.digitaloceanspaces.test',
+  S3_BUCKET: 'uploads',
+  S3_ACCESS_KEY_ID: 'key',
+  S3_SECRET_ACCESS_KEY: 'secret',
+};
+
 describe('env', () => {
   it('runs on mocks without a database or session secret in development', () => {
     const env = loadEnv({ MOCK_API: '1' });
@@ -8,8 +16,13 @@ describe('env', () => {
     expect(env.SESSION_SECRET.length).toBeGreaterThanOrEqual(32);
   });
 
-  it('needs a database and a session secret otherwise', () => {
+  it('needs a database, a bucket and a session secret otherwise', () => {
     expect(() => loadEnv({})).toThrow(/DATABASE_URL/);
+    expect(() => loadEnv({})).toThrow(/S3_BUCKET/);
+    for (const key of Object.keys(BUCKET)) {
+      const env = { ...BUCKET, DATABASE_URL: 'postgres://db.test/app', [key]: undefined };
+      expect(() => loadEnv(env)).toThrow(new RegExp(key));
+    }
     expect(() => loadEnv({ MOCK_API: '1', NODE_ENV: 'production' })).toThrow(/SESSION_SECRET/);
   });
 
@@ -31,6 +44,7 @@ describe('env', () => {
 
   it('requires SMTP and every emailed-link URL on the real API in production', () => {
     const prod = {
+      ...BUCKET,
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://db.test/app',
       SESSION_SECRET: 's'.repeat(32),
@@ -48,6 +62,7 @@ describe('env', () => {
 
   it('refuses to start in production unless the proxy in front is trusted', () => {
     const prod = {
+      ...BUCKET,
       NODE_ENV: 'production',
       DATABASE_URL: 'postgres://db.test/app',
       SESSION_SECRET: 's'.repeat(32),
@@ -63,12 +78,20 @@ describe('env', () => {
   });
 
   it('trusts no proxy by default in development', () => {
-    const env = loadEnv({ DATABASE_URL: 'postgres://db.test/app', SESSION_SECRET: 's'.repeat(32) });
+    const env = loadEnv({
+      ...BUCKET,
+      DATABASE_URL: 'postgres://db.test/app',
+      SESSION_SECRET: 's'.repeat(32),
+    });
     expect(env.TRUST_PROXY).toBe(0);
   });
 
   it('points emailed links at localhost in development', () => {
-    const env = loadEnv({ DATABASE_URL: 'postgres://db.test/app', SESSION_SECRET: 's'.repeat(32) });
+    const env = loadEnv({
+      ...BUCKET,
+      DATABASE_URL: 'postgres://db.test/app',
+      SESSION_SECRET: 's'.repeat(32),
+    });
     expect([env.API_URL, env.PORTAL_URL, env.ATHLETE_APP_URL]).toEqual([
       'http://localhost:3000',
       'http://localhost:5173',

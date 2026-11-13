@@ -27,9 +27,11 @@ An erased athlete's entries on recruiters' lists become "profile withdrawn" (`st
 ## Files
 
 Media rows go with the cascade, but the files themselves live in object storage. The erase job
-collects their storage keys (photos, resumes, children's photos) and passes them to `deleteFiles`
-after the database commit. Storage arrives with the uploads PR (#8): wire `deleteFiles` in
-`server.ts` then. Until it is wired, the job logs a warning whenever erased accounts left files.
+collects their storage keys (photos, resumes, children's photos; for each, the served `final_key`
+and the `storage_key` uploads go to) and passes them to `deleteFiles` after the database commit;
+`server.ts` wires it to the uploads bucket (TI-111). Children's photos are media rows too (owned
+by the parent, linked by `child_id`). Without a bucket (tests), the job logs a warning whenever
+erased accounts left files.
 
 ## Backups
 

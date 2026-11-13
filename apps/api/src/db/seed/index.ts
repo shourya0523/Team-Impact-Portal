@@ -34,6 +34,10 @@ try {
         await tx.insert(table).values(tableRows.slice(i, i + 1000) as never);
       }
     }
+    // children and media point at each other, so a child's photo is linked once both exist.
+    await tx.execute(sql`
+      update children c set photo_media_id = m.id
+      from media m where m.child_id = c.id and m.purpose = 'child_photo'`);
   });
   const counts = ORDER.map(([table, tableRows]) => `${getTableName(table)} ${tableRows.length}`);
   console.log(

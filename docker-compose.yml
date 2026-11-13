@@ -1,4 +1,4 @@
-# Local Postgres for development. Production uses DigitalOcean Managed Postgres.
+# Local Postgres and S3 (versitygw) for development. Production uses DigitalOcean Managed Postgres and Spaces.
 services:
   postgres:
     image: postgres:17
@@ -10,6 +10,18 @@ services:
       - '5432:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
+  s3:
+    image: versity/versitygw
+    environment:
+      ROOT_ACCESS_KEY: s3-dev
+      ROOT_SECRET_KEY: s3-dev-password
+      VGW_CORS_ALLOW_ORIGIN: '*'
+    # In the posix backend a bucket is a directory, so this creates the private uploads bucket.
+    entrypoint: sh -c 'mkdir -p /data/team-impact-uploads && exec versitygw --port :9000 posix /data'
+    ports:
+      - '9000:9000'
+    volumes:
+      - s3data:/data
   # OCR for resume photos and scans (TI-113): `docker compose --profile ocr up -d`, then set
   # DOCLING_URL=http://localhost:5001. CPU only, about 4.4 GB. Pinned to a release; bump on purpose.
   docling:
@@ -19,3 +31,4 @@ services:
       - '5001:5001'
 volumes:
   pgdata:
+  s3data:

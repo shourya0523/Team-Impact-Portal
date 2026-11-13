@@ -314,9 +314,13 @@ describe('erasing deleted accounts after 30 days', () => {
       [bob, 'member'],
     ]);
     await db.insert(schema.cards).values({ athleteId: maya.id, season: '2026-27' });
-    await db
-      .insert(schema.media)
-      .values({ ownerUserId: maya.id, kind: 'photo', storageKey: 'photo/maya' });
+    await db.insert(schema.media).values({
+      ownerUserId: maya.id,
+      purpose: 'card_photo',
+      storageKey: 'photo/maya',
+      mimeType: 'image/jpeg',
+      sizeBytes: 1000,
+    });
     const [mayasPost] = await db
       .insert(schema.posts)
       .values({ authorId: maya.id, communityId: community.id, payload: { text: 'hi' } })
@@ -360,18 +364,39 @@ describe('erasing deleted accounts after 30 days', () => {
   it('takes a parent’s children’s profiles with them, photos included', async () => {
     const lisa = await addUser('Lisa', 'parent');
     const mark = await addUser('Mark', 'parent');
-    await db.insert(schema.children).values([
-      { parentUserId: lisa.id, firstName: 'Mateo', age: 9, photoStorageKey: 'child_photo/mateo' },
-      { parentUserId: lisa.id, firstName: 'Sofia', age: 7 },
-      { parentUserId: mark.id, firstName: 'Ollie', age: 8 },
-    ]);
+    const [mateo] = await db
+      .insert(schema.children)
+      .values([
+        { parentUserId: lisa.id, firstName: 'Mateo', age: 9 },
+        { parentUserId: lisa.id, firstName: 'Sofia', age: 7 },
+        { parentUserId: mark.id, firstName: 'Ollie', age: 8 },
+      ])
+      .returning();
+    const [photo] = await db
+      .insert(schema.media)
+      .values({
+        ownerUserId: lisa.id,
+        purpose: 'child_photo',
+        status: 'ready',
+        childId: mateo!.id,
+        storageKey: 'child_photo/mateo',
+        finalKey: 'files/child_photo/mateo/1',
+        mimeType: 'image/jpeg',
+        sizeBytes: 1000,
+      })
+      .returning();
+    await db
+      .update(schema.children)
+      .set({ photoMediaId: photo!.id })
+      .where(eq(schema.children.id, mateo!.id));
     await deleteAccount(db, lisa.id, new Date(Date.now() - 31 * DAY));
     const deleted: string[][] = [];
     const { storageKeys } = await eraseDeletedAccounts(db, {
       deleteFiles: async (keys) => void deleted.push(keys),
     });
-    expect(storageKeys).toEqual(['child_photo/mateo']);
-    expect(deleted).toEqual([['child_photo/mateo']]); // handed over for deletion, after commit
+    // The upload object and the served copy both go.
+    expect(storageKeys).toEqual(['child_photo/mateo', 'files/child_photo/mateo/1']);
+    expect(deleted).toEqual([storageKeys]); // handed over for deletion, after commit
     const left = await db.select({ name: schema.children.firstName }).from(schema.children);
     expect(left).toEqual([{ name: 'Ollie' }]);
   });

@@ -88,8 +88,8 @@ whose company is suspended, is refused at once. A deleted account reads as "no s
   or a suspension takes effect on the next request.
 
 Our own routes call `app.authenticate(request)`, which returns `{ id, userType }` or null (answer
-401). It has the same shape as the stand-in in the uploads PR (#8), so those routes switch over
-unchanged.
+401). The upload routes (`apps/api/src/routes/media.ts`) use it too; there is no dev-header
+stand-in on the real API.
 
 ## Settings
 

@@ -12,7 +12,7 @@
 //
 // Backups age out on their own; see docs/account-deletion.md for the windows.
 // =============================================================================================
-import { and, asc, eq, inArray, isNotNull, isNull, lte, ne } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, lte, ne, or } from 'drizzle-orm';
 import type { FastifyBaseLogger } from 'fastify';
 import type { Db } from './db/client';
 import * as schema from './db/schema';
@@ -138,8 +138,9 @@ export interface ErasureResult {
   /** How many accounts were erased. */
   count: number;
   /**
-   * Storage keys of the files those accounts owned (photos, resumes, children's photos). Their
-   * rows are gone; the files themselves are deleted by `deleteFiles`, once storage exists (#8).
+   * Storage keys of the files those accounts owned (photos, resumes, children's photos): each
+   * file's upload key and its final key. Their rows are gone; the files themselves are deleted by
+   * `deleteFiles` (the bucket, in server.ts).
    */
   storageKeys: string[];
 }
@@ -166,15 +167,23 @@ export const eraseDeletedAccounts = async (
     const ids = due.map((u) => u.id);
     if (ids.length === 0) return { count: 0, storageKeys: [] };
 
+    // Their own files, and every photo of their children (which go with them). Child photos are
+    // owned by the parent who uploaded them, but match on the child too so none is left behind.
+    // Both keys: the served copy, and the upload object (a signed PUT may have written it again).
     const media = await tx
-      .select({ key: schema.media.storageKey })
+      .select({ uploadKey: schema.media.storageKey, finalKey: schema.media.finalKey })
       .from(schema.media)
-      .where(inArray(schema.media.ownerUserId, ids));
-    const childPhotos = await tx
-      .select({ key: schema.children.photoStorageKey })
-      .from(schema.children)
       .where(
-        and(inArray(schema.children.parentUserId, ids), isNotNull(schema.children.photoStorageKey)),
+        or(
+          inArray(schema.media.ownerUserId, ids),
+          inArray(
+            schema.media.childId,
+            tx
+              .select({ id: schema.children.id })
+              .from(schema.children)
+              .where(inArray(schema.children.parentUserId, ids)),
+          ),
+        ),
       );
 
     // On recruiters' lists the athlete becomes "profile withdrawn" (athlete_id goes null with the
@@ -208,7 +217,10 @@ export const eraseDeletedAccounts = async (
     await tx.delete(schema.users).where(inArray(schema.users.id, ids));
     return {
       count: ids.length,
-      storageKeys: [...media.map((m) => m.key), ...childPhotos.map((c) => c.key!)],
+      // Files from before the upload path have one key for both.
+      storageKeys: [
+        ...new Set(media.flatMap((m) => (m.finalKey ? [m.uploadKey, m.finalKey] : [m.uploadKey]))),
+      ],
     };
   });
   // After the commit: a file deleted for a rolled-back erase couldn't be brought back.
@@ -228,7 +240,7 @@ export const scheduleAccountErasure = (
     eraseDeletedAccounts(db, { deleteFiles }).then(
       ({ count, storageKeys }) => {
         log.info({ count }, 'Erased deleted accounts');
-        // Until uploads land there's no storage to delete from; say so rather than drop it silently.
+        // Without a bucket there's nothing to delete from; say so rather than drop it silently.
         if (!deleteFiles && storageKeys.length) {
           log.warn(
             { count: storageKeys.length },

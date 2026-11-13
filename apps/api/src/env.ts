@@ -45,6 +45,12 @@ const EnvSchema = z
     TRUST_PROXY: z.coerce.number().int().min(0).optional(),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
+    // Private bucket for uploads (TI-111): DigitalOcean Spaces in staging and production.
+    S3_ENDPOINT: z.url().optional(),
+    S3_REGION: z.string().default('us-east-1'),
+    S3_BUCKET: z.string().min(1).optional(),
+    S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+    S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
     /**
      * OpenAI key. Its presence turns on moderation screening of new content (without it, everything
      * waits for staff). Resumes only go to OpenAI when `RESUME_LLM=openai` too.
@@ -70,6 +76,16 @@ const EnvSchema = z
   .superRefine((env, ctx) => {
     if (!env.MOCK_API && !env.DATABASE_URL) {
       ctx.addIssue({ code: 'custom', path: ['DATABASE_URL'], message: 'Required unless MOCK_API' });
+    }
+    for (const key of [
+      'S3_ENDPOINT',
+      'S3_BUCKET',
+      'S3_ACCESS_KEY_ID',
+      'S3_SECRET_ACCESS_KEY',
+    ] as const) {
+      if (!env.MOCK_API && !env[key]) {
+        ctx.addIssue({ code: 'custom', path: [key], message: 'Required unless MOCK_API' });
+      }
     }
     if (env.RESUME_LLM === 'openai' && !env.OPENAI_API_KEY) {
       ctx.addIssue({
