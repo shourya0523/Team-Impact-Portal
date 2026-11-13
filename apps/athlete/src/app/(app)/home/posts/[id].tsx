@@ -1,13 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { canCommentIn, type Comment, type Post } from '@team-impact/contracts';
+import { canCommentIn, type Comment, type CommunityKind, type Post } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { describeError } from '@/api/errors';
 import { HeldNote, Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
-import { ReportButton } from '@/components/Report';
+import { blockable, ReportButton } from '@/components/Report';
 import { Async, EmptyState, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -31,7 +31,16 @@ function Byline({ who, when }: { who: Post['author']; when: string }) {
   );
 }
 
-function CommentRow({ c, onChanged }: { c: Comment; onChanged: () => void }) {
+function CommentRow({
+  c,
+  where,
+  onChanged,
+}: {
+  c: Comment;
+  /** The post's community. */
+  where: CommunityKind;
+  onChanged: () => void;
+}) {
   const { me } = useRole();
   return (
     <Card>
@@ -42,9 +51,7 @@ function CommentRow({ c, onChanged }: { c: Comment; onChanged: () => void }) {
         {c.author.id !== me?.id && (
           <ReportButton
             target={{ kind: 'comment', id: c.id }}
-            author={
-              c.author.role === 'staff' ? undefined : { id: c.author.id, name: c.author.firstName }
-            }
+            author={blockable(c.author, where)}
             onDone={onChanged}
           />
         )}
@@ -142,7 +149,14 @@ export default function PostDetail() {
                 <Async state={comments.state} onRetry={comments.reload}>
                   {(list) =>
                     list.length ? (
-                      list.map((c) => <CommentRow key={c.id} c={c} onChanged={comments.reload} />)
+                      list.map((c) => (
+                        <CommentRow
+                          key={c.id}
+                          c={c}
+                          where={p.community.kind}
+                          onChanged={comments.reload}
+                        />
+                      ))
                     ) : (
                       <EmptyState title="No comments yet">
                         {canComment ? 'Be the first to say something.' : undefined}

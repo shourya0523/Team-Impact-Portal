@@ -57,10 +57,13 @@ export const communityFacts = (
 export const contentFacts = (
   world: MockWorld,
   u: MockUser,
-  item: { id: string; authorId: string; official?: boolean },
+  item: { id: string; authorId: string; communityId: string; official?: boolean },
 ): ContentFacts => ({
   authorId: item.authorId,
   official: item.official,
+  staffInTeamImpact:
+    world.user(item.authorId)?.role === 'staff' &&
+    world.communities.find((c) => c.id === item.communityId)?.kind === 'team_impact',
   blocked: blockedBetween(world, u.id, item.authorId),
   reportedByActor: world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id),
   authorSuspended: isSuspended(world, item.authorId),

@@ -42,6 +42,11 @@ export interface AppOptions {
    */
   identity?: Omit<AuthConfig, 'mailer' | 'onMailError' | 'trustedOrigins'> &
     Partial<Pick<AuthConfig, 'mailer'>>;
+  /**
+   * The mock data to serve, for tests that seed it; a fresh fixture world by default. Its own flags
+   * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees.
+   */
+  world?: MockWorld;
 }
 
 declare module 'fastify' {
@@ -64,6 +69,7 @@ export const buildApp = async ({
   flags = DEFAULT_FLAGS,
   mock = false,
   identity,
+  world,
 }: AppOptions) => {
   const app = useZodContracts(
     Fastify({
@@ -133,7 +139,7 @@ export const buildApp = async ({
       : async () => null);
 
   if (mock) {
-    registerMockRoutes(app, new MockWorld(flags));
+    registerMockRoutes(app, world ?? new MockWorld(flags));
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

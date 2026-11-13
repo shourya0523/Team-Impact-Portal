@@ -1,6 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { api } from '@/api';
-import { ReportForm } from '@/components/Report';
+import { blockable, ReportForm } from '@/components/Report';
 import { Async, Gutter, Screen } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
@@ -19,11 +19,7 @@ export default function ReportPost() {
             <Card>
               <ReportForm
                 target={{ kind: 'post', id: p.id }}
-                author={
-                  p.author.role === 'staff' || p.author.id === me?.id
-                    ? undefined
-                    : { id: p.author.id, name: p.author.firstName }
-                }
+                author={p.author.id === me?.id ? undefined : blockable(p.author, p.community.kind)}
                 // The post is hidden for you now, so leave its page too.
                 onClose={() => router.replace('/home')}
               />

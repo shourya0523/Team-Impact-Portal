@@ -18,7 +18,7 @@ const postBase = {
   text: z.string(),
   /** An optional photo, already uploaded (http(s) only). */
   imageUrl: z.url().nullable(),
-  /** Posted by Team IMPACT staff. Official posts can't be blocked. */
+  /** A Team Impact announcement (from the portal). Official posts can’t be blocked. */
   official: z.boolean(),
   /** Rallies, the platform's reaction (the app labels it "Rally"). */
   likeCount: z.number().int().nonnegative(),
@@ -72,9 +72,11 @@ export type FeedQuery = z.input<typeof FeedQuery>;
 
 /**
  * Whether `role` may post into a community it sees (PRD §5 "Who can do what"): staff, coaches,
- * athletes and alumni post in any community they belong to; teens only in their team's; parents
- * and recruiters never (parents comment only). Staff posts in Team Impact's are announcements.
- * Nobody posts in a community still waiting for review: only its creator and staff can see it.
+ * athletes and alumni post in any community they belong to (staff get no bypass, so not in a team's
+ * community); teens only in their team's; parents and recruiters never (parents comment only).
+ * Posting here never makes an announcement: staff announce from the portal
+ * (`CreateAnnouncementRequest`). Nobody posts in a community still waiting for review: only its
+ * creator and staff can see it.
  */
 export const canPostIn = (
   role: Role,
@@ -94,9 +96,11 @@ export const canPostIn = (
 export const canCommentIn = (role: Role, kind: CommunityKind) =>
   role !== 'recruiter' && (role !== 'teen' || kind === 'team');
 
-/** Staff only, into a team community or Team Impact's. The API checks the kind. */
+/**
+ * Staff only. Always posted into Team Impact's community, which everyone belongs to (PRD §5), so
+ * there is no community to pick. `sendPush: false` sends the in-app notification only.
+ */
 export const CreateAnnouncementRequest = z.object({
-  communityId: Id,
   text: z.string().trim().min(10).max(2000),
   sendPush: z.boolean(),
 });

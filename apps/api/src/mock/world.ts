@@ -159,6 +159,13 @@ export class MockWorld {
 
   // Communities ----------------------------------------------------------------------------------
 
+  /**
+   * Team Impact's own community, where announcements go. There is exactly one: nobody can create,
+   * remove or merge one. The database doesn't enforce that yet (its unique index covers interest
+   * and medical names only), so the real route needs a partial unique index or a seeded id.
+   */
+  teamImpact = () => this.communities.find((c) => c.kind === 'team_impact')!;
+
   /** Membership as the member sees it; null if `u` isn't in it. */
   private membership = (c: MockCommunity, u: MockUser) => {
     if (c.kind === 'team') {
@@ -495,7 +502,9 @@ export class MockWorld {
       .filter(
         (e) => e.moderation === 'approved' || (e.moderation === 'in_review' && e.hostId === u.id),
       )
-      .filter((e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId }))
+      .filter(
+        (e) => !hiddenFor(this, u, { id: e.id, authorId: e.hostId, communityId: e.communityId }),
+      )
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt))
       .map((e) => this.calendarEvent(e, readable.get(e.communityId)!, u));
   };

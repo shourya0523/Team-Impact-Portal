@@ -6,7 +6,7 @@ import {
   IdParams,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { holdForReview } from '../activity';
+import { holdOrPublish } from '../activity';
 import type { MockCommunity } from '../fixtures';
 import { actorOf } from '../policy';
 import type { MockWorld } from '../world';
@@ -47,7 +47,7 @@ export const registerCommunityCreateRoutes = (
         name,
         about,
         // Name and description pass moderation like posts; until then only staff and the
-        // creator see it.
+        // creator see it. Staff's own publish at once (`holdOrPublish`).
         moderation: 'in_review' as const,
         createdAt: now,
         createdById: u.id,
@@ -60,7 +60,7 @@ export const registerCommunityCreateRoutes = (
           ? { ...userMade, kind: 'interest', official: false }
           : { ...userMade, kind: 'medical' };
       world.communities.push(created);
-      holdForReview(world, { kind: 'community', id: created.id }, `${name}: ${about}`);
+      holdOrPublish(world, u, { kind: 'community', id: created.id }, `${name}: ${about}`);
       return reply.status(201).send(world.community(created, u));
     },
   );
