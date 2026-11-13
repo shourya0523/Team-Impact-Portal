@@ -4,12 +4,19 @@ import {
   type ExperienceEntry,
   type UpdateCardRequest,
 } from '@team-impact/contracts';
+import { looksLikeContact } from './guardrails';
 import { extractHeuristic } from './heuristic';
 import { bodyFontSize, textToLines, toLines, toSections } from './layout';
 import { extractWithLlm, type LlmConfig } from './llm';
 import { ocrWithDocling, type DoclingConfig } from './ocr';
 import { MIN_TEXT_CHARS, readPdf, ResumeReadError } from './pdf';
-import { CHECK_BELOW, type ExperienceCandidate, type FieldCandidates, type Line } from './types';
+import {
+  CHECK_BELOW,
+  type Candidate,
+  type ExperienceCandidate,
+  type FieldCandidates,
+  type Line,
+} from './types';
 
 export { ResumeReadError } from './pdf';
 export type { DoclingConfig } from './ocr';
@@ -120,8 +127,47 @@ export const mergeCandidates = (
   return out;
 };
 
+/** Well below `CHECK_BELOW`, so a value that looks like a contact detail starts switched off. */
+const CONTACT_CONFIDENCE = CHECK_BELOW / 2;
+
+/**
+ * Contact details never reach the card from the resume. A list item (a skill) that looks like an
+ * email, phone number, link or handle is dropped; any other value or experience row carrying one
+ * is pushed below `CHECK_BELOW`, so the review screen shows it switched off and flagged "Check".
+ */
+export const withoutContacts = (
+  candidates: FieldCandidates,
+  now: Date = new Date(),
+): FieldCandidates => {
+  const contact = (s: unknown) => typeof s === 'string' && looksLikeContact(s, now);
+  const lower = <T extends { confidence: number }>(c: T): T => ({
+    ...c,
+    confidence: Math.min(c.confidence, CONTACT_CONFIDENCE),
+  });
+  const out: Record<string, unknown> = {};
+  for (const [key, c] of Object.entries(candidates) as [string, Candidate<unknown>][]) {
+    if (key === 'experience') continue;
+    if (Array.isArray(c.value)) {
+      const kept = c.value.filter((v) => !contact(v));
+      if (kept.length > 0) out[key] = { ...c, value: kept };
+    } else {
+      out[key] = contact(c.value) ? lower(c) : c;
+    }
+  }
+  const rows = candidates.experience?.map((e) =>
+    [e.entry.role, e.entry.organization, e.entry.period].some(contact) ? lower(e) : e,
+  );
+  if (rows) out.experience = rows;
+  return out as FieldCandidates;
+};
+
 /** Candidates → what the API returns: plain values, review order, "Check" flags. */
-export const toReading = (candidates: FieldCandidates, method: ResumeMethod): ResumeReading => {
+export const toReading = (
+  raw: FieldCandidates,
+  method: ResumeMethod,
+  now: Date = new Date(),
+): ResumeReading => {
+  const candidates = withoutContacts(raw, now);
   const fields: Record<string, unknown> = {};
   const check: (keyof CardFields)[] = [];
   const checkEntries: number[] = [];
@@ -176,7 +222,7 @@ export const readLines = async (
     ? await extractWithLlm(lines, bodyFontSize(lines), config.llm, now, config.fetch)
     : null;
   const method: ResumeMethod = llm ? `${base}+llm` : base;
-  return toReading(mergeCandidates(layout, llm), method);
+  return toReading(mergeCandidates(layout, llm), method, now);
 };
 
 /** Pasted or plain text: the same reader, without positions or styles. */

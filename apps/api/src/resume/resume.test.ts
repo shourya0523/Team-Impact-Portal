@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { findDateRange, findGradYear, formatPeriod } from './dates';
-import { isSensitiveLine, stripContacts } from './guardrails';
-import { matchesType, readResume, readResumeText, resumeConfigFromEnv } from './index';
+import { isSensitiveLine, looksLikeContact, stripContacts } from './guardrails';
+import { matchesType, readResume, readResumeText, resumeConfigFromEnv, toReading } from './index';
 import { grounded } from './llm';
 import { scoreReading, summarize } from './score';
 import { buildScan } from './test/build-pdf';
@@ -164,6 +164,124 @@ describe('guardrails', () => {
     expect(matchesType(new TextEncoder().encode('<html>'), 'application/pdf')).toBe(false);
     expect(matchesType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), 'image/jpeg')).toBe(true);
     expect(matchesType(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), 'image/png')).toBe(false);
+  });
+});
+
+describe('contact details never start accepted', () => {
+  it('drops emails, phones, links and handles from a skills list', async () => {
+    const reading = await readResumeText(
+      [
+        'Sam Rivera',
+        'Denver, CO',
+        '',
+        'EDUCATION',
+        'University of Denver',
+        'B.A. Finance  Class of 2027',
+        '',
+        'SKILLS',
+        'Excel, sam.rivera@example.com, (617) 555-0142, github.com/srivera, @srivera, Python',
+        'Instagram: srivera',
+        'Languages: Spanish; Cell: 617 555 0199',
+      ].join('\n'),
+      {},
+      NOW,
+    );
+    expect(reading.fields.skills).toEqual(['Excel', 'Python', 'Spanish']);
+    expect(reading.check).not.toContain('skills');
+    const text = JSON.stringify(reading);
+    for (const s of ['example.com', '555-0142', '555 0199', 'github', 'srivera']) {
+      expect(text).not.toContain(s);
+    }
+  });
+
+  it('flags a labelled "Looking for" that carries an email "Check"', async () => {
+    const reading = await readResumeText(
+      ['Sam Rivera', 'Looking for: a sales internship, write to sam@example.com'].join('\n'),
+      {},
+      NOW,
+    );
+    expect(reading.fields.lookingFor).toContain('sales internship');
+    expect(reading.check).toContain('lookingFor');
+    expect(reading.check).not.toContain('firstName');
+  });
+
+  it('pushes any confident value or row with a contact detail below Check', () => {
+    const reading = toReading(
+      {
+        firstName: { value: 'Sam', confidence: 0.95 },
+        hometown: { value: 'srivera.dev', confidence: 0.97 },
+        position: { value: '@srivera', confidence: 0.97 },
+        lookingFor: { value: 'Call +44 7911 123456', confidence: 0.97 },
+        skills: { value: ['[email]', 'x.com/srivera', 'Node.js', 'ASP.NET'], confidence: 0.97 },
+        experience: [
+          {
+            entry: { role: 'Sales Intern', organization: 'Acme', period: 'Summer 2025' },
+            confidence: 0.95,
+            recency: 2,
+          },
+          {
+            entry: { role: 'Founder', organization: 'srivera.dev', period: 'Summer 2024' },
+            confidence: 0.95,
+            recency: 1,
+          },
+        ],
+      },
+      'layout+llm',
+      NOW,
+    );
+    expect(reading.check).toEqual(
+      expect.arrayContaining(['hometown', 'position', 'lookingFor', 'experience']),
+    );
+    expect(reading.check).not.toContain('firstName');
+    expect(reading.check).not.toContain('skills');
+    expect(reading.fields.skills).toEqual(['Node.js', 'ASP.NET']);
+    expect(reading.checkEntries).toEqual([1]);
+  });
+
+  it('drops a skills list that was only contact details', () => {
+    const reading = toReading(
+      {
+        firstName: { value: 'Sam', confidence: 0.95 },
+        skills: { value: ['sam@example.com', '617-555-0142'], confidence: 0.8 },
+      },
+      'layout',
+      NOW,
+    );
+    expect(reading.fields).not.toHaveProperty('skills');
+    expect(reading.needsReview).not.toContain('skills');
+  });
+
+  it.each([
+    'sam@example.com',
+    '(617) 555-0142',
+    '+44 7911 123456',
+    'https://srivera.dev',
+    'www.srivera.dev',
+    'github.com/srivera',
+    'srivera.dev',
+    '@srivera',
+    'Instagram: srivera',
+    'Email: me',
+    '[phone]',
+  ])('treats %s as a contact detail', (s) => {
+    expect(looksLikeContact(s, NOW)).toBe(true);
+  });
+
+  it.each([
+    'Excel',
+    'Node.js',
+    'ASP.NET',
+    'C++',
+    'Public speaking',
+    'Spanish (fluent)',
+    'Python 3.10.12',
+    'Intern @ Acme',
+    'X-ray technician',
+    'Social media marketing',
+    'Summer 2025',
+    'Jun 2024 – Aug 2024',
+  ])('keeps %s as a value', (s) => {
+    expect(looksLikeContact(s, NOW)).toBe(false);
   });
 });
 

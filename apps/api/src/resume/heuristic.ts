@@ -13,7 +13,7 @@ import {
   TITLE,
   withoutPlaces,
 } from './gazetteer';
-import { clean } from './guardrails';
+import { clean, CONTACT_LABEL } from './guardrails';
 import { bodyFontSize, headingKey, isBullet, linesOf, toEntries } from './layout';
 import type { ExperienceCandidate, FieldCandidates, Line, Section } from './types';
 
@@ -366,7 +366,9 @@ const athletics = (sections: Section[], out: FieldCandidates) => {
 };
 
 const skills = (sections: Section[], out: FieldCandidates) => {
-  const items = linesOf(sections, 'skills').flatMap((line) =>
+  // "Instagram: jlee" is a contact line, not a skill list ("Languages: Spanish" is one).
+  const lines = linesOf(sections, 'skills').filter((line) => !CONTACT_LABEL.test(line.text));
+  const items = lines.flatMap((line) =>
     line.text
       .replace(/^[A-Za-z &/]{2,30}:\s*/, '')
       .split(/\s*[,;•|]\s*/)

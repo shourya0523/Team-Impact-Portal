@@ -191,3 +191,18 @@ export const stripContacts = (text: string, now: Date = new Date()): string =>
     .replace(PHONE_INTL, phone)
     .replace(PHONE_NATIONAL, phone)
     .replace(PHONE_US, '[phone]');
+
+/** "Email:", "Cell:", "Instagram:", "LinkedIn:": a label that introduces a contact detail. */
+export const CONTACT_LABEL =
+  /^\s*(e-?mail|phone|cell|mobile|tel(ephone)?|contact|website|web|portfolio|social|handle|linkedin|github|instagram|insta|twitter|x|tiktok|snapchat|snap|facebook|youtube|discord|threads)\s*:/i;
+
+/** What `stripContacts` leaves behind, in case a value ever carries one. */
+const PLACEHOLDER = /\[(email|phone|link|handle|date)\]/i;
+
+/**
+ * True when a proposed card value carries an email, phone number, link or handle (or a contact
+ * label, or a placeholder for one). Such values never start accepted: the card's contact details
+ * come from the athlete's settings, never from the resume.
+ */
+export const looksLikeContact = (text: string, now: Date = new Date()): boolean =>
+  CONTACT_LABEL.test(text) || PLACEHOLDER.test(text) || stripContacts(text, now) !== text;
