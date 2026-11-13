@@ -21,7 +21,11 @@ const world = async () => {
     const res = await app.inject({ method: 'POST', url: '/auth/dev-sign-in', payload: { role } });
     expect(res.statusCode).toBe(200);
     const cookie = res.cookies[0]!;
-    const call = async (method: 'GET' | 'PATCH', url: string, payload?: object) => {
+    const call = async (
+      method: 'GET' | 'PATCH' | 'PUT' | 'POST',
+      url: string,
+      payload?: object,
+    ) => {
       const r = await app.inject({
         method,
         url,
@@ -33,6 +37,8 @@ const world = async () => {
     return {
       get: (url: string) => call('GET', url),
       patch: (url: string, payload: object) => call('PATCH', url, payload),
+      put: (url: string, payload: object) => call('PUT', url, payload),
+      post: (url: string) => call('POST', url),
     };
   };
   return { as, anonymous };
@@ -54,6 +60,27 @@ describe('plain profiles: the owner edits theirs', () => {
       (p: { user: { id: string } }) => p.user.id === USERS.lisa.id,
     );
     expect(onRoster.user).toMatchObject({ firstName: 'Elisa', lastName: 'Moreno' });
+  });
+
+  it('renames the athlete’s Baseball Card too, and a pending draft, but not past seasons', async () => {
+    const { as } = await world();
+    const jordan = await as('athlete');
+    const cardId = (await jordan.get('/cards/me')).body.card.id;
+    // An unpublished draft that still carries the old name must not bring it back on publish.
+    await jordan.put('/cards/me', { firstName: USERS.jordan.firstName, major: 'Finance' });
+    expect((await jordan.patch('/me', { firstName: 'Jordy' })).status).toBe(200);
+
+    const mine = (await jordan.get('/cards/me')).body;
+    expect(mine.card).toMatchObject({ firstName: 'Jordy', lastName: USERS.jordan.lastName });
+    expect(mine.draft).toMatchObject({ firstName: 'Jordy', major: 'Finance' });
+    // Others see the new name on the card face; the earlier published versions keep theirs.
+    const staff = await as('staff');
+    expect((await staff.get(`/cards/${USERS.jordan.id}`)).body.firstName).toBe('Jordy');
+    expect((await staff.get(`/profiles/${USERS.jordan.id}`)).body.card.firstName).toBe('Jordy');
+    expect((await jordan.post('/cards/me/publish')).status).toBe(200);
+    const history = (await jordan.get('/cards/me/history')).body;
+    expect(history[0].face).toMatchObject({ id: cardId, firstName: 'Jordy', major: 'Finance' });
+    expect(history.at(-1).face.firstName).toBe(USERS.jordan.firstName);
   });
 
   it('changes only what was sent', async () => {

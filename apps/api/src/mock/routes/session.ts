@@ -1,5 +1,6 @@
 import { DevSignInRequest, Me, SignOutRequest, UpdateMeRequest } from '@team-impact/contracts';
 import { prefsOf } from '../activity';
+import { renameCard } from '../profiles';
 import type { ZodApp } from '../../zod';
 import { NEWCOMERS, SIGN_IN_AS } from '../fixtures';
 import type { MockWorld } from '../world';
@@ -52,6 +53,7 @@ export const registerSessionRoutes = (app: ZodApp, world: MockWorld, { viewer }:
       const { firstName, lastName, notificationPrefs } = request.body;
       if (firstName !== undefined) u.firstName = firstName;
       if (lastName !== undefined) u.lastName = lastName;
+      if (firstName !== undefined || lastName !== undefined) renameCard(world, u);
       if (notificationPrefs) {
         world.notificationPrefs.set(u.id, { ...prefsOf(world, u.id), ...notificationPrefs });
       }
