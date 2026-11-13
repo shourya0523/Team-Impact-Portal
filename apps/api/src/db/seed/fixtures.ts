@@ -5,7 +5,7 @@
 // Fields the schema has no column for yet are noted where they're dropped; the real route layer
 // adds them as it needs them.
 import { createHash } from 'node:crypto';
-import type { ModerationStatus } from '@team-impact/contracts';
+import { CURRENT_TERMS_VERSION, type ModerationStatus } from '@team-impact/contracts';
 import type { PgTable } from 'drizzle-orm/pg-core';
 import { COMMENTS } from '../../mock/activity';
 import * as fx from '../../mock/fixtures';
@@ -78,11 +78,11 @@ export const fixtureRows = (now = Date.now()) => {
       userId: u.id,
       flag: 'terms',
       value: true,
-      termsVersion: 'v2.0',
+      termsVersion: CURRENT_TERMS_VERSION,
       createdAt: date(u.createdAt),
     },
     ...(u.role === 'teen'
-      ? [{ userId: u.id, flag: 'parent_agreed', value: true, termsVersion: 'v2.0' }]
+      ? [{ userId: u.id, flag: 'parent_agreed', value: true, termsVersion: CURRENT_TERMS_VERSION }]
       : []),
   ]);
 
