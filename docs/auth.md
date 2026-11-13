@@ -98,7 +98,8 @@ See `.env.example`: `API_URL`, `PORTAL_URL`, `ATHLETE_APP_URL`, `SMTP_URL`, `MAI
 existing `SESSION_SECRET`, which signs cookies and tokens. Without `SMTP_URL`, emails (links
 included) print in the API log, so the log mailer is for development only. Production refuses to
 start without `SMTP_URL`, `API_URL`, `PORTAL_URL` or `ATHLETE_APP_URL`, so emailed links can't
-point at localhost.
+point at localhost, and without `TRUST_PROXY` set to 1 or more, so the rate limits don't treat every
+caller as the proxy's one IP.
 
 ## Trade-offs to know
 

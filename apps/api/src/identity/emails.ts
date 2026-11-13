@@ -14,7 +14,7 @@ export const verificationEmail = (to: string, firstName: string, url: string): M
     'Confirm this is your email address to finish creating your Team Impact account:',
     url,
     '',
-    'The link works once and expires in 24 hours. If you didn’t sign up, you can ignore this email.',
+    'The link expires in 24 hours. If you didn’t sign up, you can ignore this email.',
   ]),
 });
 
