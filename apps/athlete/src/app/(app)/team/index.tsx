@@ -1,7 +1,12 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
-import type { JoinRequest, TeamMember, TeamRoster } from '@team-impact/contracts';
+import type {
+  DecideJoinRequest,
+  JoinRequest,
+  TeamMember,
+  TeamRoster,
+} from '@team-impact/contracts';
 import { spacing } from '@team-impact/ui-tokens';
 import { api, track } from '@/api';
 import { ROLE_LABEL, shortDate } from '@/components/format';
@@ -12,6 +17,7 @@ import { useRole } from '@/navigation/role';
 import { Badge, Button, Card, Text } from '@/ui';
 
 type Tab = 'athletes' | 'families' | 'coaches' | 'teens';
+type Decision = DecideJoinRequest['decision'];
 
 const requestDetail = (r: JoinRequest) => {
   const asked = `asked ${shortDate(r.createdAt)}`;
@@ -35,12 +41,13 @@ function Approvals({
 }) {
   const { state, reload } = useApi(() => api.teamJoinRequests(teamId), [teamId, waiting]);
   const [error, setError] = useState<string | null>(null);
-  const [deciding, setDeciding] = useState<string | null>(null);
+  /** The request being decided, and which way, so only the tapped button says it's busy. */
+  const [deciding, setDeciding] = useState<{ id: string; decision: Decision } | null>(null);
   /** The last decision, e.g. "Kai Brooks is on the team." Outside the list, so it outlives the last row. */
   const [done, setDone] = useState<string | null>(null);
 
-  const decide = (r: JoinRequest, decision: 'approve' | 'decline') => {
-    setDeciding(r.id);
+  const decide = (r: JoinRequest, decision: Decision) => {
+    setDeciding({ id: r.id, decision });
     setError(null);
     setDone(null);
     return api.decideJoinRequest(r.id, decision).then(
@@ -58,6 +65,8 @@ function Approvals({
       },
     );
   };
+  const busy = (r: JoinRequest, decision: Decision) =>
+    deciding?.id === r.id && deciding.decision === decision;
   return (
     <Async state={state} onRetry={reload}>
       {(requests) => (
@@ -82,7 +91,7 @@ function Approvals({
                   <PersonRow user={r.requester} detail={requestDetail(r)} />
                   <View style={styles.buttons}>
                     <Button
-                      label={deciding === r.id ? 'Declining…' : 'Decline'}
+                      label={busy(r, 'decline') ? 'Declining…' : 'Decline'}
                       variant="secondary"
                       size="sm"
                       stretch
@@ -91,7 +100,7 @@ function Approvals({
                       onPress={() => decide(r, 'decline')}
                     />
                     <Button
-                      label={deciding === r.id ? 'Approving…' : 'Approve'}
+                      label={busy(r, 'approve') ? 'Approving…' : 'Approve'}
                       variant="brand"
                       size="sm"
                       stretch
