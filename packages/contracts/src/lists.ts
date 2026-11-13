@@ -4,18 +4,19 @@ import { HexColor, Id, Timestamp } from './common';
 import { UserSummary } from './users';
 
 /**
- * A recruiter's shortlist. The owner can share it with colleagues at the same company, who can
- * add and remove athletes and see every note. Athletes are never told they're on a list.
+ * A shortlist. Every list belongs to a company: all its recruiters see it, add and remove athletes
+ * and see every note. Only the owner renames or deletes it. Athletes are never told they're on a
+ * list.
  */
 export const RecruiterList = z.object({
   id: Id,
   companyId: Id,
   name: z.string(),
   color: HexColor,
-  /** What it's for: role, team or hiring cycle. Everyone it's shared with sees it. */
+  /** What it's for: role, team or hiring cycle. Everyone at the company sees it. */
   note: z.string().nullable(),
-  owner: UserSummary,
-  sharedWith: z.array(UserSummary),
+  /** Who made it. Null once their account is gone; then anyone at the company can manage it. */
+  owner: UserSummary.nullable(),
   /** Athletes recruiters can currently see; see `RecruiterListEntry`. */
   athleteCount: z.number().int().nonnegative(),
   createdAt: Timestamp,
@@ -33,16 +34,26 @@ export const RecruiterNote = z.object({
 });
 export type RecruiterNote = z.infer<typeof RecruiterNote>;
 
-/**
- * An athlete who unpublishes or turns off open-to-recruiting stays on the list but drops out of
- * its entries until they turn it back on.
- */
-export const RecruiterListEntry = z.object({
-  card: CardWithContact,
-  addedBy: UserSummary,
+const EntryBase = z.object({
+  id: Id,
+  /** Null once the colleague who added them has left and the list has no owner either. */
+  addedBy: UserSummary.nullable(),
   addedAt: Timestamp,
-  latestNote: RecruiterNote.nullable(),
 });
+
+/**
+ * An athlete on a list. One who turns off open-to-recruiting (or unpublishes, or is suspended)
+ * stays on it as "no longer available": no card, contacts, name or notes, because they're off the
+ * employer portal entirely. They come back as they were if they turn it back on.
+ */
+export const RecruiterListEntry = z.discriminatedUnion('available', [
+  EntryBase.extend({
+    available: z.literal(true),
+    card: CardWithContact,
+    latestNote: RecruiterNote.nullable(),
+  }),
+  EntryBase.extend({ available: z.literal(false) }),
+]);
 export type RecruiterListEntry = z.infer<typeof RecruiterListEntry>;
 
 export const RecruiterListDetail = RecruiterList.extend({ entries: z.array(RecruiterListEntry) });
@@ -63,8 +74,6 @@ export const UpdateListRequest = z.object({
   name: ListName.optional(),
   color: HexColor.optional(),
   note: ListNote.nullable().optional(),
-  /** Verified recruiters at the same company. Replaces the current set. */
-  sharedWithUserIds: z.array(Id).max(50).optional(),
 });
 export type UpdateListRequest = z.infer<typeof UpdateListRequest>;
 

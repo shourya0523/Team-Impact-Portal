@@ -601,9 +601,13 @@ export const CARDS: MockCard[] = [
   ),
 ];
 
-export const NOTES: RecruiterNote[] = [
+/** The company is kept with each note, so a note outlives its author's account. */
+export type MockNote = RecruiterNote & { companyId: string };
+
+export const NOTES: MockNote[] = [
   {
     id: id(1201),
+    companyId: id(801),
     athleteId: USERS.jordan.id,
     author: summaryOf(USERS.elena),
     text: 'Strong fit for the analyst program. Follow up after midterms.',
@@ -617,9 +621,9 @@ export interface MockList {
   name: string;
   color: string;
   note: string | null;
-  ownerId: string;
-  sharedWithIds: string[];
-  entries: { athleteId: string; addedById: string; addedAt: string }[];
+  /** Null once the owner's account is gone; the list stays with the company. */
+  ownerId: string | null;
+  entries: { id: string; athleteId: string; addedById: string | null; addedAt: string }[];
   createdAt: string;
   updatedAt: string;
 }
@@ -632,11 +636,10 @@ export const LISTS: MockList[] = [
     color: '#D0213C',
     note: 'Summer 2027 analyst class',
     ownerId: USERS.elena.id,
-    sharedWithIds: [USERS.tom.id],
     entries: [
-      { athleteId: USERS.jordan.id, addedById: USERS.elena.id, addedAt: at(9) },
-      // Riley turned recruiting off after being saved, so the entry is hidden until it's back on.
-      { athleteId: USERS.riley.id, addedById: USERS.elena.id, addedAt: at(6) },
+      { id: id(951), athleteId: USERS.jordan.id, addedById: USERS.elena.id, addedAt: at(9) },
+      // Riley turned recruiting off after being saved: "no longer available" until it's back on.
+      { id: id(952), athleteId: USERS.riley.id, addedById: USERS.elena.id, addedAt: at(6) },
     ],
     createdAt: at(5),
     updatedAt: at(9),
@@ -648,8 +651,7 @@ export const LISTS: MockList[] = [
     color: '#1E3F7B',
     note: null,
     ownerId: USERS.tom.id,
-    sharedWithIds: [],
-    entries: [{ athleteId: USERS.sam.id, addedById: USERS.tom.id, addedAt: at(10) }],
+    entries: [{ id: id(953), athleteId: USERS.sam.id, addedById: USERS.tom.id, addedAt: at(10) }],
     createdAt: at(10),
     updatedAt: at(10),
   },

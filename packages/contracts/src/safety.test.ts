@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CreateReportRequest, MyReport, SetListNoteRequest, ShareListRequest } from './index';
+import { CreateReportRequest, ListEntryParams, MyReport, SetListNoteRequest } from './index';
 
 const ID = '00000000-0000-4000-8000-000000000103';
 
@@ -34,8 +34,8 @@ describe('safety', () => {
     expect(shape).not.toContain('reporter');
   });
 
-  it('needs a real note and a user id to share with', () => {
+  it('needs a real note, and a real id for a list entry', () => {
     expect(SetListNoteRequest.safeParse({ text: '   ' }).success).toBe(false);
-    expect(ShareListRequest.safeParse({ userId: 'tom' }).success).toBe(false);
+    expect(ListEntryParams.safeParse({ id: ID, entryId: 'riley' }).success).toBe(false);
   });
 });

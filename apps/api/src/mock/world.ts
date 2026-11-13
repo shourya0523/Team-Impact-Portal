@@ -15,6 +15,7 @@ import {
   type Post,
   type RecruiterList,
   type RecruiterListDetail,
+  type RecruiterNote,
   type SharedContact,
   type StaffCommunity,
   type TeamSummary,
@@ -544,20 +545,33 @@ export class MockWorld {
 
   // Lists ----------------------------------------------------------------------------------------
 
-  listsFor = (u: MockUser) =>
-    this.lists.filter(
-      (l) => l.companyId === u.companyId && (l.ownerId === u.id || l.sharedWithIds.includes(u.id)),
-    );
+  /** Every list at the recruiter's company: lists and notes are shared company-wide. */
+  listsFor = (u: MockUser) => this.lists.filter((l) => l.companyId === u.companyId);
 
   /**
-   * A list's athletes that `u` may see: still on the employer portal, and not across a block with
-   * `u`. Per viewer, since colleagues share a list but each has their own blocks.
+   * On the employer portal now, and not across a block with `u`; anyone else on a list reads "no
+   * longer available" to them. Per viewer, since colleagues share a list but each has their own
+   * blocks.
    */
-  private visibleEntries = (l: MockList, u: MockUser) =>
-    l.entries.filter((e) => {
-      const card = this.cards.find((c) => c.face.athleteId === e.athleteId);
-      return !!card && this.canReadCard(card, u);
-    });
+  private available = (athleteId: string, u: MockUser) => {
+    const card = this.cards.find((c) => c.face.athleteId === athleteId);
+    return !!card && this.canReadCard(card, u);
+  };
+
+  private summaryOrNull = (userId: string | null) => {
+    const user = userId ? this.user(userId) : undefined;
+    return user ? fx.summaryOf(user) : null;
+  };
+
+  /** The company's latest note on an athlete, whoever wrote it, even if they've since left. */
+  private latestNote = (athleteId: string, companyId: string): RecruiterNote | null => {
+    const note = this.notes
+      .filter((n) => n.athleteId === athleteId && n.companyId === companyId)
+      .at(-1);
+    return note
+      ? { id: note.id, athleteId, author: note.author, text: note.text, createdAt: note.createdAt }
+      : null;
+  };
 
   list = (l: MockList, u: MockUser): RecruiterList => ({
     id: l.id,
@@ -565,25 +579,24 @@ export class MockWorld {
     name: l.name,
     color: l.color,
     note: l.note,
-    owner: fx.summaryOf(this.user(l.ownerId)!),
-    sharedWith: l.sharedWithIds.map((uid) => fx.summaryOf(this.user(uid)!)),
-    athleteCount: this.visibleEntries(l, u).length,
+    owner: this.summaryOrNull(l.ownerId),
+    athleteCount: l.entries.filter((e) => this.available(e.athleteId, u)).length,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   });
 
   listDetail = (l: MockList, u: MockUser): RecruiterListDetail => ({
     ...this.list(l, u),
-    entries: this.visibleEntries(l, u).map((e) => ({
-      card: this.cardFor(e.athleteId, u)!,
-      addedBy: fx.summaryOf(this.user(e.addedById)!),
-      addedAt: e.addedAt,
-      latestNote:
-        this.notes
-          .filter((n) => n.athleteId === e.athleteId)
-          .filter((n) => this.user(n.author.id)?.companyId === u.companyId)
-          .at(-1) ?? null,
-    })),
+    entries: l.entries.map((e) => {
+      const base = { id: e.id, addedBy: this.summaryOrNull(e.addedById), addedAt: e.addedAt };
+      if (!this.available(e.athleteId, u)) return { ...base, available: false as const };
+      return {
+        ...base,
+        available: true as const,
+        card: this.cardFor(e.athleteId, u)!,
+        latestNote: this.latestNote(e.athleteId, l.companyId),
+      };
+    }),
   });
 }
 

@@ -17,7 +17,7 @@ const MATEO = CHILDREN[0]!; // Lisa's son, on the team
 let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
 
-type Method = 'GET' | 'POST' | 'DELETE';
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
 
 /** One mock API; `as(role)` signs a fixture user in, so several people act on the same world. */
 const world = async () => {
@@ -41,6 +41,7 @@ const world = async () => {
     return {
       get,
       post: (url: string, payload: object = {}) => call('POST', url, payload),
+      put: (url: string, payload: object) => call('PUT', url, payload),
       block: async (userId: string) =>
         expect((await call('POST', `/blocks/${userId}`)).status).toBe(201),
       unblock: async (userId: string) =>
@@ -158,17 +159,28 @@ describe('blocking: recruiters', () => {
     expect(await elena.status(`/cards/${USERS.jordan.id}`)).toBe(404);
     expect(await elena.status(`/profiles/${USERS.jordan.id}`)).toBe(404);
 
+    // Across a block, Jordan's entry reads "no longer available" to Elena, naming no one.
     const list = await elena.get(`/lists/${FALL_INTERNS}`);
     expect(list.status).toBe(200);
-    expect(
-      list.body.entries.map((e: { card: { athleteId: string } }) => e.card.athleteId),
-    ).not.toContain(USERS.jordan.id);
+    expect(list.body.entries.find((e: { id: string }) => e.id === id(951))).toEqual({
+      id: id(951),
+      available: false,
+      addedBy: expect.objectContaining({ id: USERS.elena.id }),
+      addedAt: expect.any(String),
+    });
+    expect(list.text).not.toContain(USERS.jordan.id);
     const after = (await elena.get('/lists')).body.find(
       (l: { id: string }) => l.id === FALL_INTERNS,
     );
     expect(after.athleteCount).toBe(before.athleteCount - 1);
     const save = await elena.post(`/lists/${FALL_INTERNS}/athletes/${USERS.jordan.id}`);
     expect(save.status).toBe(404);
+    // A note on him is answered as one on an athlete who was never saved (Sam isn't on this list).
+    const note = (athleteId: string) =>
+      elena.put(`/lists/${FALL_INTERNS}/athletes/${athleteId}/note`, { text: 'Hi' });
+    const blocked = await note(USERS.jordan.id);
+    expect(blocked.status).toBe(404);
+    expect(blocked.text).toBe((await note(USERS.sam.id)).text);
   });
 });
 
