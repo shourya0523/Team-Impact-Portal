@@ -25,6 +25,11 @@ const EnvSchema = z
       // The portal (Vite) and the athlete app on web (Expo).
       .default('http://localhost:5173,http://localhost:8081')
       .transform((value) => value.split(',').map((origin) => origin.trim())),
+    /**
+     * Mock only: serve `GET /dev/outbox` and print sent email, invite links included, so they can
+     * be opened locally. Off unless asked for (`pnpm dev:mock` sets it), and refused in production.
+     */
+    DEV_OUTBOX: z.stringbool().default(false),
     // Auth (TI-101). Where the API is reached: emailed links point here first.
     API_URL: z.url().optional(),
     // Where those links land afterwards: recruiters and staff on the portal, everyone else the app.
@@ -46,6 +51,9 @@ const EnvSchema = z
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });
+    }
+    if (env.DEV_OUTBOX && env.NODE_ENV === 'production') {
+      ctx.addIssue({ code: 'custom', path: ['DEV_OUTBOX'], message: 'Never in production' });
     }
     // Verification and reset emails must really go out; the log mailer is for development.
     if (env.NODE_ENV === 'production' && !env.MOCK_API && !env.SMTP_URL) {

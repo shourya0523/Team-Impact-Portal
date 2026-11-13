@@ -17,6 +17,7 @@ const app = await buildApp({
   logger: true,
   trustProxy: env.TRUST_PROXY,
   mock: env.MOCK_API,
+  devOutbox: env.DEV_OUTBOX,
   identity: database
     ? {
         db: database.db,
@@ -35,6 +36,8 @@ const app = await buildApp({
 });
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');
+if (env.MOCK_API && env.DEV_OUTBOX)
+  app.log.warn('DEV_OUTBOX is on: /dev/outbox serves invite links');
 if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
 // Accounts deleted 30 days ago are erased daily. Uploaded files join in once storage exists (#8).
 if (db) scheduleAccountErasure(db, { log: app.log });

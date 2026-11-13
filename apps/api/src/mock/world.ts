@@ -48,6 +48,7 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+import type { MockEmail } from './outbox';
 
 /** One row of consent history (see `MockWorld.consentRecords`). */
 export interface MockConsentRecord {
@@ -98,6 +99,8 @@ export class MockWorld {
   /** Team QR codes and coach invites (`./team.ts`). */
   readonly qrCodes: MockQrCode[] = initialQrCodes();
   readonly coachInvites: MockCoachInvite[] = initialCoachInvites();
+  /** Email the mock "sent" (`./outbox.ts`); real email sending replaces it. */
+  readonly outbox: MockEmail[] = [];
   // Staff-managed records (safety area), copied so staff tools can write to them.
   readonly colleges = structuredClone(fx.COLLEGES);
   readonly companies = structuredClone(fx.COMPANIES);
@@ -116,7 +119,14 @@ export class MockWorld {
   readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
-  constructor(readonly flags: FeatureFlags) {
+  /** Whether `/dev/outbox` is served and sent email printed (DEV_OUTBOX, `./outbox.ts`). */
+  readonly devOutbox: boolean;
+
+  constructor(
+    readonly flags: FeatureFlags,
+    { devOutbox = false }: { devOutbox?: boolean } = {},
+  ) {
+    this.devOutbox = devOutbox;
     this.consentRecords.push(...fx.fixtureConsent().map((r) => ({ ...r, value: true })));
   }
 

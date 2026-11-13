@@ -13,6 +13,22 @@ describe('env', () => {
     expect(() => loadEnv({ MOCK_API: '1', NODE_ENV: 'production' })).toThrow(/SESSION_SECRET/);
   });
 
+  it('serves the dev outbox only when asked for, and never in production', () => {
+    expect(loadEnv({ MOCK_API: '1' }).DEV_OUTBOX).toBe(false);
+    expect(
+      loadEnv({ MOCK_API: '1', NODE_ENV: 'production', SESSION_SECRET: 'x'.repeat(32) }),
+    ).toMatchObject({ DEV_OUTBOX: false });
+    expect(loadEnv({ MOCK_API: '1', DEV_OUTBOX: '1' }).DEV_OUTBOX).toBe(true);
+    expect(() =>
+      loadEnv({
+        MOCK_API: '1',
+        DEV_OUTBOX: '1',
+        NODE_ENV: 'production',
+        SESSION_SECRET: 'x'.repeat(32),
+      }),
+    ).toThrow(/DEV_OUTBOX/);
+  });
+
   it('requires SMTP and every emailed-link URL on the real API in production', () => {
     const prod = {
       NODE_ENV: 'production',

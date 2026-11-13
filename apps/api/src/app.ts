@@ -47,6 +47,11 @@ export interface AppOptions {
    * win over `flags` in the mock routes, so pass the same ones or `/config/flags` disagrees.
    */
   world?: MockWorld;
+  /**
+   * With `mock`: serve `/dev/outbox` and print sent email (DEV_OUTBOX=1). Off by default, since
+   * the outbox hands out invite links without sign-in.
+   */
+  devOutbox?: boolean;
 }
 
 declare module 'fastify' {
@@ -68,6 +73,7 @@ export const buildApp = async ({
   trustProxy = 0,
   flags = DEFAULT_FLAGS,
   mock = false,
+  devOutbox = false,
   identity,
   world,
 }: AppOptions) => {
@@ -139,7 +145,7 @@ export const buildApp = async ({
       : async () => null);
 
   if (mock) {
-    registerMockRoutes(app, world ?? new MockWorld(flags));
+    registerMockRoutes(app, world ?? new MockWorld(flags, { devOutbox }));
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

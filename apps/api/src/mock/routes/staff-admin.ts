@@ -22,7 +22,6 @@ import {
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { announce } from '../activity';
-import { summaryOf } from '../fixtures';
 import { toPost } from '../safety';
 import { isSuspended } from '../staff-tools';
 import {
@@ -30,6 +29,7 @@ import {
   changedTeamFields,
   coachInviteView,
   createCoachInvite,
+  memberView,
   resendCoachInvite,
   renameTeamCommunity,
   restoreTeam,
@@ -274,12 +274,10 @@ export const registerStaffAdminRoutes = (
       staffOnly(request);
       const team = findTeam(request.params.id);
       return {
-        coaches: coachesOf(team.id).map((m) => ({
-          user: summaryOf(world.user(m.userId)!),
-          joinedVia: m.joinedVia,
-          joinedAt: m.joinedAt,
-          suspended: isSuspended(world, m.userId),
-        })),
+        coaches: coachesOf(team.id).flatMap((m) => {
+          const v = memberView(world, m);
+          return v ? [{ ...v, suspended: isSuspended(world, m.userId) }] : [];
+        }),
         invites: world.coachInvites
           .filter((i) => i.teamId === team.id)
           .sort((a, b) => b.createdAt.localeCompare(a.createdAt))

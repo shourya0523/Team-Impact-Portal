@@ -209,6 +209,8 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.qrCodes, (q) => gone(q.createdById));
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
+  // Coaches they added stay on the team; who added them is no longer recorded (data model: set null).
+  for (const m of world.teamMembers) if (m.addedById && gone(m.addedById)) m.addedById = null;
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
   removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
