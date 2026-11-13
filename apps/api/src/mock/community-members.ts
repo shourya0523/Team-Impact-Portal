@@ -1,9 +1,13 @@
 import {
   type CalendarEvent,
+  can,
   type CommunityMember,
   MEMBERS_PRIVATE_MEDICAL,
+  type MembersDenial,
+  membersDenial,
 } from '@team-impact/contracts';
 import { summaryOf, type MockCommunity, type MockUser } from './fixtures';
+import { actorOf, communityFacts } from './policy';
 import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
@@ -22,6 +26,14 @@ export const communityEvents = (
 
 const ROLE_ORDER: Partial<Record<MockUser['role'], number>> = { coach: 0, athlete: 1 };
 
+const DENIALS: Record<MembersDenial, string> = {
+  recruiter: 'Recruiters don’t see member lists',
+  medical: MEMBERS_PRIVATE_MEDICAL,
+  team_impact: 'Everyone is in the Team Impact community',
+  private: 'A private community’s members are for members only',
+  not_member: 'Join to see who’s here',
+};
+
 export type MembersResult = { members: CommunityMember[] } | { status: 403; error: string };
 
 /**
@@ -36,31 +48,26 @@ export const communityMembers = (
   c: MockCommunity,
   u: MockUser,
 ): MembersResult => {
-  if (u.role === 'recruiter') return { status: 403, error: 'Recruiters don’t see member lists' };
-  if (c.kind === 'medical') return { status: 403, error: MEMBERS_PRIVATE_MEDICAL };
-  if (c.kind === 'team_impact') {
-    return { status: 403, error: 'Everyone is in the Team Impact community' };
-  }
-  if (!world.readsCommunity(c, u)) {
-    const isPrivate = c.kind === 'interest' && c.private;
-    return {
-      status: 403,
-      error: isPrivate
-        ? 'A private community’s members are for members only'
-        : 'Join to see who’s here',
-    };
-  }
+  const denial = membersDenial(actorOf(world, u), communityFacts(world, c, u));
+  if (denial) return { status: 403, error: DENIALS[denial] };
   const rows =
     c.kind === 'team'
       ? world.teamMembers
           .filter((m) => m.teamId === c.teamId)
           .map((m) => ({ userId: m.userId, joinedAt: m.joinedAt }))
       : c.members.map((m) => ({ userId: m.userId, joinedAt: m.joinedAt }));
+  const actor = actorOf(world, u);
   const members = rows
     .map((r) => ({ who: world.user(r.userId), joinedAt: r.joinedAt }))
     .filter((r): r is { who: MockUser; joinedAt: string } => !!r.who)
-    .filter(({ who }) => who.role !== 'teen' || c.kind === 'team')
-    .filter(({ who }) => who.id === u.id || !blockedBetween(world, u.id, who.id))
+    .filter(({ who }) =>
+      can(actor, 'community.listMember', {
+        kind: c.kind,
+        memberId: who.id,
+        memberRole: who.role,
+        blocked: blockedBetween(world, u.id, who.id),
+      }),
+    )
     .sort(
       (a, b) =>
         (ROLE_ORDER[a.who.role] ?? 2) - (ROLE_ORDER[b.who.role] ?? 2) ||

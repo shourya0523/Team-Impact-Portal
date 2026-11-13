@@ -1,9 +1,12 @@
 import {
   type CalendarEvent,
-  canJoinCommunity,
+  can,
+  contactAudience,
+  recruiterVisible,
   type CardFace,
   type CardWithContact,
   type Community,
+  consentFlags,
   type ContactSharing,
   type FeatureFlags,
   type IdentitySearchLogEntry,
@@ -12,17 +15,30 @@ import {
   type Post,
   type RecruiterList,
   type RecruiterListDetail,
+  type RecruiterNote,
   type SharedContact,
   type StaffCommunity,
   type TeamSummary,
+  type TrackedEvent,
 } from '@team-impact/contracts';
+import { eventRow } from '../events-log';
 import { COMMENTS, DEFAULT_PREFS } from './activity';
-import type { MockComment, MockNotification, MockRsvp } from './activity';
+import type { MockComment, MockDevice, MockNotification, MockPush, MockRsvp } from './activity';
 import * as fx from './fixtures';
-import type { MockCard, MockCommunity, MockEvent, MockList, MockUser } from './fixtures';
+import {
+  byRecency,
+  heuristic,
+  type HeuristicParams,
+  PILOT_RANKING,
+  pageOf,
+  rank,
+  type Scorer,
+} from './feed';
+import type { MockCard, MockCommunity, MockEvent, MockList, MockPost, MockUser } from './fixtures';
+import { actorOf, cardFacts, communityFacts } from './policy';
 import { createProfileState } from './profiles';
 import { newSignupState } from './signup';
-import { isSuspended, newStaffToolsState } from './staff-tools';
+import { newStaffToolsState } from './staff-tools';
 import {
   initialCoachInvites,
   initialQrCodes,
@@ -31,6 +47,17 @@ import {
   type MockQrCode,
 } from './team';
 import { hiddenFor, type MockBlock, type MockReport } from './safety';
+
+/** One row of consent history (see `MockWorld.consentRecords`). */
+export interface MockConsentRecord {
+  userId: string;
+  flag: string;
+  value: boolean;
+  recordedAt: string;
+}
+
+/** A feed page request: the route's query, plus the time for tests that need a fixed one. */
+type PageRequest = { cursor?: string; limit: number; now?: string };
 
 /**
  * The mock API's state and visibility rules. Each test or server gets its own copy, so writes
@@ -60,6 +87,9 @@ export class MockWorld {
   readonly rsvps: MockRsvp[] = [];
   readonly notifications: MockNotification[] = [];
   readonly notificationPrefs = new Map<string, NotificationPrefs>();
+  /** Phones registered for push, and the pushes sent to them (nothing leaves the mock). */
+  readonly devices: MockDevice[] = [];
+  readonly pushOutbox: MockPush[] = [];
   /** Children, card drafts, pending resumes and card history (profiles area). */
   readonly profiles = createProfileState(this.cards);
   /** Coaches edit their team and a first coach makes it live, so each world has its own copy. */
@@ -74,13 +104,38 @@ export class MockWorld {
   // Trust and safety (./safety.ts): reports hide items for their reporter; blocks cut both ways.
   readonly reports: MockReport[] = [];
   readonly blocks: MockBlock[] = [];
+  /**
+   * Append-only consent history, like `consent_records`: every privacy choice gets a timestamped
+   * row and none is ever edited. Write through `recordConsent`.
+   */
+  readonly consentRecords: MockConsentRecord[] = [];
   /** Suspended accounts and the moderation action log (`./staff-tools.ts`). */
   readonly staffTools = newStaffToolsState();
+  /** What the real routes write to events_log, checked the same way (`track()`, src/events-log.ts). */
+  readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
-  constructor(readonly flags: FeatureFlags) {}
+  constructor(readonly flags: FeatureFlags) {
+    this.consentRecords.push(...fx.fixtureConsent().map((r) => ({ ...r, value: true })));
+  }
 
   newId = () => fx.id(this.nextId++);
+
+  /**
+   * Records a privacy choice going from `previous` to `next`. Nothing changes, nothing is recorded,
+   * so callers never add duplicate history.
+   */
+  recordConsent = (userId: string, flag: string, previous: boolean, next: boolean) => {
+    if (previous === next) return;
+    this.consentRecords.push({ userId, flag, value: next, recordedAt: new Date().toISOString() });
+  };
+
+  /** The mock's `track()`: throws on an event the contract refuses, like the real one. */
+  track = (userId: string | null, events: TrackedEvent | readonly TrackedEvent[]) => {
+    const list: readonly TrackedEvent[] = 'name' in events ? [events] : events;
+    const occurredAt = new Date().toISOString();
+    this.eventsLog.push(...list.map((event) => ({ ...eventRow(userId, event), occurredAt })));
+  };
 
   user = (userId: string) => this.users.find((u) => u.id === userId);
 
@@ -124,32 +179,12 @@ export class MockWorld {
   };
 
   /** Whether `u` may see the community exists: listed, openable, its name shown. */
-  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (c.kind === 'medical' && !this.flags.medicalCommunities) return false;
-    if (c.moderation === 'removed') return false;
-    const creator = 'createdById' in c && c.createdById === u.id;
-    if (c.moderation !== 'approved' && u.role !== 'staff' && !creator) return false;
-    if (u.role === 'staff') return true;
-    switch (c.kind) {
-      case 'team':
-        return this.membership(c, u) !== null;
-      case 'team_impact':
-        return true;
-      case 'medical':
-        // Teens and recruiters never see medical communities, not even their names.
-        return canJoinCommunity(u.role, 'medical');
-      case 'interest':
-        return u.role === 'recruiter' ? c.official : true;
-    }
-  };
+  canSeeCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.see', communityFacts(this, c, u));
 
   /** Whose posts and events reach `u`'s feed: their communities, plus what recruiters may read. */
-  readsCommunity = (c: MockCommunity, u: MockUser): boolean => {
-    if (!this.canSeeCommunity(c, u)) return false;
-    if (this.membership(c, u)) return true;
-    if (u.role !== 'recruiter') return false;
-    return c.kind === 'team_impact' || (c.kind === 'interest' && c.official);
-  };
+  readsCommunity = (c: MockCommunity, u: MockUser): boolean =>
+    can(actorOf(this, u), 'community.read', communityFacts(this, c, u));
 
   community = (c: MockCommunity, u: MockUser): Community => {
     const base = {
@@ -199,9 +234,6 @@ export class MockWorld {
       c.kind === 'interest' ? c.members.filter((m) => m.recruiterSearchOptIn).length : null,
   });
 
-  /** Ranking for the pilot: team first, then other communities, then Team Impact; newest first. */
-  private static WEIGHT = { team: 0, interest: 1, medical: 1, team_impact: 2 } as const;
-
   /**
    * Communities whose posts and events reach `u`'s home feed and events list: every one they read,
    * medical and private ones included (PRD v2.3). Private ones only ever reach members.
@@ -209,45 +241,158 @@ export class MockWorld {
   private homeCommunities = (u: MockUser) =>
     new Map(this.communities.filter((c) => this.readsCommunity(c, u)).map((c) => [c.id, c]));
 
-  feed = (u: MockUser): Post[] => this.postsIn(this.homeCommunities(u), u);
+  feed = (u: MockUser, asOf?: string): Post[] => this.postsIn(this.homeCommunities(u), u, asOf);
 
   /** One community's own feed, for its members (and recruiters, in official ones). */
-  communityFeed = (c: MockCommunity, u: MockUser): Post[] =>
-    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u) : [];
+  communityFeed = (c: MockCommunity, u: MockUser, asOf?: string): Post[] =>
+    this.readsCommunity(c, u) ? this.postsIn(new Map([[c.id, c]]), u, asOf) : [];
 
-  /** Approved posts, plus the viewer's own while they wait for review ("Waiting for review"). */
-  postsIn = (readable: Map<string, MockCommunity>, u: MockUser): Post[] =>
-    this.posts
-      .filter((p) => readable.has(p.communityId))
-      .filter(
-        (p) => p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id),
-      )
-      .filter((p) => !hiddenFor(this, u, p))
-      .sort(
-        (a, b) =>
-          MockWorld.WEIGHT[readable.get(a.communityId)!.kind] -
-            MockWorld.WEIGHT[readable.get(b.communityId)!.kind] ||
-          b.createdAt.localeCompare(a.createdAt),
-      )
-      .map((p) => {
-        const c = readable.get(p.communityId)!;
-        const { authorId, communityId, opportunity, ...rest } = p;
-        void authorId;
-        void communityId;
-        const shared = {
-          ...rest,
-          author: fx.summaryOf(this.user(p.authorId)!),
-          community: { id: c.id, name: c.name, kind: c.kind },
-          imageUrl: p.imageUrl ?? null,
-          commentCount: this.comments.filter(
-            (k) => k.postId === p.id && k.moderation === 'approved',
-          ).length,
-          likedByMe: this.rallies.some((r) => r.postId === p.id && r.userId === u.id),
-        };
-        return p.kind === 'opportunity'
-          ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
-          : { ...shared, kind: p.kind };
-      });
+  /**
+   * A teen's name only ever shows in the community of a team they're on (CLAUDE.md hard rules):
+   * not another team's, and not their old team's once a coach removes them. Posting and
+   * commenting already enforce this; reads check again so nothing that slipped in can leak.
+   */
+  teenOutsideTeam = (authorId: string, c: MockCommunity) =>
+    this.user(authorId)?.role === 'teen' &&
+    (c.kind !== 'team' || !this.teamIdsOf(authorId).includes(c.teamId));
+
+  /**
+   * Whether `u` sees post `p` in `c`, a community they read: approved, or their own while it waits
+   * for review ("Waiting for review"); never a teen's outside their team; never one a block or
+   * their own report hides.
+   */
+  private canSeePost = (p: MockPost, c: MockCommunity, u: MockUser) =>
+    (p.moderation === 'approved' || (p.moderation === 'in_review' && p.authorId === u.id)) &&
+    !this.teenOutsideTeam(p.authorId, c) &&
+    !hiddenFor(this, u, p);
+
+  /**
+   * Approved comment counts and `u`'s rallies for a set of posts, one pass over each list rather
+   * than one per post. `posts` must already be ones `u` can see (`canSeePost`); this only counts.
+   *
+   * Kept simple on purpose: the mock stores comments and rallies as flat arrays with no index by
+   * post, so this reads every comment and rally in the world, not just those on `posts`. Fine at
+   * fixture size; an index would have to be kept in step with every write. The real API should
+   * only touch these posts' rows: one grouped count per post (`comments_post_created_idx`) and
+   * the viewer's rallies on them.
+   */
+  private engagement = (
+    posts: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ) => {
+    const inPost = new Map(posts.map((p) => [p.id, communityOf(p)]));
+    const commentCounts = new Map<string, number>();
+    for (const k of this.comments) {
+      const c = inPost.get(k.postId);
+      if (!c || k.moderation !== 'approved' || this.teenOutsideTeam(k.authorId, c)) continue;
+      commentCounts.set(k.postId, (commentCounts.get(k.postId) ?? 0) + 1);
+    }
+    const rallied = new Set(
+      this.rallies.filter((r) => r.userId === u.id && inPost.has(r.postId)).map((r) => r.postId),
+    );
+    return { commentCounts, rallied };
+  };
+
+  /** A stored post in the shape the API returns. */
+  private toPost = (
+    p: MockPost,
+    c: MockCommunity,
+    { commentCounts, rallied }: ReturnType<MockWorld['engagement']>,
+  ): Post => {
+    const { authorId, communityId, opportunity, ...rest } = p;
+    void authorId;
+    void communityId;
+    const shared = {
+      ...rest,
+      author: fx.summaryOf(this.user(p.authorId)!),
+      community: { id: c.id, name: c.name, kind: c.kind },
+      imageUrl: p.imageUrl ?? null,
+      commentCount: commentCounts.get(p.id) ?? 0,
+      likedByMe: rallied.has(p.id),
+    };
+    return p.kind === 'opportunity'
+      ? { ...shared, kind: 'opportunity', opportunity: opportunity! }
+      : { ...shared, kind: p.kind };
+  };
+
+  /**
+   * How feeds rank posts: the pilot heuristic (`PILOT_RANKING` in `./feed.ts`) unless changed. The
+   * tuning script swaps in other settings to compare them; null is plain newest first.
+   */
+  ranking: HeuristicParams | null = structuredClone(PILOT_RANKING);
+
+  /** The stored posts `u` sees in `readable` (communities they read), and how to score them. */
+  private visibleIn = (readable: Map<string, MockCommunity>, u: MockUser) => {
+    const communityOf = (p: MockPost) => readable.get(p.communityId)!;
+    const visible = this.posts.filter(
+      (p) => readable.has(p.communityId) && this.canSeePost(p, communityOf(p), u),
+    );
+    return { visible, communityOf, scorer: this.scorerFor(visible, communityOf, u) };
+  };
+
+  /**
+   * The heuristic scores engagement, so it counts comments for every visible post, not just the
+   * page (the page's own counts for the response come from `shape`). Newest first needs none.
+   */
+  private scorerFor = (
+    visible: MockPost[],
+    communityOf: (p: MockPost) => MockCommunity,
+    u: MockUser,
+  ): Scorer => {
+    if (!this.ranking) return byRecency;
+    const { commentCounts } = this.engagement(visible, communityOf, u);
+    return heuristic(this.ranking, (postId) => commentCounts.get(postId) ?? 0);
+  };
+
+  /** Stored posts in the shape the API returns, counting comments and rallies for these only. */
+  private shape = (posts: MockPost[], communityOf: (p: MockPost) => MockCommunity, u: MockUser) => {
+    const counts = this.engagement(posts, communityOf, u);
+    return posts.map((p) => this.toPost(p, communityOf(p), counts));
+  };
+
+  /** Every post `u` sees in `readable`, in feed order as of `asOf`. Routes page via `feedPage`. */
+  postsIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    asOf = new Date().toISOString(),
+  ): Post[] => {
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    return this.shape(rank(visible, communityOf, scorer, asOf), communityOf, u);
+  };
+
+  /**
+   * One page of the posts `u` sees in `readable`. Only the page's posts are counted and shaped.
+   * Null for a cursor that isn't valid for this feed (the route answers 400).
+   */
+  private pageIn = (
+    readable: Map<string, MockCommunity>,
+    u: MockUser,
+    feed: string,
+    { cursor, limit, now = new Date().toISOString() }: PageRequest,
+  ): { items: Post[]; nextCursor: string | null } | null => {
+    const { visible, communityOf, scorer } = this.visibleIn(readable, u);
+    const page = pageOf(visible, communityOf, { feed, cursor, limit, now }, scorer);
+    return page && { items: this.shape(page.posts, communityOf, u), nextCursor: page.nextCursor };
+  };
+
+  /** One page of `u`'s home feed. */
+  feedPage = (u: MockUser, request: PageRequest) =>
+    this.pageIn(this.homeCommunities(u), u, 'home', request);
+
+  /** One page of a community's own feed: empty for anyone who doesn't read it. */
+  communityFeedPage = (c: MockCommunity, u: MockUser, request: PageRequest) =>
+    this.pageIn(this.readsCommunity(c, u) ? new Map([[c.id, c]]) : new Map(), u, c.id, request);
+
+  /** One post as `u` reads it in `c`, or undefined if they can't. Callers check `u` reads `c`. */
+  postView = (p: MockPost, c: MockCommunity, u: MockUser): Post | undefined =>
+    p.communityId === c.id && this.canSeePost(p, c, u)
+      ? this.toPost(
+          p,
+          c,
+          this.engagement([p], () => c, u),
+        )
+      : undefined;
 
   /**
    * Join an interest or medical community. Team communities follow the team and everyone is
@@ -256,7 +401,7 @@ export class MockWorld {
   join = (c: MockCommunity, u: MockUser): string | null => {
     if (c.kind !== 'interest' && c.kind !== 'medical')
       return 'This community can’t be joined directly';
-    if (!canJoinCommunity(u.role, c.kind) || c.moderation !== 'approved') {
+    if (!can(actorOf(this, u), 'community.join', { kind: c.kind }) || c.moderation !== 'approved') {
       return 'You can’t join this community';
     }
     if (c.members.some((m) => m.userId === u.id)) return null;
@@ -304,16 +449,30 @@ export class MockWorld {
   };
 
   /**
-   * "Recruiters can find me through this community": official interest communities only, for
-   * athletes with a published card. Returns an error message, or null on success.
+   * Why `u` can't set "recruiters can find me through this community", or null if they can:
+   * official interest communities only, for athletes with a published card. Changes nothing, so a
+   * batch can be checked in full before any of it is applied.
    */
-  setFindable = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
-    const member = c.members.find((m) => m.userId === u.id);
+  findableProblem = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
     if (c.kind !== 'interest' || !c.official)
       return 'Only official communities can make you findable';
-    if (!member) return 'Join the community first';
+    if (!c.members.some((m) => m.userId === u.id)) return 'Join the community first';
     const card = this.cards.find((k) => k.face.athleteId === u.id);
     if (findable && !card?.visibility.published) return 'Publish your Baseball Card first';
+    return null;
+  };
+
+  /** Sets the opt-in and records the change. Returns `findableProblem`'s error, or null. */
+  setFindable = (c: MockCommunity, u: MockUser, findable: boolean): string | null => {
+    const problem = this.findableProblem(c, u, findable);
+    if (problem) return problem;
+    const member = c.members.find((m) => m.userId === u.id)!;
+    this.recordConsent(
+      u.id,
+      consentFlags.findableIn(c.id),
+      member.recruiterSearchOptIn ?? false,
+      findable,
+    );
     member.recruiterSearchOptIn = findable;
     return null;
   };
@@ -350,15 +509,11 @@ export class MockWorld {
   };
 
   /** On the employer portal at all: a published card, open to recruiting, of an athlete. */
-  recruiterCanSee = (card: MockCard) => {
-    const owner = this.user(card.face.athleteId);
-    return (
-      card.visibility.published &&
-      card.visibility.openToRecruiting &&
-      !isSuspended(this, card.face.athleteId) &&
-      (owner?.role === 'athlete' || owner?.role === 'alumni_athlete')
-    );
-  };
+  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card, null));
+
+  /** Whether `u` may read this card at all, blocks included (search, lists). */
+  canReadCard = (card: MockCard, u: MockUser) =>
+    can(actorOf(this, u), 'card.read', cardFacts(this, card, u));
 
   private static share = (
     contact: MockCard['contact'],
@@ -375,64 +530,73 @@ export class MockWorld {
     if (!card) return null;
     const face = this.cardFace(card);
     const none: ContactSharing = { email: false, phone: false, linkedin: false };
-    if (u.id === athleteId) {
-      return {
-        ...face,
-        contact: MockWorld.share(card.contact, { email: true, phone: true, linkedin: true }),
-      };
-    }
-    if (!card.visibility.published) return null;
-    if (u.role === 'recruiter') {
-      return this.recruiterCanSee(card)
-        ? { ...face, contact: MockWorld.share(card.contact, card.visibility.recruitersSee) }
-        : null;
-    }
-    if (u.role === 'staff') return { ...face, contact: {} };
-    const sameTeam = card.face.teamId !== null && this.teamIdsOf(u.id).includes(card.face.teamId);
-    if (!sameTeam) return null;
-    // Teens never see athletes' contact details; approved parents see the family set.
-    const sharing = u.role === 'parent' ? card.visibility.familiesSee : none;
+    const facts = cardFacts(this, card, u);
+    const actor = actorOf(this, u);
+    if (!can(actor, 'card.read', facts)) return null;
+    const all: ContactSharing = { email: true, phone: true, linkedin: true };
+    const sharing = {
+      owner: all,
+      recruiters: card.visibility.recruitersSee,
+      families: card.visibility.familiesSee,
+      none,
+    }[contactAudience(actor, facts)];
     return { ...face, contact: MockWorld.share(card.contact, sharing) };
   };
 
   // Lists ----------------------------------------------------------------------------------------
 
-  listsFor = (u: MockUser) =>
-    this.lists.filter(
-      (l) => l.companyId === u.companyId && (l.ownerId === u.id || l.sharedWithIds.includes(u.id)),
-    );
+  /** Every list at the recruiter's company: lists and notes are shared company-wide. */
+  listsFor = (u: MockUser) => this.lists.filter((l) => l.companyId === u.companyId);
 
-  private visibleEntries = (l: MockList) =>
-    l.entries.filter((e) => {
-      const card = this.cards.find((c) => c.face.athleteId === e.athleteId);
-      return card && this.recruiterCanSee(card);
-    });
+  /**
+   * On the employer portal now, and not across a block with `u`; anyone else on a list reads "no
+   * longer available" to them. Per viewer, since colleagues share a list but each has their own
+   * blocks.
+   */
+  private available = (athleteId: string, u: MockUser) => {
+    const card = this.cards.find((c) => c.face.athleteId === athleteId);
+    return !!card && this.canReadCard(card, u);
+  };
 
-  list = (l: MockList): RecruiterList => ({
+  private summaryOrNull = (userId: string | null) => {
+    const user = userId ? this.user(userId) : undefined;
+    return user ? fx.summaryOf(user) : null;
+  };
+
+  /** The company's latest note on an athlete, whoever wrote it, even if they've since left. */
+  private latestNote = (athleteId: string, companyId: string): RecruiterNote | null => {
+    const note = this.notes
+      .filter((n) => n.athleteId === athleteId && n.companyId === companyId)
+      .at(-1);
+    return note
+      ? { id: note.id, athleteId, author: note.author, text: note.text, createdAt: note.createdAt }
+      : null;
+  };
+
+  list = (l: MockList, u: MockUser): RecruiterList => ({
     id: l.id,
     companyId: l.companyId,
     name: l.name,
     color: l.color,
     note: l.note,
-    owner: fx.summaryOf(this.user(l.ownerId)!),
-    sharedWith: l.sharedWithIds.map((uid) => fx.summaryOf(this.user(uid)!)),
-    athleteCount: this.visibleEntries(l).length,
+    owner: this.summaryOrNull(l.ownerId),
+    athleteCount: l.entries.filter((e) => this.available(e.athleteId, u)).length,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   });
 
   listDetail = (l: MockList, u: MockUser): RecruiterListDetail => ({
-    ...this.list(l),
-    entries: this.visibleEntries(l).map((e) => ({
-      card: this.cardFor(e.athleteId, u)!,
-      addedBy: fx.summaryOf(this.user(e.addedById)!),
-      addedAt: e.addedAt,
-      latestNote:
-        this.notes
-          .filter((n) => n.athleteId === e.athleteId)
-          .filter((n) => this.user(n.author.id)?.companyId === u.companyId)
-          .at(-1) ?? null,
-    })),
+    ...this.list(l, u),
+    entries: l.entries.map((e) => {
+      const base = { id: e.id, addedBy: this.summaryOrNull(e.addedById), addedAt: e.addedAt };
+      if (!this.available(e.athleteId, u)) return { ...base, available: false as const };
+      return {
+        ...base,
+        available: true as const,
+        card: this.cardFor(e.athleteId, u)!,
+        latestNote: this.latestNote(e.athleteId, l.companyId),
+      };
+    }),
   });
 }
 

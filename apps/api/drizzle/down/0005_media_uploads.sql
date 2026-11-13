@@ -1,4 +1,4 @@
--- Reverses 0002_media_uploads.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
+-- Reverses 0005_media_uploads.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
 -- Child photos go back to children.photo_storage_key; anything uploaded since is kept as a photo or resume.
 CREATE TYPE "public"."media_kind" AS ENUM('photo', 'resume');
 ALTER TABLE "media" ADD COLUMN "kind" "media_kind";

@@ -7,14 +7,20 @@ import {
   type QrCodeJoin,
   type QrCodeLifetime,
   type RosterChild,
+  type StaffUpdateTeamRequest,
   type Team,
+  type TeamAthleteContacts,
   type TeamMember,
   type TeamQrCode,
   type TeamRoster,
   type UpdateTeamRequest,
+  can,
 } from '@team-impact/contracts';
+import { isReadableTeamColor } from '@team-impact/ui-tokens';
 import { notify } from './activity';
 import { id, summaryOf, USERS, type MockUser } from './fixtures';
+import { actorOf } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 
 /**
@@ -191,16 +197,17 @@ export const initialCoachInvites = (now = Date.now()): MockCoachInvite[] => [
 
 // Who may do what ---------------------------------------------------------------------------------
 
+/** The team's own coaches: the only ones who get family contact details. */
 export const isCoachOf = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'coach' && world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.familyContacts', { teamId });
 
 /** Approve, remove, edit, make codes and invite coaches: the team's coaches, and staff. */
 export const canManageTeam = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || isCoachOf(world, u, teamId);
+  can(actorOf(world, u), 'team.manage', { teamId });
 
 /** The roster is for the team itself and staff; everyone else gets a 404. */
 export const canSeeRoster = (world: MockWorld, u: MockUser, teamId: string) =>
-  u.role === 'staff' || world.teamIdsOf(u.id).includes(teamId);
+  can(actorOf(world, u), 'team.roster', { teamId });
 
 // Teams -------------------------------------------------------------------------------------------
 
@@ -215,9 +222,93 @@ export const updateTeam = (world: MockWorld, teamId: string, edit: UpdateTeamReq
   const t = world.teams.find((x) => x.id === teamId);
   if (!t) return null;
   if (edit.name !== undefined) t.name = edit.name;
-  if (edit.color !== undefined) t.color = edit.color;
+  if (edit.color !== undefined) t.color = edit.color?.toUpperCase() ?? null;
   if (edit.about !== undefined) t.about = edit.about;
   return team(world, teamId);
+};
+
+type MockTeam = MockWorld['teams'][number];
+
+/** Which of an edit's fields would change the team: `team.updated` logs their names, not values. */
+export const changedTeamFields = (t: MockTeam, edit: StaffUpdateTeamRequest) =>
+  (Object.keys(edit) as (keyof StaffUpdateTeamRequest)[]).filter((k) => {
+    if (k === 'archived' || edit[k] === undefined) return false;
+    if (k === 'color') return edit.color?.toUpperCase() !== t.color?.toUpperCase();
+    return edit[k] !== (k === 'collegeId' ? t.college.id : t[k]);
+  });
+
+/** The team's private community is named after it, so it follows a rename or a college move. */
+export const renameTeamCommunity = (world: MockWorld, t: MockTeam) => {
+  const c = world.communities.find((x) => x.kind === 'team' && x.teamId === t.id);
+  if (c) c.name = `${t.college.name} ${t.name}`;
+};
+
+/** A colour neither white nor ink text reaches 4.5:1 on (PRD §3). No colour means navy, which passes. */
+export const unreadableTeamColor = (color: string | null | undefined) =>
+  !!color && !isReadableTeamColor(color);
+
+export const UNREADABLE_COLOR_MESSAGE =
+  'Names can’t be read on that colour in white or dark text. Pick a darker or lighter one.';
+
+/** What a join request declined by archiving says, so the requester knows it wasn't the coach. */
+export const ARCHIVED_DECLINE_NOTE =
+  'Team Impact archived this team, so it isn’t taking new members.';
+
+/**
+ * Archives a team (S7): it leaves the join search, its pending join requests are declined with a
+ * note, and every QR code still on is revoked, so restoring the team doesn't turn them back on.
+ * Members keep the team, its community and roster. Returns what it closed, for `team.archived`.
+ */
+export const archiveTeam = (world: MockWorld, t: MockTeam) => {
+  const now = new Date().toISOString();
+  t.status = 'archived';
+  const declined = pendingRequests(world, t.id);
+  for (const r of declined) {
+    r.status = 'declined';
+    r.decidedAt = now;
+    r.decisionNote = ARCHIVED_DECLINE_NOTE;
+  }
+  // Expired codes are revoked too, but only the ones still working count as closed.
+  const codes = world.qrCodes.filter((c) => c.teamId === t.id && !c.revokedAt);
+  const live = codes.filter((c) => Date.parse(c.expiresAt) > Date.parse(now));
+  for (const c of codes) c.revokedAt = now;
+  return { declinedRequestCount: declined.length, revokedCodeCount: live.length };
+};
+
+/** A team waiting on its first coach goes live once it has a coach who can act (not suspended). */
+export const goLiveIfCoached = (world: MockWorld, teamId: string) => {
+  const t = world.teams.find((x) => x.id === teamId);
+  if (t?.status === 'invited' && activeCoachIds(world, teamId).length) t.status = 'live';
+};
+
+/** Live again if it still has a coach, otherwise back to waiting on one. Its codes stay revoked. */
+export const restoreTeam = (world: MockWorld, t: MockTeam) => {
+  t.status = activeCoachIds(world, t.id).length ? 'live' : 'invited';
+};
+
+/**
+ * The team's coaches who can act for it: suspended coaches don't count. Reads the suspension list
+ * directly rather than through `isSuspended`, since staff-tools.ts imports this file.
+ */
+export const activeCoachIds = (world: MockWorld, teamId: string) =>
+  world.teamMembers
+    .filter(
+      (m) =>
+        m.teamId === teamId &&
+        world.user(m.userId)?.role === 'coach' &&
+        !world.staffTools.suspensions.some((s) => s.userId === m.userId),
+    )
+    .map((m) => m.userId);
+
+/**
+ * True when `userId` is the only coach who can act for a live team, so removing, suspending or
+ * deleting them would leave it with nobody to approve members (PRD §3: a live team always keeps
+ * at least one coach). Suspended coaches don't count. One rule for all three paths.
+ */
+export const isLastCoach = (world: MockWorld, teamId: string, userId: string) => {
+  if (!isTeamLive(world, teamId) || world.user(userId)?.role !== 'coach') return false;
+  if (!world.teamMembers.some((m) => m.teamId === teamId && m.userId === userId)) return false;
+  return activeCoachIds(world, teamId).every((id) => id === userId);
 };
 
 // Roster ------------------------------------------------------------------------------------------
@@ -226,6 +317,14 @@ const childrenOf = (world: MockWorld, parentId: string, teamId: string): RosterC
   world.children
     .filter((c) => c.parentId === parentId && c.teamId === teamId)
     .map(({ id: childId, firstName }) => ({ id: childId, firstName }));
+
+/** Whether `memberId` shows on `viewer`'s roster of `teamId`, blocks included. */
+const listsMember = (world: MockWorld, viewer: MockUser, teamId: string, memberId: string) =>
+  can(actorOf(world, viewer), 'team.listMember', {
+    teamId,
+    memberId,
+    blocked: blockedBetween(world, viewer.id, memberId),
+  });
 
 export const roster = (world: MockWorld, teamId: string, viewer: MockUser): TeamRoster | null => {
   const t = team(world, teamId);
@@ -238,7 +337,9 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
     .filter((m) => m.teamId === teamId)
     .flatMap((m) => {
       const u = world.user(m.userId);
-      if (!u) return [];
+      // A block hides the member (and a parent's children with them) from the viewer, unless the
+      // viewer runs the team (PRD §9; `team.listMember`).
+      if (!u || !listsMember(world, viewer, teamId, u.id)) return [];
       const member: TeamMember = {
         user: summaryOf(u),
         joinedVia: m.joinedVia,
@@ -272,6 +373,34 @@ export const roster = (world: MockWorld, teamId: string, viewer: MockUser): Team
 };
 
 /**
+ * The team's athletes with what each shares with families (PRD §6, F4), for an approved parent on
+ * the team; null for anyone else (the route answers 403). Both go through `team.athleteContacts`:
+ * an athlete across a block from the parent, whoever blocked whom, is left out. Contacts read
+ * through `cardFor`, the rule the athlete's profile already uses, so the two can't disagree: only
+ * the athlete's family channels, and nothing while their card is unpublished.
+ */
+export const athleteContacts = (
+  world: MockWorld,
+  teamId: string,
+  viewer: MockUser,
+): TeamAthleteContacts | null => {
+  const actor = actorOf(world, viewer);
+  if (!can(actor, 'team.athleteContacts', { teamId, blocked: false })) return null;
+  return world.teamMembers
+    .filter((m) => m.teamId === teamId)
+    .flatMap((m) => {
+      const athlete = world.user(m.userId);
+      if (athlete?.role !== 'athlete') return [];
+      const blocked = blockedBetween(world, viewer.id, athlete.id);
+      if (!can(actor, 'team.athleteContacts', { teamId, blocked })) return [];
+      return [
+        { athlete: summaryOf(athlete), contact: world.cardFor(athlete.id, viewer)?.contact ?? {} },
+      ];
+    })
+    .sort((a, b) => a.athlete.firstName.localeCompare(b.athlete.firstName));
+};
+
+/**
  * Takes someone off the team. A parent's under-13 children leave with them: a child's profile is
  * visible only to its team and family, so it can't stay on a team its parent has left. A team
  * always keeps at least one coach. Returns an error message, or the children who left.
@@ -283,17 +412,11 @@ export const removeMember = (
 ): { error: string; status: number } | { removedChildren: RosterChild[] } => {
   const index = world.teamMembers.findIndex((m) => m.teamId === teamId && m.userId === userId);
   if (index < 0) return { error: 'Not on this team', status: 404 };
-  const u = world.user(userId);
-  if (u?.role === 'coach') {
-    const coaches = world.teamMembers.filter(
-      (m) => m.teamId === teamId && world.user(m.userId)?.role === 'coach',
-    );
-    if (coaches.length <= 1) {
-      return {
-        error: 'A team always keeps at least one coach. Add another coach first.',
-        status: 409,
-      };
-    }
+  if (isLastCoach(world, teamId, userId)) {
+    return {
+      error: 'A team always keeps at least one coach. Add another coach first.',
+      status: 409,
+    };
   }
   world.teamMembers.splice(index, 1);
   const removedChildren = childrenOf(world, userId, teamId);
@@ -528,6 +651,9 @@ export const createCoachInvite = (
   email: string,
   now = Date.now(),
 ): { error: string; status: number } | { invite: MockCoachInvite } => {
+  const t = world.teams.find((x) => x.id === teamId);
+  if (!t) return { error: 'No such team', status: 404 };
+  if (t.status === 'archived') return { error: 'Restore the team first', status: 400 };
   const alreadyCoach = world.teamMembers.some((m) => {
     const member = world.user(m.userId);
     return m.teamId === teamId && member?.role === 'coach' && member.email === email;
@@ -564,7 +690,47 @@ export const usableInvite = (
   if (Date.parse(invite.expiresAt) <= now) {
     return { status: 410, message: 'This invite has expired. Ask Team Impact to resend it' };
   }
+  if (world.teams.find((t) => t.id === invite.teamId)?.status === 'archived') {
+    return { status: 410, message: 'This team is archived. Ask Team Impact to restore it' };
+  }
   return invite;
+};
+
+/** Withdraws an invite that hasn't been accepted. `changed` is false if it was already revoked. */
+export const revokeCoachInvite = (
+  invite: MockCoachInvite,
+): { error: string; status: number } | { invite: MockCoachInvite; changed: boolean } => {
+  if (invite.acceptedAt) return { error: 'Already accepted', status: 400 };
+  const changed = invite.revokedAt === null;
+  invite.revokedAt ??= new Date().toISOString();
+  return { invite, changed };
+};
+
+/**
+ * Staff resend (S8): a fresh invite, with a new link and a new 7 days, goes to the same email. A
+ * pending invite is revoked so only the new link works; an expired one is left as it was. A
+ * revoked invite was withdrawn on purpose (or already resent), so it isn't resent.
+ */
+export const resendCoachInvite = (
+  world: MockWorld,
+  u: MockUser,
+  old: MockCoachInvite,
+): { error: string; status: number } | { invite: MockCoachInvite } => {
+  if (old.acceptedAt) return { error: 'Already accepted', status: 400 };
+  if (old.revokedAt) {
+    return { error: 'This invite was withdrawn. Send a new one instead', status: 409 };
+  }
+  // An older invite stays history once replaced, even if it expired rather than being revoked.
+  const newer = world.coachInvites
+    .slice(world.coachInvites.indexOf(old) + 1)
+    .some((i) => i.teamId === old.teamId && i.email === old.email);
+  if (newer) return { error: 'A newer invite already went to this email', status: 409 };
+  const pending = isPending(old);
+  if (pending) old.revokedAt = new Date().toISOString();
+  const result = createCoachInvite(world, u, old.teamId, old.email);
+  // Nothing changes if the new invite can't be made (the team was archived, say).
+  if ('error' in result && pending) old.revokedAt = null;
+  return result;
 };
 
 /** A pending invite, or null if it's used, revoked, expired or unknown. */

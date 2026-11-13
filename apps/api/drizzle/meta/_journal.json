@@ -19,8 +19,29 @@
     {
       "idx": 2,
       "version": "7",
-      "when": 1792036065829,
-      "tag": "0002_media_uploads",
+      "when": 1792098984361,
+      "tag": "0002_events_log_subject",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1792788186805,
+      "tag": "0003_communities",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793661067323,
+      "tag": "0004_better_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794600153070,
+      "tag": "0005_media_uploads",
       "breakpoints": true
     }
   ]

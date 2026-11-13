@@ -1,8 +1,10 @@
 import {
+  can,
   canBeOpenToRecruiting,
   CardFields,
   type CardVersion,
   type ChildProfile,
+  consentFlags,
   EXTRACTABLE_CARD_FIELDS,
   ExperienceEntry,
   hasBaseballCard,
@@ -17,6 +19,8 @@ import {
 } from '@team-impact/contracts';
 import * as fx from './fixtures';
 import type { MockCard, MockUser } from './fixtures';
+import { actorOf, cardFacts } from './policy';
+import { blockedBetween } from './safety';
 import type { MockWorld } from './world';
 import type { MockChild } from './team';
 
@@ -94,16 +98,13 @@ export const createProfileState = (cards: MockCard[]): ProfileState => {
 
 // Profiles -----------------------------------------------------------------------------------------
 
-const sharesTeam = (world: MockWorld, a: string, b: string) => {
-  const mine = new Set(world.teamIdsOf(a));
-  return world.teamIdsOf(b).some((t) => mine.has(t));
-};
-
 /** Team and family only: the parent, and accounts on the child's team. Recruiters never. */
 export const canSeeChild = (world: MockWorld, child: MockChild, u: MockUser) =>
-  u.role !== 'recruiter' &&
-  (u.id === child.parentId ||
-    (child.teamId !== null && world.teamIdsOf(u.id).includes(child.teamId)));
+  can(actorOf(world, u), 'child.read', {
+    parentId: child.parentId,
+    teamId: child.teamId,
+    parentBlocked: blockedBetween(world, u.id, child.parentId),
+  });
 
 export const childProfile = (world: MockWorld, child: MockChild): ChildProfile => ({
   kind: 'child',
@@ -136,27 +137,26 @@ const profileCommunities = (world: MockWorld, t: MockUser, u: MockUser): Profile
     });
 };
 
-/** Whether `u` may open `t`'s plain profile at all. */
+/** Whether `u` may open `t`'s profile at all (teens included). */
 const canSeePerson = (world: MockWorld, t: MockUser, u: MockUser) => {
-  if (t.id === u.id || u.role === 'staff' || t.role === 'staff') return true;
-  if (u.role === 'recruiter') {
-    // Athletes without open-to-recruiting don't exist on the employer side; colleagues do.
-    if (t.role === 'recruiter') return t.companyId === u.companyId;
-    const card = world.cards.find((c) => c.face.athleteId === t.id);
-    return !!card && world.recruiterCanSee(card);
-  }
-  if (t.role === 'recruiter') return false;
-  if (sharesTeam(world, t.id, u.id)) return true;
-  if (t.role === 'alumni_athlete' || t.role === 'alumni_mentor') return true;
-  // Fellow members of an open interest community (never medical or private ones).
-  return world.communities.some(
-    (c) =>
-      c.kind === 'interest' &&
-      !c.private &&
-      c.moderation === 'approved' &&
-      c.members.some((m) => m.userId === t.id) &&
-      c.members.some((m) => m.userId === u.id),
-  );
+  const card = world.cards.find((c) => c.face.athleteId === t.id);
+  return can(actorOf(world, u), 'person.read', {
+    id: t.id,
+    role: t.role,
+    teamIds: world.teamIdsOf(t.id),
+    companyId: t.companyId ?? null,
+    card: card ? cardFacts(world, card, u) : null,
+    blocked: blockedBetween(world, u.id, t.id),
+    // Fellow members of an open interest community (never medical or private ones).
+    sharesOpenCommunity: world.communities.some(
+      (c) =>
+        c.kind === 'interest' &&
+        !c.private &&
+        c.moderation === 'approved' &&
+        c.members.some((m) => m.userId === t.id) &&
+        c.members.some((m) => m.userId === u.id),
+    ),
+  });
 };
 
 /** `id` may be a user or a child. Null when the viewer may not see it (the route says 404). */
@@ -166,14 +166,14 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
 
   const t = world.user(id);
   if (!t) return null;
-  if (t.role === 'teen') {
-    // Visible only to their own team (and themselves); recruiters never.
-    const visible = t.id === u.id || (u.role !== 'recruiter' && sharesTeam(world, t.id, u.id));
-    return visible
-      ? { kind: 'teen', user: fx.summaryOf(t), teams: world.teamIdsOf(t.id).map(world.teamSummary) }
-      : null;
-  }
   if (!canSeePerson(world, t, u)) return null;
+  if (t.role === 'teen') {
+    return {
+      kind: 'teen',
+      user: fx.summaryOf(t),
+      teams: world.teamIdsOf(t.id).map(world.teamSummary),
+    };
+  }
 
   const viewerTeams = new Set(world.teamIdsOf(u.id));
   const teams = world
@@ -192,9 +192,8 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     const { contact: shared, ...face } = withContact;
     card = face;
     // Profiles show contacts only to the audiences the athlete chose; teens never get any.
-    if (t.id !== u.id && (u.role === 'parent' || u.role === 'recruiter')) contact = shared;
+    if (t.id !== u.id) contact = shared;
   }
-  if (u.role === 'teen') contact = {};
   return {
     kind: 'person',
     user: fx.summaryOf(t),
@@ -202,13 +201,39 @@ export const profileFor = (world: MockWorld, id: string, u: MockUser): Profile |
     communities: profileCommunities(world, t, u),
     card,
     contact,
+    company: companyOf(world, t),
   };
+};
+
+/**
+ * A recruiter's company, shown on their profile (PRD §2). Everyone who may open a recruiter's
+ * profile at all (colleagues and staff, per `person.read`) may see who they recruit for.
+ */
+const companyOf = (world: MockWorld, t: MockUser) => {
+  if (t.role !== 'recruiter' || !t.companyId) return null;
+  const company = world.companies.find((c) => c.id === t.companyId);
+  return company ? { id: company.id, name: company.name } : null;
 };
 
 // Settings -----------------------------------------------------------------------------------------
 
 export const cardOf = (world: MockWorld, athleteId: string) =>
   world.cards.find((c) => c.face.athleteId === athleteId);
+
+/**
+ * Renaming yourself (`PATCH /me`) renames your Baseball Card too: the live card face, and any name
+ * waiting in an unpublished draft, so publishing it later doesn't bring the old name back. Earlier
+ * published versions in the history keep the name they were published with.
+ */
+export const renameCard = (world: MockWorld, u: MockUser) => {
+  const card = cardOf(world, u.id);
+  if (!card) return;
+  card.face.firstName = u.firstName;
+  card.face.lastName = u.lastName;
+  const draft = world.profiles.drafts.get(u.id);
+  if (draft?.firstName !== undefined) draft.firstName = u.firstName;
+  if (draft?.lastName !== undefined) draft.lastName = u.lastName;
+};
 
 export const settingsFor = (world: MockWorld, u: MockUser): MySettings => {
   const holder = hasBaseballCard(u.role);
@@ -309,7 +334,12 @@ export const publishCard = (world: MockWorld, u: MockUser, now: string): string 
       recruitersSee: { email: true, phone: false, linkedin: false },
     },
   };
-  if (!existing) world.cards.push(card);
+  if (!existing) {
+    world.cards.push(card);
+    // A new card shares email by default; those choices are consents too (PRD §6).
+    for (const flag of fx.sharingFlagsOn(card.visibility))
+      world.recordConsent(u.id, flag, false, true);
+  }
   // A card from an earlier season stays in the history as it was; this one starts the new season.
   if (card.face.season < CURRENT_SEASON) {
     card.face.id = world.newId();
@@ -341,6 +371,7 @@ export const unpublishCard = (world: MockWorld, u: MockUser, now: string): strin
   const card = cardOf(world, u.id);
   if (!card) return 'You have no Baseball Card yet.';
   card.visibility.published = false;
+  world.recordConsent(u.id, consentFlags.openToRecruiting, card.visibility.openToRecruiting, false);
   card.visibility.openToRecruiting = false;
   world.profiles.updatedAt.set(u.id, now);
   return null;

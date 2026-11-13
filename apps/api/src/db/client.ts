@@ -8,5 +8,5 @@ export const createDb = (databaseUrl: string) => {
   return { db: drizzle(sql, { schema }), close: () => sql.end() };
 };
 
-// Driver-agnostic, so tests can run the same queries against an in-process PGlite database.
+/** Any database or transaction with our schema, whatever the driver (tests use PGlite). */
 export type Db = PgDatabase<PgQueryResultHKT, typeof schema>;

@@ -1,5 +1,5 @@
 {
-  "id": "4f83b9f5-f88c-47f8-8dc8-75abc0f12395",
+  "id": "8690c444-03b2-4c94-918f-8d8c0890305a",
   "prevId": "c1569af5-f939-4c0d-b337-cf0913e59f9a",
   "version": "7",
   "dialect": "postgresql",
@@ -448,56 +448,18 @@
           "primaryKey": false,
           "notNull": true
         },
-        "purpose": {
-          "name": "purpose",
-          "type": "media_purpose",
+        "kind": {
+          "name": "kind",
+          "type": "media_kind",
           "typeSchema": "public",
           "primaryKey": false,
           "notNull": true
-        },
-        "status": {
-          "name": "status",
-          "type": "media_status",
-          "typeSchema": "public",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "'pending'"
-        },
-        "child_id": {
-          "name": "child_id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
         },
         "storage_key": {
           "name": "storage_key",
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "mime_type": {
-          "name": "mime_type",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "size_bytes": {
-          "name": "size_bytes",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "rights_affirmed_at": {
-          "name": "rights_affirmed_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "taken_down_at": {
-          "name": "taken_down_at",
-          "type": "timestamp with time zone",
-          "primaryKey": false,
-          "notNull": false
         },
         "width": {
           "name": "width",
@@ -547,21 +509,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "media_child_id_idx": {
-          "name": "media_child_id_idx",
-          "columns": [
-            {
-              "expression": "child_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -571,19 +518,6 @@
           "tableTo": "users",
           "columnsFrom": [
             "owner_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "media_child_id_children_id_fk": {
-          "name": "media_child_id_children_id_fk",
-          "tableFrom": "media",
-          "tableTo": "children",
-          "columnsFrom": [
-            "child_id"
           ],
           "columnsTo": [
             "id"
@@ -1882,9 +1816,9 @@
           "primaryKey": false,
           "notNull": true
         },
-        "photo_media_id": {
-          "name": "photo_media_id",
-          "type": "uuid",
+        "photo_storage_key": {
+          "name": "photo_storage_key",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         },
@@ -1938,21 +1872,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "children_photo_media_id_idx": {
-          "name": "children_photo_media_id_idx",
-          "columns": [
-            {
-              "expression": "photo_media_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -1975,19 +1894,6 @@
           "tableTo": "teams",
           "columnsFrom": [
             "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "children_photo_media_id_media_id_fk": {
-          "name": "children_photo_media_id_media_id_fk",
-          "tableFrom": "children",
-          "tableTo": "media",
-          "columnsFrom": [
-            "photo_media_id"
           ],
           "columnsTo": [
             "id"
@@ -3459,6 +3365,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "subject_id": {
+          "name": "subject_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "properties": {
           "name": "properties",
           "type": "jsonb",
@@ -3490,6 +3402,21 @@
           "method": "btree",
           "with": {}
         },
+        "events_log_subject_id_idx": {
+          "name": "events_log_subject_id_idx",
+          "columns": [
+            {
+              "expression": "subject_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "events_log_event_occurred_idx": {
           "name": "events_log_event_occurred_idx",
           "columns": [
@@ -3510,6 +3437,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "events_log_occurred_at_idx": {
+          "name": "events_log_occurred_at_idx",
+          "columns": [
+            {
+              "expression": "occurred_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -3519,6 +3461,19 @@
           "tableTo": "users",
           "columnsFrom": [
             "user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "events_log_subject_id_users_id_fk": {
+          "name": "events_log_subject_id_users_id_fk",
+          "tableFrom": "events_log",
+          "tableTo": "users",
+          "columnsFrom": [
+            "subject_id"
           ],
           "columnsTo": [
             "id"
@@ -3909,23 +3864,12 @@
         "declined"
       ]
     },
-    "public.media_purpose": {
-      "name": "media_purpose",
+    "public.media_kind": {
+      "name": "media_kind",
       "schema": "public",
       "values": [
-        "card_photo",
-        "child_photo",
-        "post_image",
+        "photo",
         "resume"
-      ]
-    },
-    "public.media_status": {
-      "name": "media_status",
-      "schema": "public",
-      "values": [
-        "pending",
-        "ready",
-        "taken_down"
       ]
     },
     "public.membership_role": {

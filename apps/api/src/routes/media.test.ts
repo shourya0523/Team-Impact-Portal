@@ -1,120 +1,191 @@
-import { randomUUID } from 'node:crypto';
+// TI-111 on the real API: Better Auth sessions, an in-process Postgres (PGlite) with every
+// migration applied, and an in-memory bucket standing in for Spaces.
 import { eq } from 'drizzle-orm';
+import type { LightMyRequestResponse } from 'fastify';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { UploadResponse } from '@team-impact/contracts';
-import { children, colleges, groups, media, memberships, teams, users } from '../db/schema';
-import { createTestApp } from '../test/app';
+import { buildApp } from '../app';
+import {
+  authAccounts,
+  children,
+  colleges,
+  communities,
+  media,
+  memberships,
+  teams,
+  users,
+} from '../db/schema';
+import { createMemoryMailer } from '../identity/mailer';
+import { createMemoryStorage } from '../storage/memory';
+import { createTestDb } from '../test/db';
 
-type TestApp = Awaited<ReturnType<typeof createTestApp>>;
-let t: TestApp;
+const PORTAL = 'http://localhost:5173';
+// argon2id hash of "team-impact-dev", the seed data's shared password.
+const SEED_HASH =
+  '$argon2id$v=19$m=65536,t=3,p=4$kwOXDCSVp3jrLCRhtryvcw$3F8TXsfX3cZ6DhEoMEoYr1C1B20F0TTfGItSyp1tal4';
 
-const ids = {
-  parent: randomUUID(),
-  teammate: randomUUID(),
-  outsider: randomUUID(),
-  staff: randomUUID(),
-  child: randomUUID(),
+let testDb: Awaited<ReturnType<typeof createTestDb>>;
+let app: Awaited<ReturnType<typeof buildApp>>;
+const { storage, objects } = createMemoryStorage();
+/** Session cookies by person. */
+const cookies = { parent: '', teammate: '', outsider: '', staff: '' };
+let childId: string;
+
+type Person = keyof typeof cookies;
+
+const addUser = async (name: Person, userType: 'parent' | 'athlete' | 'staff') => {
+  const [user] = await testDb.db
+    .insert(users)
+    .values({
+      userType,
+      email: `${name}@example.test`,
+      firstName: name,
+      lastName: 'Test',
+      dob: '1990-01-01',
+      emailVerified: true,
+    })
+    .returning();
+  await testDb.db.insert(authAccounts).values({
+    userId: user!.id,
+    accountId: user!.id,
+    providerId: 'credential',
+    password: SEED_HASH,
+  });
+  return user!;
 };
 
-const addUser = (id: string, userType: 'parent' | 'athlete' | 'staff') =>
-  t.db.insert(users).values({
-    id,
-    userType,
-    email: `${id}@example.test`,
-    passwordHash: 'x',
-    firstName: 'Test',
-    lastName: 'User',
-    dob: '1990-01-01',
+const cookieOf = (res: LightMyRequestResponse) =>
+  res.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+
+const signIn = async (name: Person) => {
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/auth/sign-in/email',
+    payload: { email: `${name}@example.test`, password: 'team-impact-dev' },
+    headers: { origin: PORTAL },
+  });
+  expect(res.statusCode).toBe(200);
+  cookies[name] = cookieOf(res);
+};
+
+// Booting PGlite and running the migrations can take a while on a busy CI runner.
+beforeAll(async () => {
+  testDb = await createTestDb();
+  app = await buildApp({
+    sessionSecret: 's'.repeat(32),
+    corsOrigins: [PORTAL],
+    identity: {
+      db: testDb.db,
+      secret: 's'.repeat(32),
+      baseURL: 'http://localhost:3000',
+      links: { portalUrl: 'http://portal.test', athleteAppUrl: 'http://app.test' },
+      mailer: createMemoryMailer(),
+      production: false,
+    },
+    storage,
   });
 
-beforeAll(async () => {
-  t = await createTestApp();
-  await addUser(ids.parent, 'parent');
-  await addUser(ids.teammate, 'athlete');
-  await addUser(ids.outsider, 'athlete');
-  await addUser(ids.staff, 'staff');
-  const [college] = await t.db.insert(colleges).values({ name: 'Tufts' }).returning();
-  const [team] = await t.db
+  const parent = await addUser('parent', 'parent');
+  const teammate = await addUser('teammate', 'athlete');
+  await addUser('outsider', 'athlete');
+  await addUser('staff', 'staff');
+  const [college] = await testDb.db.insert(colleges).values({ name: 'Tufts' }).returning();
+  const [team] = await testDb.db
     .insert(teams)
     .values({ collegeId: college!.id, sport: 'Soccer', gender: 'women', displayName: 'Jumbos' })
     .returning();
-  const [group] = await t.db
-    .insert(groups)
-    .values({ kind: 'team', name: 'Jumbos', teamId: team!.id })
+  const [community] = await testDb.db
+    .insert(communities)
+    .values({ kind: 'team', name: 'Jumbos', teamId: team!.id, status: 'approved' })
     .returning();
-  await t.db.insert(memberships).values([
-    { userId: ids.parent, groupId: group!.id, source: 'join_code' },
-    { userId: ids.teammate, groupId: group!.id, source: 'join_code' },
+  await testDb.db.insert(memberships).values([
+    { userId: parent.id, communityId: community!.id, source: 'join_code' },
+    { userId: teammate.id, communityId: community!.id, source: 'join_code' },
   ]);
-  await t.db.insert(children).values({
-    id: ids.child,
-    parentUserId: ids.parent,
-    teamId: team!.id,
-    firstName: 'Sam',
-    age: 8,
-  });
+  const [child] = await testDb.db
+    .insert(children)
+    .values({ parentUserId: parent.id, teamId: team!.id, firstName: 'Sam', age: 8 })
+    .returning();
+  childId = child!.id;
+  for (const name of Object.keys(cookies) as Person[]) await signIn(name);
+}, 30_000);
+
+afterAll(async () => {
+  await app.close();
+  await testDb.close();
 });
 
-afterAll(() => t.close());
+const as = (name: Person) => ({ cookie: cookies[name] });
 
-const as = (userId: string) => ({ 'x-dev-user-id': userId });
+const requestUpload = (name: Person, payload: object) =>
+  app.inject({ method: 'POST', url: '/uploads', headers: as(name), payload });
 
-const requestUpload = (userId: string, payload: object) =>
-  t.app.inject({ method: 'POST', url: '/uploads', headers: as(userId), payload });
+const complete = (name: Person, mediaId: string) =>
+  app.inject({ method: 'POST', url: `/uploads/${mediaId}/complete`, headers: as(name) });
 
-const photo = { mimeType: 'image/jpeg', sizeBytes: 2000, rightsAffirmed: true };
+const photo = { mimeType: 'image/jpeg', sizeBytes: 2000, rightsAffirmed: true } as const;
 
-/** Requests an upload, "PUTs" the file into the fake bucket and completes it. */
-const upload = async (userId: string, payload: object) => {
-  const res = await requestUpload(userId, payload);
+const rowOf = async (mediaId: string) =>
+  (await testDb.db.select().from(media).where(eq(media.id, mediaId)))[0]!;
+
+/** Requests an upload and returns its row, as the client would before PUTting the file. */
+const startUpload = async (name: Person, payload: object) => {
+  const res = await requestUpload(name, payload);
   expect(res.statusCode).toBe(201);
-  const body = UploadResponse.parse(res.json());
-  const [row] = await t.db.select().from(media).where(eq(media.id, body.mediaId));
-  t.objects.set(row!.storageKey, { contentType: row!.mimeType, byteSize: row!.sizeBytes });
-  const done = await t.app.inject({
-    method: 'POST',
-    url: `/uploads/${body.mediaId}/complete`,
-    headers: as(userId),
-  });
-  expect(done.statusCode).toBe(204);
-  return body.mediaId;
+  return rowOf(UploadResponse.parse(res.json()).mediaId);
 };
 
-const view = (userId: string, mediaId: string) =>
-  t.app.inject({ method: 'GET', url: `/media/${mediaId}`, headers: as(userId) });
+/** Requests an upload, "PUTs" the file into the fake bucket and completes it. */
+const upload = async (name: Person, payload: object) => {
+  const row = await startUpload(name, payload);
+  objects.set(row.storageKey, { contentType: row.mimeType, byteSize: row.sizeBytes });
+  expect((await complete(name, row.id)).statusCode).toBe(204);
+  return row.id;
+};
+
+const view = (name: Person, mediaId: string) =>
+  app.inject({ method: 'GET', url: `/media/${mediaId}`, headers: as(name) });
 
 describe('upload', () => {
   it('needs a signed-in user', async () => {
-    const res = await t.app.inject({
+    const res = await app.inject({
       method: 'POST',
       url: '/uploads',
       payload: { purpose: 'card_photo', ...photo },
     });
     expect(res.statusCode).toBe(401);
+    // The old development stand-in is gone: a header naming a user signs no one in.
+    const forged = await app.inject({
+      method: 'POST',
+      url: '/uploads',
+      headers: { 'x-dev-user-id': '00000000-0000-4000-8000-000000000000' },
+      payload: { purpose: 'card_photo', ...photo },
+    });
+    expect(forged.statusCode).toBe(401);
   });
 
   it('returns a signed PUT with type and size pinned, and stores the rights affirmation', async () => {
-    const res = await requestUpload(ids.teammate, { purpose: 'card_photo', ...photo });
+    const res = await requestUpload('teammate', { purpose: 'card_photo', ...photo });
     expect(res.statusCode).toBe(201);
     const body = UploadResponse.parse(res.json());
     expect(body.headers).toEqual({ 'content-type': 'image/jpeg', 'content-length': '2000' });
-    const [row] = await t.db.select().from(media).where(eq(media.id, body.mediaId));
+    const [row] = await testDb.db.select().from(media).where(eq(media.id, body.mediaId));
     expect(row).toMatchObject({ status: 'pending', purpose: 'card_photo', sizeBytes: 2000 });
     expect(row!.rightsAffirmedAt).toBeInstanceOf(Date);
   });
 
   it('rejects files over the cap, the wrong type, or photos without a rights affirmation', async () => {
-    const tooBig = await requestUpload(ids.teammate, {
+    const tooBig = await requestUpload('teammate', {
       purpose: 'post_image',
       ...photo,
       sizeBytes: 50 * 1024 * 1024,
     });
-    const wrongType = await requestUpload(ids.teammate, {
+    const wrongType = await requestUpload('teammate', {
       purpose: 'resume',
       mimeType: 'text/html',
       sizeBytes: 2000,
     });
-    const noRights = await requestUpload(ids.teammate, {
+    const noRights = await requestUpload('teammate', {
       purpose: 'post_image',
       mimeType: 'image/png',
       sizeBytes: 2000,
@@ -123,43 +194,38 @@ describe('upload', () => {
   });
 
   it("only lets a child's parent upload their photo", async () => {
-    const res = await requestUpload(ids.teammate, {
+    const res = await requestUpload('teammate', {
       purpose: 'child_photo',
-      childId: ids.child,
+      childId,
       ...photo,
     });
     expect(res.statusCode).toBe(403);
   });
 
   it('will not complete until the file is in the bucket', async () => {
-    const res = await requestUpload(ids.teammate, {
+    const res = await requestUpload('teammate', {
       purpose: 'resume',
       mimeType: 'application/pdf',
       sizeBytes: 3000,
     });
     const { mediaId } = UploadResponse.parse(res.json());
-    const complete = await t.app.inject({
-      method: 'POST',
-      url: `/uploads/${mediaId}/complete`,
-      headers: as(ids.teammate),
-    });
-    expect(complete.statusCode).toBe(409);
+    expect((await complete('teammate', mediaId)).statusCode).toBe(409);
   });
 });
 
 describe('child photos through the access layer', () => {
   let photoId: string;
   beforeAll(async () => {
-    photoId = await upload(ids.parent, { purpose: 'child_photo', childId: ids.child, ...photo });
+    photoId = await upload('parent', { purpose: 'child_photo', childId, ...photo });
   });
 
   it('becomes the child profile photo once complete', async () => {
-    const [child] = await t.db.select().from(children).where(eq(children.id, ids.child));
+    const [child] = await testDb.db.select().from(children).where(eq(children.id, childId));
     expect(child!.photoMediaId).toBe(photoId);
   });
 
   it('shows the photo to the parent and the team via a short-lived signed URL', async () => {
-    for (const viewer of [ids.parent, ids.teammate]) {
+    for (const viewer of ['parent', 'teammate'] as const) {
       const res = await view(viewer, photoId);
       expect(res.statusCode).toBe(302);
       expect(res.headers.location).toContain('signature=get');
@@ -167,51 +233,51 @@ describe('child photos through the access layer', () => {
   });
 
   it('hides the photo from anyone outside the team and family, staff included', async () => {
-    expect((await view(ids.outsider, photoId)).statusCode).toBe(404);
-    expect((await view(ids.staff, photoId)).statusCode).toBe(404);
+    expect((await view('outsider', photoId)).statusCode).toBe(404);
+    expect((await view('staff', photoId)).statusCode).toBe(404);
   });
 
   it('does not serve an upload that was never completed', async () => {
-    const res = await requestUpload(ids.parent, {
+    const res = await requestUpload('parent', {
       purpose: 'child_photo',
-      childId: ids.child,
+      childId,
       ...photo,
     });
     const { mediaId } = UploadResponse.parse(res.json());
-    expect((await view(ids.parent, mediaId)).statusCode).toBe(404);
+    expect((await view('parent', mediaId)).statusCode).toBe(404);
   });
 });
 
 describe('staff takedown', () => {
   it('is staff only', async () => {
-    const mediaId = await upload(ids.teammate, { purpose: 'post_image', ...photo });
-    const res = await t.app.inject({
+    const mediaId = await upload('teammate', { purpose: 'post_image', ...photo });
+    const res = await app.inject({
       method: 'POST',
       url: `/staff/media/${mediaId}/takedown`,
-      headers: as(ids.teammate),
+      headers: as('teammate'),
     });
     expect(res.statusCode).toBe(403);
   });
 
   it('deletes the file, unlinks it from the child, and stops serving it', async () => {
-    const mediaId = await upload(ids.parent, {
+    const mediaId = await upload('parent', {
       purpose: 'child_photo',
-      childId: ids.child,
+      childId,
       ...photo,
     });
-    const [row] = await t.db.select().from(media).where(eq(media.id, mediaId));
-    const res = await t.app.inject({
+    const [row] = await testDb.db.select().from(media).where(eq(media.id, mediaId));
+    const res = await app.inject({
       method: 'POST',
       url: `/staff/media/${mediaId}/takedown`,
-      headers: as(ids.staff),
+      headers: as('staff'),
     });
     expect(res.statusCode).toBe(204);
 
-    const [after] = await t.db.select().from(media).where(eq(media.id, mediaId));
+    const [after] = await testDb.db.select().from(media).where(eq(media.id, mediaId));
     expect(after!.status).toBe('taken_down');
-    expect(t.objects.has(row!.storageKey)).toBe(false);
-    const [child] = await t.db.select().from(children).where(eq(children.id, ids.child));
+    expect(objects.has(row!.storageKey)).toBe(false);
+    const [child] = await testDb.db.select().from(children).where(eq(children.id, childId));
     expect(child!.photoMediaId).toBeNull();
-    expect((await view(ids.parent, mediaId)).statusCode).toBe(404);
+    expect((await view('parent', mediaId)).statusCode).toBe(404);
   });
 });

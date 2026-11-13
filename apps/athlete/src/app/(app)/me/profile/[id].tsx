@@ -1,16 +1,34 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { StyleSheet, View, useWindowDimensions } from 'react-native';
-import type { ChildProfile, PersonProfile, TeenProfile, TeamSummary } from '@team-impact/contracts';
+import { useEffect } from 'react';
+import { Linking, StyleSheet, View, useWindowDimensions } from 'react-native';
+import type {
+  ChildProfile,
+  ContactSharing,
+  PersonProfile,
+  Profile,
+  TeenProfile,
+  TeamSummary,
+} from '@team-impact/contracts';
 import { AthleteCard } from '@team-impact/ui-primitives/native';
 import { colors, spacing } from '@team-impact/ui-tokens';
-import { api } from '@/api';
+import { api, track } from '@/api';
 import { toCardData } from '@/components/cardData';
 import { ROLE_LABEL, KIND_LABEL } from '@/components/format';
+import { ReportButton } from '@/components/Report';
 import { Async, Chip, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
+import { useRole } from '@/navigation/role';
 import { Avatar, Badge, Card, Icon, TeamAvatar, Text } from '@/ui';
 
 const MAX_CARD_WIDTH = 360;
+
+type Channel = keyof ContactSharing;
+
+const HREF: Record<Channel, (value: string) => string> = {
+  email: (v) => `mailto:${v}`,
+  phone: (v) => `tel:${v.replace(/[^+\d]/g, '')}`,
+  linkedin: (v) => (/^https?:\/\//.test(v) ? v : `https://${v}`),
+};
 
 function Teams({ teams }: { teams: TeamSummary[] }) {
   if (teams.length === 0) return null;
@@ -46,16 +64,38 @@ function OnlyTeam({ children }: { children: string }) {
 function Person({ p }: { p: PersonProfile }) {
   const { width } = useWindowDimensions();
   const channels = [
-    p.contact.email && { label: 'Email', value: p.contact.email },
-    p.contact.phone && { label: 'Phone', value: p.contact.phone },
-    p.contact.linkedinUrl && { label: 'LinkedIn', value: p.contact.linkedinUrl },
-  ].filter((c): c is { label: string; value: string } => !!c);
+    p.contact.email && { channel: 'email' as const, label: 'Email', value: p.contact.email },
+    p.contact.phone && { channel: 'phone' as const, label: 'Phone', value: p.contact.phone },
+    p.contact.linkedinUrl && {
+      channel: 'linkedin' as const,
+      label: 'LinkedIn',
+      value: p.contact.linkedinUrl,
+    },
+  ].filter((c): c is { channel: Channel; label: string; value: string } => !!c);
+
+  // The profile has loaded by the time this renders, so this logs once per card shown.
+  useEffect(() => {
+    if (p.card) {
+      track({ name: 'card.viewed', properties: { cardId: p.card.id }, subjectId: p.user.id });
+    }
+  }, [p.card?.id, p.user.id]);
+
+  const open = (c: { channel: Channel; value: string }) => {
+    track({ name: 'contact.viewed', properties: { channel: c.channel }, subjectId: p.user.id });
+    Linking.openURL(HREF[c.channel](c.value));
+  };
   return (
     <Gutter>
       <View style={styles.row}>
         <Avatar name={`${p.user.firstName} ${p.user.lastName}`} role={p.user.role} size="lg" />
         <Badge caps variant="brandTint" label={ROLE_LABEL[p.user.role]} />
       </View>
+      {/* A recruiter's profile sits under their company (PRD §2). */}
+      {p.company && (
+        <Text variant="small" color="secondary">
+          Recruiter at {p.company.name}
+        </Text>
+      )}
       {p.card && (
         <View style={styles.center}>
           <AthleteCard
@@ -73,7 +113,9 @@ function Person({ p }: { p: PersonProfile }) {
                 <Text variant="caption" color="muted">
                   {c.label}
                 </Text>
-                <Text selectable>{c.value}</Text>
+                <Text selectable color="brand" accessibilityRole="link" onPress={() => open(c)}>
+                  {c.value}
+                </Text>
               </View>
             ))}
           </Card>
@@ -144,6 +186,29 @@ function Child({ p }: { p: ChildProfile }) {
   );
 }
 
+/**
+ * Report this person, and block them from the same form (PRD §9). Not on your own profile, and
+ * Team Impact staff can be reported but never blocked. Children have no account to report: their
+ * parent runs the profile, so it's the parent who can be reported or blocked.
+ */
+function ProfileReport({ p }: { p: Profile }) {
+  const { me } = useRole();
+  if (p.kind === 'child' || p.user.id === me?.id) return null;
+  const { user } = p;
+  return (
+    <ReportButton
+      target={{ kind: 'profile', id: user.id }}
+      author={
+        user.role === 'staff'
+          ? undefined
+          : { id: user.id, name: `${user.firstName} ${user.lastName}` }
+      }
+      // A block hides this profile from you, so there's nothing left to show here.
+      onDone={() => router.back()}
+    />
+  );
+}
+
 /** "/me/profile/[id]": someone's profile, or a child's, shaped by the API for the viewer. */
 export default function ProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -155,7 +220,12 @@ export default function ProfileScreen() {
         ? state.data.firstName
         : `${state.data.user.firstName} ${state.data.user.lastName}`;
   return (
-    <Screen eyebrow="Profile" title={title} back>
+    <Screen
+      eyebrow="Profile"
+      title={title}
+      back
+      right={state.status === 'ready' && <ProfileReport p={state.data} />}
+    >
       <Async state={state}>
         {(p) =>
           p.kind === 'child' ? (

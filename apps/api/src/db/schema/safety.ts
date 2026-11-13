@@ -46,18 +46,28 @@ export const moderationActions = pgTable(
   ],
 );
 
-/** Product analytics and audit trail, including team/coach changes and identity searches. */
+/**
+ * Product analytics and audit trail, including team/coach changes and identity searches. Event
+ * names and properties are `TRACKED_EVENTS` in contracts, written through `track()`
+ * (src/events-log.ts). Both user columns cascade, so the TI-79 hard delete removes what someone
+ * did and what was shown about them. Rows older than `EVENTS_LOG_RETENTION_DAYS` are pruned daily.
+ */
 export const eventsLog = pgTable(
   'events_log',
   {
     id: id(),
+    /** Who did it; null for the system. */
     userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }),
     event: text('event').notNull(),
-    properties: jsonb('properties').notNull().default({}),
+    /** Who it's about, for events that have a subject (PRD §12: what was shown to whom). */
+    subjectId: uuid('subject_id').references(() => users.id, { onDelete: 'cascade' }),
+    properties: jsonb('properties').$type<Record<string, unknown>>().notNull().default({}),
     occurredAt: at('occurred_at').notNull().defaultNow(),
   },
   (t) => [
     index('events_log_user_id_idx').on(t.userId),
+    index('events_log_subject_id_idx').on(t.subjectId),
     index('events_log_event_occurred_idx').on(t.event, t.occurredAt),
+    index('events_log_occurred_at_idx').on(t.occurredAt),
   ],
 );

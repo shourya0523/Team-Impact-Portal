@@ -49,14 +49,49 @@ export const FindTeamsQuery = z.object({
 });
 export type FindTeamsQuery = z.infer<typeof FindTeamsQuery>;
 
+/**
+ * The sports staff can create a team for. A fixed list, so one college can't end up with both
+ * "Soccer" and "soccer" teams and the join search groups teams reliably. Add to it as colleges join.
+ */
+export const SPORTS = [
+  'Baseball',
+  'Basketball',
+  'Beach Volleyball',
+  'Cross Country',
+  'Fencing',
+  'Field Hockey',
+  'Football',
+  'Golf',
+  'Gymnastics',
+  'Ice Hockey',
+  'Lacrosse',
+  'Rowing',
+  'Rugby',
+  'Sailing',
+  'Skiing',
+  'Soccer',
+  'Softball',
+  'Squash',
+  'Swimming & Diving',
+  'Tennis',
+  'Track & Field',
+  'Volleyball',
+  'Water Polo',
+  'Wrestling',
+] as const;
+export const Sport = z.enum(SPORTS, { error: 'Pick a sport from the list.' });
+export type Sport = z.infer<typeof Sport>;
+
 const TeamName = z.string().trim().min(1, 'The team needs a name.').max(80);
-const Sport = z.string().trim().min(1).max(60);
-/** The portal also rejects colours that neither white nor dark text can be read on. */
+/**
+ * The API also refuses colours that neither white nor ink text reaches 4.5:1 on
+ * (`isReadableTeamColor` in ui-tokens), and the portal and athlete app check before sending.
+ */
 const TeamColor = HexColor;
 
 /**
- * Staff only. One team per college, sport and gender. Creating it emails the first coach an
- * invite. The logo uploads separately.
+ * Staff only. One team per college, sport and gender. Creating it makes the team's private
+ * community and emails the first coach an invite. The logo uploads separately.
  */
 export const CreateTeamRequest = z.object({
   collegeId: Id,
@@ -78,7 +113,11 @@ export const UpdateTeamRequest = z.object({
 });
 export type UpdateTeamRequest = z.infer<typeof UpdateTeamRequest>;
 
-/** Staff can also move, archive and restore a team. */
+/**
+ * Staff can also move, archive and restore a team. Archiving takes it out of the join search,
+ * declines its pending join requests and revokes its QR codes; restoring brings the team back,
+ * but not those codes.
+ */
 export const StaffUpdateTeamRequest = UpdateTeamRequest.extend({
   collegeId: Id.optional(),
   sport: Sport.optional(),

@@ -44,7 +44,8 @@ export type Block = z.infer<typeof Block>;
 
 /** A team's coaches and its coach invites (pending, accepted or revoked), for staff (S8). */
 export const TeamCoaches = z.object({
-  coaches: z.array(TeamMember),
+  /** Suspended coaches stay on the team but can't act for it, so they don't count as its coach. */
+  coaches: z.array(TeamMember.extend({ suspended: z.boolean() })),
   invites: z.array(CoachInvite),
 });
 export type TeamCoaches = z.infer<typeof TeamCoaches>;
@@ -54,9 +55,9 @@ export type TeamCoaches = z.infer<typeof TeamCoaches>;
 export const ListAthleteParams = z.object({ id: Id, athleteId: Id });
 export type ListAthleteParams = z.infer<typeof ListAthleteParams>;
 
-/** The owner shares a list with one colleague at the same company. */
-export const ShareListRequest = z.object({ userId: Id });
-export type ShareListRequest = z.infer<typeof ShareListRequest>;
+/** One entry on a list, by its own id: a "no longer available" one has no athlete to name. */
+export const ListEntryParams = z.object({ id: Id, entryId: Id });
+export type ListEntryParams = z.infer<typeof ListEntryParams>;
 
 /** The company's note on an athlete, written from a list. Notes are company-wide. */
 export const SetListNoteRequest = z.object({

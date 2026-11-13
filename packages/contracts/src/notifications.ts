@@ -59,3 +59,33 @@ export type NotificationList = z.infer<typeof NotificationList>;
 /** Mark these read; with no `ids`, mark everything read. */
 export const MarkNotificationsReadRequest = z.object({ ids: z.array(Id).min(1).optional() });
 export type MarkNotificationsReadRequest = z.infer<typeof MarkNotificationsReadRequest>;
+
+/**
+ * An Expo push token, as the phone reports it: `ExponentPushToken[…]` (or the newer
+ * `ExpoPushToken[…]`). Anything else is refused, so an account can't fill the table with junk.
+ */
+export const DeviceToken = z
+  .string()
+  .max(200)
+  .regex(/^Expo(nent)?PushToken\[[^\]\s]+\]$/, 'Not an Expo push token');
+
+/** Phones one account can have registered at once; registering another drops the oldest. */
+export const MAX_DEVICES_PER_USER = 10;
+
+/**
+ * Registers the signed-in user's phone for push notifications. A phone belongs to whoever signed in
+ * on it last: a token already registered to anyone moves to this user. Past
+ * `MAX_DEVICES_PER_USER`, the user's oldest phone is dropped.
+ */
+export const RegisterDeviceRequest = z.object({
+  token: DeviceToken,
+  platform: z.enum(['ios', 'android']),
+});
+export type RegisterDeviceRequest = z.infer<typeof RegisterDeviceRequest>;
+
+/**
+ * `DELETE /me/devices`. The token goes in the body, not the path: paths end up in access logs,
+ * proxies and error trackers, and a token alone is enough to push to that phone.
+ */
+export const UnregisterDeviceRequest = z.object({ token: DeviceToken });
+export type UnregisterDeviceRequest = z.infer<typeof UnregisterDeviceRequest>;

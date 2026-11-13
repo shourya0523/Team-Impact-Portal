@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import { and, eq } from 'drizzle-orm';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { IdParams, UploadRequest, UploadResponse } from '@team-impact/contracts';
-import type { Authenticate, SessionUser } from '../auth';
 import type { Db } from '../db/client';
-import { children, groups, media, memberships } from '../db/schema';
+import { children, communities, media, memberships } from '../db/schema';
+import type { Authenticate, SessionUser } from '../identity/session';
 import type { Storage } from '../storage';
-import type { ZodTypeProvider } from '../zod';
+import { httpError, type ZodTypeProvider } from '../zod';
 
 const UPLOAD_URL_TTL_SECONDS = 5 * 60;
 const READ_URL_TTL_SECONDS = 60;
@@ -14,14 +14,11 @@ const READ_URL_TTL_SECONDS = 60;
 export interface MediaRoutesOptions {
   db: Db;
   storage: Storage;
+  /** The real session check (identity/session.ts). */
   authenticate: Authenticate;
 }
 
 type MediaRow = typeof media.$inferSelect;
-
-/** Fastify's error handler (src/zod.ts) turns `statusCode` into the shared error shape. */
-const httpError = (statusCode: number, message: string) =>
-  Object.assign(new Error(message), { statusCode });
 
 /**
  * The one upload path (TI-111): ask for a signed URL, PUT the file to the private bucket, confirm.
@@ -56,11 +53,18 @@ export const mediaRoutes = async (
     if (!child) return false;
     if (child.parentUserId === user.id) return true;
     if (!child.teamId) return false;
+    // On the team: a member of the child's team community, any season.
     const [member] = await db
       .select({ id: memberships.id })
       .from(memberships)
-      .innerJoin(groups, eq(groups.id, memberships.groupId))
-      .where(and(eq(groups.teamId, child.teamId), eq(memberships.userId, user.id)))
+      .innerJoin(communities, eq(communities.id, memberships.communityId))
+      .where(
+        and(
+          eq(communities.kind, 'team'),
+          eq(communities.teamId, child.teamId),
+          eq(memberships.userId, user.id),
+        ),
+      )
       .limit(1);
     return Boolean(member);
   };

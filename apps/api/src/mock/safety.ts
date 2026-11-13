@@ -1,3 +1,4 @@
+import { can } from '@team-impact/contracts';
 import type {
   CreateReportRequest,
   ModerationTicket,
@@ -6,7 +7,9 @@ import type {
 } from '@team-impact/contracts';
 import { commentsFor } from './activity';
 import type { MockPost } from './fixtures';
+import { actorOf, contentFacts } from './policy';
 import { canSeeChild } from './profiles';
+import { isLastCoach } from './team';
 import type { MockUser, MockWorld } from './world';
 
 /**
@@ -46,10 +49,7 @@ export const hiddenFor = (
   world: MockWorld,
   u: MockUser,
   item: { id: string; authorId: string; official?: boolean },
-) =>
-  world.reports.some((r) => r.reporterId === u.id && r.target.id === item.id) ||
-  (!item.official && blockedBetween(world, u.id, item.authorId)) ||
-  world.staffTools.suspensions.some((s) => s.userId === item.authorId);
+) => !can(actorOf(world, u), 'content.read', contentFacts(world, u, item));
 
 /**
  * What a report points at, as `u` can see it, with a one-line preview for the staff ticket.
@@ -146,7 +146,7 @@ export const myReport = (world: MockWorld, r: MockReport) => ({
 /** A stored post in the shape `u` reads it, through the feed's own mapping. */
 export const toPost = (world: MockWorld, p: MockPost, u: MockUser): Post | undefined => {
   const c = world.communities.find((x) => x.id === p.communityId);
-  return c ? world.postsIn(new Map([[c.id, c]]), u).find((x) => x.id === p.id) : undefined;
+  return c ? world.postView(p, c, u) : undefined;
 };
 
 const removeWhere = <T>(items: T[], drop: (item: T) => boolean) => {
@@ -161,14 +161,8 @@ const removeWhere = <T>(items: T[], drop: (item: T) => boolean) => {
 export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] | null => {
   if (u.role === 'staff') return [403, 'Staff accounts are closed by Team Impact, not in the app'];
   // A live team always keeps at least one coach (PRD §3).
-  for (const teamId of world.teamIdsOf(u.id)) {
-    const team = world.teams.find((t) => t.id === teamId);
-    const coaches = world.teamMembers.filter(
-      (m) => m.teamId === teamId && world.user(m.userId)?.role === 'coach',
-    );
-    if (u.role === 'coach' && team?.status === 'live' && coaches.length === 1) {
-      return [409, 'You’re this team’s only coach. Ask Team Impact to add another coach first.'];
-    }
+  if (world.teamIdsOf(u.id).some((teamId) => isLastCoach(world, teamId, u.id))) {
+    return [409, 'You’re this team’s only coach. Ask Team Impact to add another coach first.'];
   }
 
   const gone = (id: string) => id === u.id;
@@ -198,6 +192,12 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   removeWhere(world.rsvps, (r) => !eventIds.has(r.eventId));
   removeWhere(world.notifications, (n) => gone(n.userId) || n.actorId === u.id);
   world.notificationPrefs.delete(u.id);
+  // What they did and what was shown about them, as the events_log foreign keys cascade.
+  removeWhere(world.eventsLog, (e) => gone(e.userId ?? '') || gone(e.subjectId ?? ''));
+  // Their phones stop getting pushes now. The real API must do this when `deleted_at` is set: the
+  // `device_tokens` cascade only runs at the hard delete, up to 30 days later (TI-79).
+  removeWhere(world.devices, (d) => gone(d.userId));
+  removeWhere(world.pushOutbox, (p) => gone(p.userId));
   // Card drafts, pending resumes and card history.
   world.profiles.drafts.delete(u.id);
   world.profiles.resumes.delete(u.id);
@@ -208,13 +208,15 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   for (const q of world.qrCodes) q.joins = q.joins.filter((j) => !gone(j.userId));
   removeWhere(world.coachInvites, (i) => gone(i.invitedById));
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
+  removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
-  removeWhere(world.lists, (l) => gone(l.ownerId));
   for (const l of world.lists) {
-    l.sharedWithIds = l.sharedWithIds.filter((id) => !gone(id));
+    // Lists are the company's: a departed owner's stay, for anyone there to manage.
+    if (l.ownerId !== null && gone(l.ownerId)) l.ownerId = null;
     l.entries = l.entries.filter((e) => !gone(e.athleteId));
     // A departed colleague's saves stay on the list, credited to its owner.
-    for (const e of l.entries) if (gone(e.addedById)) e.addedById = l.ownerId;
+    for (const e of l.entries)
+      if (e.addedById !== null && gone(e.addedById)) e.addedById = l.ownerId;
   }
 
   for (const c of [...world.communities]) {

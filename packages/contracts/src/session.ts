@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DeviceToken } from './notifications';
 import { Role } from './roles';
 
 /**
@@ -11,3 +12,10 @@ export const DevSignInRequest = z.object({
   newcomer: z.boolean().optional(),
 });
 export type DevSignInRequest = z.infer<typeof DevSignInRequest>;
+
+/**
+ * The app sends its push token so this phone stops getting the user's pushes; their other phones
+ * keep theirs. The portal has no push, so it sends no body.
+ */
+export const SignOutRequest = z.object({ token: DeviceToken.optional() }).nullish();
+export type SignOutRequest = z.infer<typeof SignOutRequest>;
