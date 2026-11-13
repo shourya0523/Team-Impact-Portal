@@ -619,6 +619,47 @@ describe('feeds: pages', () => {
     expect(jordan.find((p) => p.id === id(405))).toMatchObject({ commentCount: 2 });
   });
 
+  it('splits the home feed by chip: team, and everything else, each in feed order', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const isTeam = (p: { community: { kind: string } }) => p.community.kind === 'team';
+    for (const u of w.users) {
+      const all = w.feed(u);
+      for (const [scope, wanted] of [
+        ['team', all.filter(isTeam)],
+        ['communities', all.filter((p) => !isTeam(p))],
+      ] as const) {
+        const got = walk((cursor) => w.feedPage(u, { cursor, limit: 2, scope }), 2, wanted);
+        expect(got, `${u.firstName}, ${scope}`).toEqual(wanted);
+      }
+    }
+    const jordan = w.feedPage(USERS.jordan, { limit: 20, scope: 'communities' })!.items;
+    expect(jordan.some((p) => p.community.id === TEAM_IMPACT)).toBe(true);
+  });
+
+  it('never widens what a chip shows past the communities the reader reads', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.feedPage(USERS.coach, { limit: 100, scope: 'communities' })!.items;
+    expect(coach.length).toBeGreaterThan(0);
+    expect(coach.some((p) => p.community.id === MEDICAL)).toBe(false);
+  });
+
+  it('refuses a cursor from another chip', async () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const team = w.feedPage(USERS.jordan, { limit: 1, scope: 'team' })!;
+    expect(team.nextCursor).not.toBeNull();
+    const cursor = team.nextCursor!;
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1, scope: 'communities' })).toBeNull();
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1 })).toBeNull();
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1, scope: 'team' })).not.toBeNull();
+
+    const { as } = await world();
+    const jordan = await as('athlete');
+    const first = (await jordan.get('/feed?scope=team&limit=1')).body;
+    const q = new URLSearchParams({ scope: 'communities', cursor: first.nextCursor });
+    expect((await jordan.get(`/feed?${q}`)).status).toBe(400);
+    expect((await jordan.get('/feed?scope=bogus')).status).toBe(400);
+  });
+
   it('refuses a cursor from another feed, even one the reader can’t see', () => {
     const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
     const home = w.feedPage(USERS.jordan, { limit: 1 })!;
@@ -836,6 +877,25 @@ describe('creating and leaving communities', () => {
     expect(ids((await priya.get('/communities')).body)).toContain(created.body.id);
   });
 
+  it('takes no posts or events in a held community, its creator’s included, until approved', async () => {
+    const { as } = await world();
+    const athlete = await as('athlete');
+    const created = await athlete.post('/communities', {
+      kind: 'interest',
+      name: 'Pre-med athletes',
+      about: 'MCAT study groups.',
+      private: false,
+    });
+    const at = `/communities/${created.body.id}`;
+    const event = { title: 'Study hall', startsAt: '2026-11-20T23:00:00.000Z', location: 'Online' };
+    expect((await athlete.post(`${at}/posts`, { text: 'Hi' })).status).toBe(409);
+    expect((await athlete.post(`${at}/events`, event)).status).toBe(409);
+
+    await approve(await as('staff'), created.body.id);
+    expect((await athlete.post(`${at}/posts`, { text: 'Hi' })).status).toBe(201);
+    expect((await athlete.post(`${at}/events`, event)).status).toBe(201);
+  });
+
   it('rejects a duplicate name in the same kind, ignoring case', async () => {
     const { as } = await world();
     const coach = await as('coach');
@@ -847,12 +907,16 @@ describe('creating and leaving communities', () => {
     expect(dup.status).toBe(409);
   });
 
-  it('never lets a teen or recruiter create a medical community', async () => {
+  it('lets parents create medical communities only, and teens and recruiters neither kind', async () => {
     const { as } = await world();
     const body = { kind: 'medical', name: 'Teen heart group', about: 'Support.' };
     expect((await (await as('teen')).post('/communities', body)).status).toBe(403);
     expect((await (await as('recruiter')).post('/communities', body)).status).toBe(403);
     expect((await (await as('parent')).post('/communities', body)).status).toBe(201);
+    const interest = { kind: 'interest', name: 'Pickup basketball', about: 'Sunday games.' };
+    for (const role of ['parent', 'teen', 'recruiter'] as const) {
+      expect((await (await as(role)).post('/communities', interest)).status, role).toBe(403);
+    }
   });
 
   it('hides the medical kind entirely while its switch is off', async () => {
@@ -862,6 +926,49 @@ describe('creating and leaving communities', () => {
     expect(res.status).toBe(400);
     expect(res.text).not.toContain('edical');
     expect((await parent.post(`/communities/${MEDICAL}/posts`, { text: 'Hi' })).status).toBe(404);
+  });
+
+  it('keeps a medical community’s events off the events list while its switch is off', () => {
+    const coffee = {
+      id: id(9001),
+      title: 'Family coffee',
+      details: null,
+      startsAt: '2026-11-05T15:00:00.000Z',
+      endsAt: null,
+      location: 'Davis Square',
+      hostId: USERS.lisa.id,
+      communityId: MEDICAL,
+      goingCount: 1,
+      moderation: 'approved' as const,
+      createdAt: '2026-10-20T12:00:00.000Z',
+    };
+    // With the switch on, Lisa sees it, so the switch is what hides it.
+    for (const on of [true, false]) {
+      const w = new MockWorld({ identitySearch: true, medicalCommunities: on });
+      w.events.push(coffee);
+      expect(ids(w.eventsFor(w.user(USERS.lisa.id)!)).includes(coffee.id), String(on)).toBe(on);
+    }
+  });
+
+  it('takes a held community down when staff remove it, and frees its name', async () => {
+    const { as } = await world();
+    const athlete = await as('athlete');
+    const staff = await as('staff');
+    const body = { kind: 'interest', name: 'Pre-med athletes', about: 'MCAT study groups.' };
+    const created = await athlete.post('/communities', body);
+    const tickets = (await staff.get('/staff/moderation/tickets')).body;
+    const ticket = tickets.find((t: { target: { id: string } }) => t.target.id === created.body.id);
+    const res = await staff.post(`/staff/moderation/tickets/${ticket.id}/resolve`, {
+      resolution: 'remove',
+    });
+    expect(res.status).toBe(200);
+    // Gone for its creator too, and nothing can be posted into it.
+    expect((await athlete.get(`/communities/${created.body.id}`)).status).toBe(404);
+    expect(ids((await athlete.get('/communities')).body)).not.toContain(created.body.id);
+    const post = await athlete.post(`/communities/${created.body.id}/posts`, { text: 'Hi' });
+    expect(post.status).toBe(404);
+    // Removed names don't count against the next community of that name.
+    expect((await athlete.post('/communities', body)).status).toBe(201);
   });
 
   it('clears the recruiter opt-in on leaving', async () => {
@@ -885,6 +992,22 @@ describe('creating and leaving communities', () => {
   it('can’t leave a team community', async () => {
     const { as } = await world();
     expect((await (await as('athlete')).post(`/communities/${TEAM}/leave`)).status).toBe(400);
+  });
+
+  it('keeps the creator in, and lets a member leave a medical community', async () => {
+    const { as } = await world();
+    const lisa = await as('parent'); // made it
+    const jordan = await as('athlete'); // a member
+    expect((await lisa.post(`/communities/${MEDICAL}/leave`)).status).toBe(400);
+    expect((await jordan.get('/feed')).text).toContain('sent meals');
+    const left = await jordan.post(`/communities/${MEDICAL}/leave`);
+    expect(left.status).toBe(200);
+    expect(left.body.myMembership).toBeNull();
+    expect((await jordan.get('/feed')).text).not.toContain('sent meals');
+    // It's private, so coming back is a request to Lisa, not a rejoin.
+    const back = await jordan.post(`/communities/${MEDICAL}/join`);
+    expect(back.body).toMatchObject({ myMembership: null });
+    expect(back.body.myJoinRequest).not.toBeNull();
   });
 });
 
@@ -926,6 +1049,30 @@ describe('private communities', () => {
       kind: 'join_approved',
       target: { kind: 'community', id: CAPTAINS },
     });
+  });
+
+  it('leaves the requester out when the creator declines, and tells them nothing', async () => {
+    const { as } = await world();
+    const priya = await as('alumni_athlete');
+    const coach = await as('coach');
+    await priya.post(`/communities/${CAPTAINS}/join`);
+    const decline = { decision: 'decline' };
+    const url = `/communities/${CAPTAINS}/requests/${USERS.priya.id}`;
+    const waiting = await coach.post(url, decline);
+    expect(waiting.status).toBe(200);
+    expect(waiting.body.map((r: { user: { id: string } }) => r.user.id)).not.toContain(
+      USERS.priya.id,
+    );
+    // The request is used up: deciding it again finds nothing.
+    expect((await coach.post(url, decline)).status).toBe(404);
+    const captains = (await priya.get(`/communities/${CAPTAINS}`)).body;
+    expect(captains).toMatchObject({ myMembership: null, myJoinRequest: null, memberCount: 2 });
+    expect((await priya.get(`/communities/${CAPTAINS}/posts`)).body.items).toEqual([]);
+    const notes = (await priya.get('/notifications')).body.items;
+    expect(notes.filter((n: { kind: string }) => n.kind === 'join_approved')).toEqual([]);
+    // A decline isn't a ban: she can ask again.
+    const again = await priya.post(`/communities/${CAPTAINS}/join`);
+    expect(again.body.myJoinRequest).not.toBeNull();
   });
 });
 

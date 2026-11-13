@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CalendarDate, Id, Timestamp } from './common';
+import { CalendarDate, Id, PageQuery, Timestamp } from './common';
 import { type Community, CommunitySummary, type CommunityKind } from './communities';
 import { ModerationStatus } from './moderation';
 import type { Role } from './roles';
@@ -59,13 +59,30 @@ export const NewPostRequest = CreatePostRequest.omit({ communityId: true });
 export type NewPostRequest = z.infer<typeof NewPostRequest>;
 
 /**
+ * Which part of the home feed (the app's All, My team and Communities chips): `team` is your team
+ * communities, `communities` everything else you read, Team Impact's included. Filtered before
+ * paging, so every page is full; it only narrows what you already read.
+ */
+export const FeedScope = z.enum(['all', 'team', 'communities']);
+export type FeedScope = z.infer<typeof FeedScope>;
+
+/** Query of `GET /feed`. */
+export const FeedQuery = PageQuery.extend({ scope: FeedScope.default('all') });
+export type FeedQuery = z.input<typeof FeedQuery>;
+
+/**
  * Whether `role` may post into a community it sees (PRD §5 "Who can do what"): staff, coaches,
  * athletes and alumni post in any community they belong to (staff get no bypass, so not in a team's
  * community); teens only in their team's; parents and recruiters never (parents comment only).
  * Posting here never makes an announcement: staff announce from the portal
- * (`CreateAnnouncementRequest`).
+ * (`CreateAnnouncementRequest`). Nobody posts in a community still waiting for review: only its
+ * creator and staff can see it.
  */
-export const canPostIn = (role: Role, community: Pick<Community, 'kind' | 'myMembership'>) => {
+export const canPostIn = (
+  role: Role,
+  community: Pick<Community, 'kind' | 'myMembership' | 'moderation'>,
+) => {
+  if (community.moderation !== 'approved') return false;
   if (role === 'parent' || role === 'recruiter') return false;
   if (role === 'teen' && community.kind !== 'team') return false;
   return community.myMembership !== null;

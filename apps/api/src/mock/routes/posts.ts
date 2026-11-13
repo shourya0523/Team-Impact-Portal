@@ -55,6 +55,8 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     async (request, reply) => {
       const u = viewer(request);
       const c = seenCommunity(world, u, request.params.id);
+      // Only its creator and staff see a held community, so saying so gives nothing away.
+      if (c.moderation !== 'approved') throw httpError(409, 'This community is waiting for review');
       if (!canPostIn(u.role, world.community(c, u))) {
         throw httpError(403, 'You can’t post in this community');
       }

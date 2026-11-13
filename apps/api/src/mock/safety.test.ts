@@ -12,11 +12,13 @@ const FIRST_GEN = id(304); // official interest
 const FINANCE = id(305); // open interest
 const CAPTAINS = id(307); // private interest
 const COACH_POST = id(401);
+const SAM_POST = id(403); // in First-gen
 const NOAH_POST = id(406);
 const SOCCER = id(201);
 const TUFTS = id(701);
 const NORTHBEAM = id(801);
-const FALL_INTERNS = id(901); // Elena's, shared with Tom
+const FALL_INTERNS = id(901); // Elena's; Riley on it has turned recruiting off
+const TECH_PIPELINE = id(902); // Tom's
 const MATEO = id(150); // Lisa's child
 
 let closers: (() => Promise<void>)[] = [];
@@ -49,6 +51,7 @@ const world = async () => {
   return { as };
 };
 
+const ids = (body: { id: string }[]) => body.map((x) => x.id);
 const postIds = (body: { items: { id: string }[] }) => body.items.map((p) => p.id);
 
 describe('reports', () => {
@@ -371,6 +374,24 @@ describe('staff tools', () => {
     expect((await staff.get(`/communities/${FINANCE}`)).status).toBe(404);
   });
 
+  it('removes a community that breaks the rules, but never a team’s or Team Impact’s', async () => {
+    const w = await world();
+    const staff = await w.as('staff');
+    const jordan = await w.as('athlete'); // made First-gen
+    const recruiter = await w.as('recruiter');
+    expect(postIds((await jordan.get('/feed')).body)).toContain(SAM_POST);
+    expect((await staff.call('DELETE', `/staff/communities/${FIRST_GEN}`)).status).toBe(204);
+    // Gone for its members, posts and all.
+    expect((await jordan.get(`/communities/${FIRST_GEN}`)).status).toBe(404);
+    expect(postIds((await jordan.get('/feed')).body)).not.toContain(SAM_POST);
+    // An official community stops being a recruiter filter with it.
+    const search = await recruiter.get(`/search/athletes?communityId=${FIRST_GEN}`);
+    expect(search.status).toBe(400);
+    for (const kept of [TEAM_COMMUNITY, TEAM_IMPACT]) {
+      expect((await staff.call('DELETE', `/staff/communities/${kept}`)).status, kept).toBe(400);
+    }
+  });
+
   it('posts staff announcements straight into the Team Impact feed', async () => {
     const w = await world();
     const staff = await w.as('staff');
@@ -405,7 +426,7 @@ describe('staff tools', () => {
 });
 
 describe('recruiter lists', () => {
-  it('creates, renames, shares, notes and deletes a list', async () => {
+  it('creates, renames, notes and deletes a list', async () => {
     const w = await world();
     const elena = await w.as('recruiter');
     const created = await elena.call('POST', '/lists', { name: 'Spring', color: '#1E3F7B' });
@@ -417,13 +438,6 @@ describe('recruiter lists', () => {
     expect((await elena.call('PATCH', `/lists/${listId}`, { name: 'Spring 2027' })).body.name).toBe(
       'Spring 2027',
     );
-    const shared = await elena.call('POST', `/lists/${listId}/share`, { userId: USERS.tom.id });
-    expect(shared.body.sharedWith.map((u: { id: string }) => u.id)).toEqual([USERS.tom.id]);
-    // Never outside the company.
-    expect(
-      (await elena.call('POST', `/lists/${listId}/share`, { userId: USERS.jordan.id })).status,
-    ).toBe(400);
-
     const added = await elena.call('POST', `/lists/${listId}/athletes/${USERS.jordan.id}`);
     expect(added.status).toBe(200);
     expect(added.body.entries).toHaveLength(1);
@@ -434,7 +448,8 @@ describe('recruiter lists', () => {
     expect((await elena.get(`/lists/${listId}`)).body.entries[0].latestNote.text).toBe(
       'Call after finals',
     );
-    const removed = await elena.call('DELETE', `/lists/${listId}/athletes/${USERS.jordan.id}`);
+    const entryId = added.body.entries[0].id;
+    const removed = await elena.call('DELETE', `/lists/${listId}/entries/${entryId}`);
     expect(removed.body.entries).toHaveLength(0);
     expect((await elena.call('DELETE', `/lists/${listId}`)).status).toBe(204);
     expect((await elena.get(`/lists/${listId}`)).status).toBe(404);
@@ -450,15 +465,115 @@ describe('recruiter lists', () => {
     }
   });
 
-  it('keeps other recruiters’ unshared lists out of reach', async () => {
+  it('shares every list and note with everyone at the company; only the owner manages one', async () => {
     const w = await world();
     const elena = await w.as('recruiter');
-    // Tom's own list was never shared with Elena.
-    expect((await elena.get(`/lists/${id(902)}`)).status).toBe(404);
-    expect((await elena.call('DELETE', `/lists/${id(902)}`)).status).toBe(404);
-    expect((await elena.call('POST', `/lists/${id(902)}/athletes/${USERS.jordan.id}`)).status).toBe(
-      404,
+    // Tom's list is Elena's to read, add to and note on too.
+    expect(ids((await elena.get('/lists')).body)).toEqual(
+      expect.arrayContaining([FALL_INTERNS, TECH_PIPELINE]),
     );
+    expect(
+      (await elena.call('POST', `/lists/${TECH_PIPELINE}/athletes/${USERS.jordan.id}`)).status,
+    ).toBe(200);
+    await elena.call('PUT', `/lists/${TECH_PIPELINE}/athletes/${USERS.sam.id}/note`, {
+      text: 'Ask about the summer',
+    });
+    // But only Tom renames or deletes it.
+    expect((await elena.call('PATCH', `/lists/${TECH_PIPELINE}`, { name: 'Mine' })).status).toBe(
+      403,
+    );
+    expect((await elena.call('DELETE', `/lists/${TECH_PIPELINE}`)).status).toBe(403);
+  });
+
+  it('shows colleagues the same list and notes, and never another company', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const tom = w.user(USERS.tom.id)!;
+    const list = w.listsFor(tom).find((l) => l.id === FALL_INTERNS)!;
+    const jordan = w.listDetail(list, tom).entries.find((e) => e.available)!;
+    expect(jordan).toMatchObject({
+      available: true,
+      card: { athleteId: USERS.jordan.id },
+      latestNote: { author: { id: USERS.elena.id } },
+    });
+    expect(w.listsFor({ ...tom, companyId: id(899) })).toEqual([]);
+  });
+
+  it('shows an athlete who turned recruiting off as no longer available, naming no one', async () => {
+    const w = await world();
+    const elena = await w.as('recruiter');
+    const list = await elena.get(`/lists/${FALL_INTERNS}`);
+    expect(list.body.athleteCount).toBe(1);
+    expect(list.body.entries).toEqual([
+      expect.objectContaining({
+        available: true,
+        card: expect.objectContaining({ firstName: 'Jordan' }),
+      }),
+      {
+        id: id(952),
+        available: false,
+        addedBy: expect.objectContaining({ id: USERS.elena.id }),
+        addedAt: expect.any(String),
+      },
+    ]);
+    expect(list.text).not.toContain('Riley');
+    expect(list.text).not.toContain(USERS.riley.id);
+    // Not open to notes, but it can be cleared off the list.
+    expect(
+      (
+        await elena.call('PUT', `/lists/${FALL_INTERNS}/athletes/${USERS.riley.id}/note`, {
+          text: 'Hi',
+        })
+      ).status,
+    ).toBe(404);
+    const cleared = await elena.call('DELETE', `/lists/${FALL_INTERNS}/entries/${id(952)}`);
+    expect(cleared.body.entries).toHaveLength(1);
+  });
+
+  it('answers a note on a hidden saved athlete exactly as one on an athlete never saved', async () => {
+    const w = await world();
+    const elena = await w.as('recruiter');
+    const note = (athleteId: string) =>
+      elena.call('PUT', `/lists/${FALL_INTERNS}/athletes/${athleteId}/note`, { text: 'Hi' });
+    // Riley is saved but has turned recruiting off; Sam is visible but not on this list; Mateo is a
+    // child, never on the portal or a list.
+    const hidden = await note(USERS.riley.id);
+    const notSaved = await note(USERS.sam.id);
+    const never = await note(MATEO);
+    expect(hidden.status).toBe(404);
+    expect(hidden.text).toBe(notSaved.text);
+    expect(hidden.text).toBe(never.text);
+    expect(hidden.text).not.toContain('athlete');
+  });
+
+  it('turns a saved athlete into no longer available while recruiting is off, and back', async () => {
+    const w = await world();
+    const elena = await w.as('recruiter');
+    const jordan = await w.as('athlete');
+    const jordanEntry = async () =>
+      (await elena.get(`/lists/${FALL_INTERNS}`)).body.entries.find(
+        (e: { id: string }) => e.id === id(951),
+      );
+    await jordan.call('PUT', '/me/settings', { openToRecruiting: false });
+    expect(await jordanEntry()).not.toHaveProperty('card');
+    expect((await jordanEntry()).available).toBe(false);
+    await jordan.call('PUT', '/me/settings', { openToRecruiting: true });
+    expect(await jordanEntry()).toMatchObject({
+      available: true,
+      card: { athleteId: USERS.jordan.id },
+      latestNote: { text: expect.stringContaining('analyst program') },
+    });
+  });
+
+  it('keeps a departed owner’s lists for the company, for anyone there to manage', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    expect(deleteAccount(w, w.user(USERS.elena.id)!)).toBeNull();
+    const tom = w.user(USERS.tom.id)!;
+    const list = w.listsFor(tom).find((l) => l.id === FALL_INTERNS)!;
+    expect(w.list(list, tom).owner).toBeNull();
+    const entries = w.listDetail(list, tom).entries;
+    expect(entries.map((e) => e.addedBy)).toEqual([null, null]);
+    // Elena's note on Jordan is still the company's.
+    expect(entries[0]).toMatchObject({ latestNote: { author: { id: USERS.elena.id } } });
   });
 });
 

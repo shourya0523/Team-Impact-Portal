@@ -5,6 +5,7 @@ import {
   Community,
   CommunityJoinRequest,
   DecideJoinRequest,
+  FeedQuery,
   Id,
   IdParams,
   page,
@@ -121,7 +122,7 @@ export const registerCommunityRoutes = (app: ZodApp, world: MockWorld, { viewer 
 
   app.get(
     '/feed',
-    { schema: { querystring: PageQuery, response: { 200: page(Post) } } },
+    { schema: { querystring: FeedQuery, response: { 200: page(Post) } } },
     async (request) => {
       const feedPage = world.feedPage(viewer(request), request.query);
       if (!feedPage) throw httpError(400, 'Invalid cursor. Start again from the first page.');

@@ -1,12 +1,14 @@
 import {
-  canCreateCommunity,
+  can,
   Community,
+  consentFlags,
   CreateCommunityRequest,
   IdParams,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
 import { holdOrPublish } from '../activity';
 import type { MockCommunity } from '../fixtures';
+import { actorOf } from '../policy';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
 import { seenCommunity } from './posts';
@@ -25,11 +27,13 @@ export const registerCommunityCreateRoutes = (
     async (request, reply) => {
       const u = viewer(request);
       const { kind, name, about } = request.body;
-      // With the medical switch off the kind doesn't exist anywhere (PRD §11).
-      if (kind === 'medical' && !world.flags.medicalCommunities) {
-        throw httpError(400, 'Choose a kind of community');
-      }
-      if (!canCreateCommunity(u.role, kind)) {
+      const medicalEnabled = world.flags.medicalCommunities;
+      if (!can(actorOf(world, u), 'community.create', { kind, medicalEnabled })) {
+        // With the medical switch off the kind doesn't exist anywhere (PRD §11), so it reads as
+        // a bad choice rather than a refusal.
+        if (kind === 'medical' && !medicalEnabled) {
+          throw httpError(400, 'Choose a kind of community');
+        }
         throw httpError(403, 'You can’t create this kind of community');
       }
       // Names are unique per kind, ignoring case; held names count, removed ones don't.
@@ -74,6 +78,13 @@ export const registerCommunityCreateRoutes = (
       if (c.createdById === u.id)
         throw httpError(400, 'You created this community, so you stay in it');
       // Dropping the membership drops the recruiter opt-in with it; rejoining starts it off.
+      // Leaving ends any "findable through this community" opt-in, so record it going off.
+      world.recordConsent(
+        u.id,
+        consentFlags.findableIn(c.id),
+        c.members.find((m) => m.userId === u.id)?.recruiterSearchOptIn ?? false,
+        false,
+      );
       c.members = c.members.filter((m) => m.userId !== u.id);
       c.requests = c.requests.filter((r) => r.userId !== u.id);
       return world.community(c, u);

@@ -4,10 +4,11 @@ import { Image, StyleSheet, View } from 'react-native';
 import { canCommentIn, type Comment, type CommunityKind, type Post } from '@team-impact/contracts';
 import { colors, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { HeldNote, Rally } from '@/components/activity';
 import { ROLE_LABEL, shortDate } from '@/components/format';
 import { blockable, ReportButton } from '@/components/Report';
-import { Async, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
+import { Async, EmptyState, ErrorText, Gutter, Screen, SectionLabel } from '@/components/ui';
 import { useApi } from '@/hooks/useApi';
 import { useRole } from '@/navigation/role';
 import { Avatar, Badge, Button, Card, Input, Text } from '@/ui';
@@ -84,14 +85,24 @@ export default function PostDetail() {
           setDraft('');
           comments.reload();
         },
-        (e: Error) => setError(e.message),
+        (e: Error) => setError(describeError(e)),
       )
       .finally(() => setBusy(false));
   };
 
   return (
     <Screen eyebrow="Post" title="Conversation" back>
-      <Async state={post.state}>
+      <Async
+        state={post.state}
+        onRetry={post.reload}
+        notFound={
+          <Gutter>
+            <EmptyState title="Post not available">
+              It may have been removed, or you blocked or reported it.
+            </EmptyState>
+          </Gutter>
+        }
+      >
         {(p) => {
           const held = p.moderation !== 'approved';
           const canComment = !!role && !held && canCommentIn(role, p.community.kind);
@@ -135,7 +146,7 @@ export default function PostDetail() {
               </Gutter>
               <SectionLabel>Comments</SectionLabel>
               <Gutter>
-                <Async state={comments.state}>
+                <Async state={comments.state} onRetry={comments.reload}>
                   {(list) =>
                     list.length ? (
                       list.map((c) => (
@@ -147,9 +158,9 @@ export default function PostDetail() {
                         />
                       ))
                     ) : (
-                      <Text variant="small" color="secondary">
-                        No comments yet.
-                      </Text>
+                      <EmptyState title="No comments yet">
+                        {canComment ? 'Be the first to say something.' : undefined}
+                      </EmptyState>
                     )
                   }
                 </Async>

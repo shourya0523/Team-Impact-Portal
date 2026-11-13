@@ -26,4 +26,5 @@ export * from './profiles';
 export * from './team';
 export * from './community-members';
 export * from './staff-tools';
+export * from './consent';
 export * from './policy';

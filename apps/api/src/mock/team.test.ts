@@ -21,6 +21,7 @@ const OTHER_TEAM = id(202); // invited, no coach yet
 const KAI_REQUEST = id(1101);
 const LIVE_CODE = id(1201);
 const REVOKED_CODE = id(1202);
+const COACH_POST = id(401); // approved, in the soccer team's community
 const MATEO = CHILDREN[0]!; // Lisa's son
 
 let close: (() => Promise<void>) | undefined;
@@ -181,6 +182,30 @@ describe('team: join approvals', () => {
     const result = decideJoinRequest(world, coach, id(1199), 'approve');
     expect(result).toEqual({ error: 'Only this team’s coaches can decide', status: 403 });
     expect(world.teamIdsOf(USERS.kai.id)).not.toContain(OTHER_TEAM);
+  });
+});
+
+describe('team: the team community follows the team', () => {
+  const teamCommunity = (world: MockWorld) =>
+    world.communities.find((c) => c.kind === 'team' && c.teamId === TEAM)!;
+
+  it('coach approval brings the team community and its posts with it', () => {
+    const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const kai = world.user(USERS.kai.id)!;
+    expect(world.canSeeCommunity(teamCommunity(world), kai)).toBe(false);
+    decideJoinRequest(world, world.user(USERS.coach.id)!, KAI_REQUEST, 'approve');
+    expect(world.community(teamCommunity(world), kai).myMembership).not.toBeNull();
+    expect(world.feed(kai).map((p) => p.id)).toContain(COACH_POST);
+  });
+
+  it('a QR join does the same, with no approval', () => {
+    const world = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const leo = world.user(USERS.leo.id)!;
+    expect(world.canSeeCommunity(teamCommunity(world), leo)).toBe(false);
+    const live = world.qrCodes.find((c) => c.id === LIVE_CODE)!;
+    expect(redeemQrCode(world, leo, live.shortCode)).toMatchObject({ joined: true });
+    expect(world.community(teamCommunity(world), leo).myMembership).not.toBeNull();
+    expect(world.feed(leo).map((p) => p.id)).toContain(COACH_POST);
   });
 });
 

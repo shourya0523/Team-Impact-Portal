@@ -177,10 +177,20 @@ describe('mock API: communities', () => {
   });
 
   it('hides the medical kind everywhere with one switch', async () => {
-    const { get } = await signIn('parent', { identitySearch: true, medicalCommunities: false });
+    const off = { identitySearch: true, medicalCommunities: false };
+    const { get, send } = await signIn('parent', off);
     const kinds = (await get('/communities')).body.map((c: { kind: string }) => c.kind);
     expect(kinds).not.toContain('medical');
     expect((await get('/feed')).text).not.toContain(MEDICAL);
+    // Lisa made it, but while the switch is off there's nothing to join.
+    expect((await send('POST', `/communities/${MEDICAL}/join`, {})).status).toBe(404);
+    await close?.();
+    // Staff, who see every other community, don't see it either.
+    const staff = await signIn('staff', off);
+    const listed = (await staff.get('/staff/communities')).body.map(
+      (r: { community: { kind: string } }) => r.community.kind,
+    );
+    expect(listed).not.toContain('medical');
   });
 
   it('shows recruiters only Team Impact and official interest communities', async () => {

@@ -9,6 +9,7 @@ import {
 } from '@team-impact/contracts';
 import { colors, layout, radius, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
+import { describeError } from '@/api/errors';
 import { ErrorText, IconButton } from '@/components/ui';
 import { Button, Input, Sheet, Text } from '@/ui';
 
@@ -43,12 +44,15 @@ const WHAT: Record<CreateReportRequest['target']['kind'], string> = {
 
 const DOT = 20;
 
+/** What the form did: a report hides that one item for you, a block everything by its author. */
+export type ReportAction = 'report' | 'block';
+
 type ReportProps = {
   target: CreateReportRequest['target'];
   /** Offer blocking the item's author from the same form (P2); see `blockable`. */
   author?: { id: string; name: string };
-  /** After a report or block, e.g. to reload a feed the item should drop out of. */
-  onDone?: () => void;
+  /** After a report or block, e.g. to drop the item (or its author's items) from a feed. */
+  onDone?: (action: ReportAction) => void;
 };
 
 /**
@@ -69,21 +73,22 @@ export function ReportForm({
   const [done, setDone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const run = (action: () => Promise<unknown>, message: string) => {
+  const run = (kind: ReportAction, action: () => Promise<unknown>, message: string) => {
     setBusy(true);
     setError(null);
     action()
       .then(() => {
         setDone(message);
-        onDone?.();
+        onDone?.(kind);
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => setError(describeError(e)))
       .finally(() => setBusy(false));
   };
 
   const send = () =>
     reason &&
     run(
+      'report',
       () => api.report({ target, reason, ...(note.trim() ? { note: note.trim() } : {}) }),
       `Thanks. Team Impact will review this ${WHAT[target.kind]}, and we’ve hidden it for you.`,
     );
@@ -91,6 +96,7 @@ export function ReportForm({
   const block = () =>
     author &&
     run(
+      'block',
       () => api.block(author.id),
       `${author.name} is blocked. You won’t see each other’s posts, comments or events. Undo this in Me › Safety.`,
     );
@@ -160,15 +166,15 @@ export function ReportSheet({
   onDone,
   ...props
 }: ReportProps & { visible: boolean; onClose: () => void }) {
-  const [acted, setActed] = useState(false);
+  const [acted, setActed] = useState<ReportAction | null>(null);
   const close = () => {
     onClose();
-    if (acted) onDone?.();
-    setActed(false);
+    if (acted) onDone?.(acted);
+    setActed(null);
   };
   return (
     <Sheet visible={visible} title={`Report this ${WHAT[props.target.kind]}`} onClose={close}>
-      {visible && <ReportForm {...props} onDone={() => setActed(true)} onClose={close} />}
+      {visible && <ReportForm {...props} onDone={setActed} onClose={close} />}
     </Sheet>
   );
 }

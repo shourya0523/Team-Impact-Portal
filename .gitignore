@@ -2,7 +2,9 @@ node_modules/
 dist/
 .turbo/
 *.tsbuildinfo
+# Every env file stays local (.env, .env.local, .env.development, ...); only the template is shared.
 .env
-.env*.local
+.env.*
+!.env.example
 .DS_Store
 coverage/
