@@ -18,9 +18,8 @@ export interface MockEmail {
 export const sendEmail = (world: MockWorld, email: Omit<MockEmail, 'id' | 'sentAt'>) => {
   const sent: MockEmail = { ...email, id: world.newId(), sentAt: new Date().toISOString() };
   world.outbox.push(sent);
-  // Only when a person runs the API locally: tests send plenty, and a deployed server's logs would
-  // keep the token the invite only stores a hash of.
-  if (process.env.NODE_ENV !== 'test' && process.env.NODE_ENV !== 'production')
-    console.info(`✉ to ${sent.to}: ${sent.subject}\n  ${sent.link ?? ''}`);
+  // Only with the dev outbox on (DEV_OUTBOX=1, local runs): a deployed server's logs would keep the
+  // token the invite only stores a hash of.
+  if (world.devOutbox) console.info(`✉ to ${sent.to}: ${sent.subject}\n  ${sent.link ?? ''}`);
   return sent;
 };

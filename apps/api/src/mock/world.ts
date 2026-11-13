@@ -103,7 +103,15 @@ export class MockWorld {
   readonly eventsLog: (ReturnType<typeof eventRow> & { occurredAt: string })[] = [];
   private nextId = 5000;
 
-  constructor(readonly flags: FeatureFlags) {}
+  /** Whether `/dev/outbox` is served and sent email printed (DEV_OUTBOX, `./outbox.ts`). */
+  readonly devOutbox: boolean;
+
+  constructor(
+    readonly flags: FeatureFlags,
+    { devOutbox = false }: { devOutbox?: boolean } = {},
+  ) {
+    this.devOutbox = devOutbox;
+  }
 
   newId = () => fx.id(this.nextId++);
 

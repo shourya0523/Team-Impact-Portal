@@ -18,6 +18,11 @@ const EnvSchema = z
       // The portal (Vite) and the athlete app on web (Expo).
       .default('http://localhost:5173,http://localhost:8081')
       .transform((value) => value.split(',').map((origin) => origin.trim())),
+    /**
+     * Mock only: serve `GET /dev/outbox` and print sent email, invite links included, so they can
+     * be opened locally. Off unless asked for (`pnpm dev:mock` sets it), and refused in production.
+     */
+    DEV_OUTBOX: z.stringbool().default(false),
     FLAG_IDENTITY_SEARCH: z.stringbool().default(true),
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
   })
@@ -27,6 +32,9 @@ const EnvSchema = z
     }
     if (!env.SESSION_SECRET && (!env.MOCK_API || env.NODE_ENV === 'production')) {
       ctx.addIssue({ code: 'custom', path: ['SESSION_SECRET'], message: 'Required' });
+    }
+    if (env.DEV_OUTBOX && env.NODE_ENV === 'production') {
+      ctx.addIssue({ code: 'custom', path: ['DEV_OUTBOX'], message: 'Never in production' });
     }
   })
   .transform((env) => ({ ...env, SESSION_SECRET: env.SESSION_SECRET ?? DEV_SESSION_SECRET }));

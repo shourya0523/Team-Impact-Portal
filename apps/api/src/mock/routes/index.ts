@@ -52,6 +52,7 @@ export const registerMockRoutes = (app: ZodApp, world: MockWorld) => {
   ]) {
     register(app, world, g);
   }
-  // `/dev/outbox` hands out invite links without sign-in: never on a deployed server.
-  if (process.env.NODE_ENV !== 'production') registerDevRoutes(app, world);
+  // `/dev/outbox` hands out invite links without sign-in, so only when asked for (DEV_OUTBOX=1,
+  // which env.ts refuses in production).
+  if (world.devOutbox) registerDevRoutes(app, world);
 };

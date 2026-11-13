@@ -27,6 +27,11 @@ export interface AppOptions {
   flags?: Flags;
   /** Serve fixture data instead of the database (MOCK_API=1). */
   mock?: boolean;
+  /**
+   * With `mock`: serve `/dev/outbox` and print sent email (DEV_OUTBOX=1). Off by default, since
+   * the outbox hands out invite links without sign-in.
+   */
+  devOutbox?: boolean;
 }
 
 /** Identity search and medical communities ship on for the pilot (PRD §7, §5). */
@@ -40,6 +45,7 @@ export const buildApp = async ({
   logger = false,
   flags = DEFAULT_FLAGS,
   mock = false,
+  devOutbox = false,
 }: AppOptions) => {
   const app = useZodContracts(Fastify({ logger }));
 
@@ -59,7 +65,7 @@ export const buildApp = async ({
   app.get('/config/flags', { schema: { response: { 200: FeatureFlags } } }, async () => flags);
 
   if (mock) {
-    registerMockRoutes(app, new MockWorld(flags));
+    registerMockRoutes(app, new MockWorld(flags, { devOutbox }));
   } else if (db) {
     /** Client-side events. Everything else is tracked by the route that does the action. */
     app.post('/events', { schema: { body: TrackEventRequest } }, async (request, reply) => {

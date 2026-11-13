@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { Role } from '@team-impact/contracts';
 import { buildApp } from '../app';
 import { DEFAULT_PREFS } from './activity';
@@ -30,8 +30,13 @@ let close: (() => Promise<void>) | undefined;
 afterEach(() => close?.());
 
 /** A fresh mock API, signed in as `role`'s fixture user. */
-const signIn = async (role: Role) => {
-  const app = await buildApp({ sessionSecret: 'x'.repeat(32), corsOrigins: [], mock: true });
+const signIn = async (role: Role, { devOutbox = false } = {}) => {
+  const app = await buildApp({
+    sessionSecret: 'x'.repeat(32),
+    corsOrigins: [],
+    mock: true,
+    devOutbox,
+  });
   close = () => app.close();
   const res = await app.inject({ method: 'POST', url: '/auth/dev-sign-in', payload: { role } });
   expect(res.statusCode).toBe(200);
@@ -535,7 +540,7 @@ describe('team: coach invites and edits', () => {
     expect((await call('PATCH', `/teams/${TEAM}`, { name: 'Ours' })).status).toBe(403);
   });
   it('emails the invite link, and that link is the one that opens it', async () => {
-    const { call } = await signIn('coach');
+    const { call } = await signIn('coach', { devOutbox: true });
     const made = await call('POST', `/teams/${TEAM}/coach-invites`, {
       email: 'new.assistant@tufts.edu',
     });
@@ -548,13 +553,9 @@ describe('team: coach invites and edits', () => {
     expect((await call('GET', `/invites/${token}`)).status).toBe(200);
   });
 
-  it('has no dev outbox in production, where it would hand out invite links', async () => {
-    vi.stubEnv('NODE_ENV', 'production');
-    try {
-      const { call } = await signIn('coach');
-      expect((await call('GET', '/dev/outbox')).status).toBe(404);
-    } finally {
-      vi.unstubAllEnvs();
-    }
+  it('has no dev outbox unless asked for, since it hands out invite links', async () => {
+    const { call } = await signIn('coach');
+    await call('POST', `/teams/${TEAM}/coach-invites`, { email: 'new.assistant@tufts.edu' });
+    expect((await call('GET', '/dev/outbox')).status).toBe(404);
   });
 });

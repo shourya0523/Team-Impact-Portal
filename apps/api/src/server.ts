@@ -12,6 +12,7 @@ const app = await buildApp({
   db,
   logger: true,
   mock: env.MOCK_API,
+  devOutbox: env.DEV_OUTBOX,
   flags: {
     identitySearch: env.FLAG_IDENTITY_SEARCH,
     medicalCommunities: env.FLAG_MEDICAL_COMMUNITIES,
@@ -19,6 +20,8 @@ const app = await buildApp({
 });
 
 if (env.MOCK_API) app.log.warn('MOCK_API is on: serving fixture data, not the database');
+if (env.MOCK_API && env.DEV_OUTBOX)
+  app.log.warn('DEV_OUTBOX is on: /dev/outbox serves invite links');
 if (db) scheduleEventsLogRetention(db, { days: env.EVENTS_LOG_RETENTION_DAYS, log: app.log });
 
 await app.listen({ port: env.PORT, host: '0.0.0.0' });
