@@ -47,10 +47,13 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
         l.name.trim().toLowerCase() === name.trim().toLowerCase(),
     );
 
-  /** On the employer portal at all: never a child, teen or athlete who isn't open to recruiting. */
-  const visibleAthlete = (athleteId: string) => {
+  /**
+   * On the employer portal at all (never a child, teen or athlete who isn't open to recruiting),
+   * and not across a block with `u`.
+   */
+  const visibleAthlete = (athleteId: string, u: MockUser) => {
     const card = world.cards.find((c) => c.face.athleteId === athleteId);
-    if (!card || !world.recruiterCanSee(card)) throw httpError(404, 'No such athlete');
+    if (!card || !world.canReadCard(card, u)) throw httpError(404, 'No such athlete');
     return card;
   };
 
@@ -74,7 +77,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
         updatedAt: now,
       };
       world.lists.push(list);
-      return reply.status(201).send(world.list(list));
+      return reply.status(201).send(world.list(list, u));
     },
   );
 
@@ -92,7 +95,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       if (b.color !== undefined) list.color = b.color;
       if (b.note !== undefined) list.note = b.note || null;
       touch(list);
-      return world.list(list);
+      return world.list(list, u);
     },
   );
 
@@ -111,7 +114,7 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       const u = recruiter(request);
       const list = listOf(u, request.params.id);
       const { athleteId } = request.params;
-      visibleAthlete(athleteId);
+      visibleAthlete(athleteId, u);
       if (list.entries.some((e) => e.athleteId === athleteId)) {
         throw httpError(409, 'Already on this list');
       }
@@ -159,11 +162,11 @@ export const registerListRoutes = (app: ZodApp, world: MockWorld, { requireRole 
       const u = recruiter(request);
       const list = listOf(u, request.params.id);
       const { athleteId } = request.params;
-      // An athlete off the employer portal gets the same answer as one never saved, so the reply
-      // never confirms that a hidden athlete is on the list.
+      // An athlete off the employer portal, or across a block with `u`, gets the same answer as one
+      // never saved, so the reply never confirms that a hidden athlete is on the list.
       const card = world.cards.find((c) => c.face.athleteId === athleteId);
       const onList = list.entries.some((e) => e.athleteId === athleteId);
-      if (!onList || !card || !world.recruiterCanSee(card)) {
+      if (!onList || !card || !world.canReadCard(card, u)) {
         throw httpError(404, 'Not on this list');
       }
       const note = {

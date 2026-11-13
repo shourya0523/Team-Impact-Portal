@@ -514,7 +514,7 @@ describe('recruiter lists', () => {
     expect(deleteAccount(w, w.user(USERS.elena.id)!)).toBeNull();
     const tom = w.user(USERS.tom.id)!;
     const list = w.listsFor(tom).find((l) => l.id === FALL_INTERNS)!;
-    expect(w.list(list).owner).toBeNull();
+    expect(w.list(list, tom).owner).toBeNull();
     const entries = w.listDetail(list, tom).entries;
     expect(entries.map((e) => e.addedBy)).toEqual([null, null]);
     // Elena's note on Jordan is still the company's.

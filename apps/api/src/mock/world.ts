@@ -470,7 +470,11 @@ export class MockWorld {
   };
 
   /** On the employer portal at all: a published card, open to recruiting, of an athlete. */
-  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card));
+  recruiterCanSee = (card: MockCard) => recruiterVisible(cardFacts(this, card, null));
+
+  /** Whether `u` may read this card at all, blocks included (search, lists). */
+  canReadCard = (card: MockCard, u: MockUser) =>
+    can(actorOf(this, u), 'card.read', cardFacts(this, card, u));
 
   private static share = (
     contact: MockCard['contact'],
@@ -487,7 +491,7 @@ export class MockWorld {
     if (!card) return null;
     const face = this.cardFace(card);
     const none: ContactSharing = { email: false, phone: false, linkedin: false };
-    const facts = cardFacts(this, card);
+    const facts = cardFacts(this, card, u);
     const actor = actorOf(this, u);
     if (!can(actor, 'card.read', facts)) return null;
     const all: ContactSharing = { email: true, phone: true, linkedin: true };
@@ -505,10 +509,14 @@ export class MockWorld {
   /** Every list at the recruiter's company: lists and notes are shared company-wide. */
   listsFor = (u: MockUser) => this.lists.filter((l) => l.companyId === u.companyId);
 
-  /** On the employer portal now; anyone else on a list reads "no longer available". */
-  private available = (athleteId: string) => {
+  /**
+   * On the employer portal now, and not across a block with `u`; anyone else on a list reads "no
+   * longer available" to them. Per viewer, since colleagues share a list but each has their own
+   * blocks.
+   */
+  private available = (athleteId: string, u: MockUser) => {
     const card = this.cards.find((c) => c.face.athleteId === athleteId);
-    return !!card && this.recruiterCanSee(card);
+    return !!card && this.canReadCard(card, u);
   };
 
   private summaryOrNull = (userId: string | null) => {
@@ -526,23 +534,23 @@ export class MockWorld {
       : null;
   };
 
-  list = (l: MockList): RecruiterList => ({
+  list = (l: MockList, u: MockUser): RecruiterList => ({
     id: l.id,
     companyId: l.companyId,
     name: l.name,
     color: l.color,
     note: l.note,
     owner: this.summaryOrNull(l.ownerId),
-    athleteCount: l.entries.filter((e) => this.available(e.athleteId)).length,
+    athleteCount: l.entries.filter((e) => this.available(e.athleteId, u)).length,
     createdAt: l.createdAt,
     updatedAt: l.updatedAt,
   });
 
   listDetail = (l: MockList, u: MockUser): RecruiterListDetail => ({
-    ...this.list(l),
+    ...this.list(l, u),
     entries: l.entries.map((e) => {
       const base = { id: e.id, addedBy: this.summaryOrNull(e.addedById), addedAt: e.addedAt };
-      if (!this.available(e.athleteId)) return { ...base, available: false as const };
+      if (!this.available(e.athleteId, u)) return { ...base, available: false as const };
       return {
         ...base,
         available: true as const,
