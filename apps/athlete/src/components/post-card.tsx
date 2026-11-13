@@ -40,10 +40,11 @@ function CommentsButton({ post }: { post: Post }) {
   );
 }
 
-/**
- * From Team Impact, not the staff member who wrote it. Reportable like any post, but its author
- * can't be blocked (official posts, `Post.official`).
- */
+/** No Report button on Team Impact's official posts (`Post.official`, never blockable) or your own. */
+const reportable = (post: Post, myId: string | undefined) =>
+  !post.official && post.author.id !== myId;
+
+/** From Team Impact, not the staff member who wrote it. */
 function Announcement({ post, onRemove }: { post: Post; onRemove?: Remove }) {
   const { role, me } = useRole();
   return (
@@ -60,7 +61,7 @@ function Announcement({ post, onRemove }: { post: Post; onRemove?: Remove }) {
             Announcement · {shortDate(post.createdAt)}
           </Text>
         </View>
-        {me?.id !== post.author.id && (
+        {reportable(post, me?.id) && (
           <ReportButton
             target={{ kind: 'post', id: post.id }}
             onDone={(action) => onRemove?.(removedBy(post, action))}
@@ -143,7 +144,7 @@ export function PostCard({
             </Text>
           </View>
         </View>
-        {me?.id !== post.author.id && (
+        {reportable(post, me?.id) && (
           <ReportButton
             target={{ kind: 'post', id: post.id }}
             author={
