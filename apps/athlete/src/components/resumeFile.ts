@@ -37,9 +37,32 @@ const checked = (file: PickedResume): PickedResume => {
   return file;
 };
 
+type PhotoType = Exclude<ResumeUploadRequest['mimeType'], 'application/pdf'>;
+const PHOTO_TYPES: readonly string[] = RESUME_UPLOAD_LIMITS.mimeTypes.filter(
+  (t) => t !== 'application/pdf',
+);
+const EXTENSION: Record<PhotoType, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/heic': 'heic',
+};
+
+/**
+ * The photo's real type, which the server checks against its first bytes: the bytes themselves
+ * for JPEG and PNG (the picker re-encodes on some platforms and not on web), else what the picker
+ * reports.
+ */
+const photoTypeOf = (base64: string, reported: string | undefined): PhotoType => {
+  if (base64.startsWith('/9j/')) return 'image/jpeg';
+  if (base64.startsWith('iVBORw0KGgo')) return 'image/png';
+  const type = reported?.toLowerCase();
+  if (type && PHOTO_TYPES.includes(type)) return type as PhotoType;
+  throw new ResumePickError('Use a JPEG, PNG or HEIC photo.');
+};
+
 /**
  * Opens the system picker for a resume PDF, or a photo of a printed resume. Returns null when the
- * athlete cancels. Photos come back as JPEG.
+ * athlete cancels. Photos keep their own type (JPEG, PNG or HEIC).
  */
 export const pickResume = async (kind: ResumeKind): Promise<PickedResume | null> => {
   if (kind === 'pdf') {
@@ -67,9 +90,10 @@ export const pickResume = async (kind: ResumeKind): Promise<PickedResume | null>
   const asset = result.canceled ? undefined : result.assets[0];
   if (!asset) return null;
   const fileBase64 = asset.base64 ?? (await readBase64(asset.uri));
+  const mimeType = photoTypeOf(fileBase64, asset.mimeType);
   return checked({
-    fileName: asset.fileName ?? 'resume-photo.jpg',
-    mimeType: 'image/jpeg',
+    fileName: asset.fileName ?? `resume-photo.${EXTENSION[mimeType]}`,
+    mimeType,
     sizeBytes: sizeOf(fileBase64),
     fileBase64,
   });
