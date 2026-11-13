@@ -1,4 +1,4 @@
--- Reverses 0002_better_auth.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
+-- Reverses 0004_better_auth.sql. Run with `pnpm --filter @team-impact/api db:rollback`.
 -- Password hashes come back from the email-and-password sign-in rows before those tables go.
 ALTER TABLE "users" ADD COLUMN "password_hash" text;
 UPDATE "users" u SET "password_hash" = a."password"
