@@ -265,6 +265,49 @@ describe('staff: published at once, no review queue', () => {
     );
   });
 
+  it('publishes a staff comment at once and tells the post’s author', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const athlete = await as('athlete');
+    const coach = await as('coach');
+    const post = await athlete.post(`/communities/${TEAM_IMPACT}/posts`, { text: 'First game!' });
+    await approve(staff, post.body.id);
+
+    const created = await staff.post(`/posts/${post.body.id}/comments`, { text: 'Go Jumbos' });
+    expect(created.status).toBe(201);
+    expect(created.body.moderation).toBe('approved');
+    expect(await openTickets(staff, created.body.id)).toEqual([]);
+    expect(ids((await coach.get(`/posts/${post.body.id}/comments`)).body)).toContain(
+      created.body.id,
+    );
+    expect((await coach.get(`/posts/${post.body.id}`)).body.commentCount).toBe(1);
+    expect((await athlete.get('/notifications')).body.items[0]).toMatchObject({
+      kind: 'reply',
+      target: { kind: 'post', id: post.body.id },
+    });
+
+    // Everyone else's comments are still held.
+    const held = await coach.post(`/posts/${post.body.id}/comments`, { text: 'Nice' });
+    expect(held.body.moderation).toBe('in_review');
+    expect(await openTickets(staff, held.body.id)).toHaveLength(1);
+  });
+
+  it('publishes a community staff create at once, with no ticket', async () => {
+    const { as } = await world();
+    const staff = await as('staff');
+    const athlete = await as('athlete');
+    const created = await staff.post('/communities', {
+      kind: 'interest',
+      name: 'Athletes in Law',
+      about: 'Mentors and LSAT prep.',
+      private: false,
+    });
+    expect(created.status).toBe(201);
+    expect(created.body).toMatchObject({ moderation: 'approved', official: false });
+    expect(await openTickets(staff, created.body.id)).toEqual([]);
+    expect(ids((await athlete.get('/communities')).body)).toContain(created.body.id);
+  });
+
   it('needs membership like everyone else: no posting or events outside staff’s communities', async () => {
     const { as } = await world();
     const staff = await as('staff');

@@ -20,7 +20,8 @@ import type { MockWorld } from './world';
  * Every new post, comment, event and community starts `in_review` and is queued for staff as a
  * moderation ticket with no reports. Nothing reaches anyone but its author until staff keep it
  * (`dismiss`), and notifications fire only then, so held content never leaks through them. Staff's
- * own posts and events are the exception: they publish at once (`holdOrPublish`).
+ * own posts, comments, events and communities are the exception: they publish at once
+ * (`holdOrPublish`).
  */
 
 export interface MockComment {
@@ -286,10 +287,9 @@ export const publish = (world: MockWorld, target: Target, options: NotifyOptions
 };
 
 /**
- * Hold a new post or event for review, or publish it at once when staff wrote it: Team Impact's own
- * voice is exempt from the review queue (ticket: Team Impact announcements and staff posting from
- * the portal). PRD §5 and §9 still expect the automated OpenAI screen on every post and event;
- * revisit this when that screen exists.
+ * Hold a new post, comment, event or community for review, or publish it at once when staff wrote
+ * it: Team Impact's own voice skips pre-publication moderation entirely (CLAUDE.md, TI-146). Staff
+ * content outside Team Impact's own community can still be reported, and blocked by readers.
  */
 export const holdOrPublish = (
   world: MockWorld,

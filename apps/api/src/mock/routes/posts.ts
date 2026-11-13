@@ -10,7 +10,7 @@ import {
   Post,
 } from '@team-impact/contracts';
 import type { ZodApp } from '../../zod';
-import { commentsFor, holdForReview, holdOrPublish, toComment } from '../activity';
+import { commentsFor, holdOrPublish, toComment } from '../activity';
 import type { MockCommunity, MockUser } from '../fixtures';
 import type { MockWorld } from '../world';
 import { httpError, type Guards } from './context';
@@ -22,7 +22,7 @@ export const seenCommunity = (world: MockWorld, u: MockUser, id: string) => {
   return c;
 };
 
-/** Posts, comments and rallies. Everything new is held for moderation (P5), except staff posts. */
+/** Posts, comments and rallies. Everything new is held for moderation (P5), except staff's. */
 export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Guards) => {
   const postView = (c: MockCommunity, u: MockUser, postId: string) => {
     const p = world.posts.find((x) => x.id === postId);
@@ -114,7 +114,7 @@ export const registerPostRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
         createdAt: new Date().toISOString(),
       };
       world.comments.push(created);
-      holdForReview(world, { kind: 'comment', id: created.id }, created.text);
+      holdOrPublish(world, u, { kind: 'comment', id: created.id }, created.text);
       return reply.status(201).send(toComment(world, created));
     },
   );

@@ -109,6 +109,36 @@ describe('Posts page', () => {
     await waitFor(() => expect(options()).toEqual(['Team Impact', 'Athletes in Finance']));
   });
 
+  it('says the communities are loading, then offers them', async () => {
+    fakeApi();
+    render(<PostsPage />);
+    expect(options()).toEqual(['Loading communities…']);
+    expect(screen.getByLabelText<HTMLSelectElement>('Community').disabled).toBe(true);
+    await waitFor(() => expect(options()).toEqual(['Team Impact', 'Athletes in Finance']));
+    expect(screen.getByLabelText<HTMLSelectElement>('Community').disabled).toBe(false);
+  });
+
+  it('says when the communities can’t load, and tries again', async () => {
+    fakeApi();
+    const real = vi.mocked(fetch).getMockImplementation()!;
+    let failures = 1;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (String(url).endsWith('/communities') && failures-- > 0) {
+        return new Response(
+          JSON.stringify({ error: { code: 'unavailable', message: 'Server is down' } }),
+          { status: 503, headers: { 'content-type': 'application/json' } },
+        );
+      }
+      return real(url, init);
+    });
+    render(<PostsPage />);
+    expect((await screen.findByRole('alert')).textContent).toContain('Server is down');
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Post' }).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(options()).toEqual(['Team Impact', 'Athletes in Finance']));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('posts into the chosen community, lists it and says where it went', async () => {
     const writes = fakeApi();
     render(<PostsPage />);
