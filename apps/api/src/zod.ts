@@ -1,6 +1,7 @@
 import type { FastifyError, FastifyInstance, FastifyTypeProvider } from 'fastify';
 import type { z } from 'zod';
 import type { ApiError, ErrorCode } from '@team-impact/contracts';
+import { redactUrl } from './logging';
 
 /**
  * Routes declare contract schemas directly: `schema: { params, querystring, body, response }`.
@@ -77,8 +78,11 @@ export const useZodContracts = (app: FastifyInstance) => {
     return reply.status(500).send(apiError('internal_error', 'Something went wrong'));
   });
 
+  // The URL is redacted: an unsupported method on an emailed link would otherwise echo its token.
   app.setNotFoundHandler((request, reply) =>
-    reply.status(404).send(apiError('not_found', `No route for ${request.method} ${request.url}`)),
+    reply
+      .status(404)
+      .send(apiError('not_found', `No route for ${request.method} ${redactUrl(request.url)}`)),
   );
 
   return app.withTypeProvider<ZodTypeProvider>();

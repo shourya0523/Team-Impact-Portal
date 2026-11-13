@@ -336,6 +336,47 @@ describe('feeds: pages', () => {
     expect(jordan.find((p) => p.id === id(405))).toMatchObject({ commentCount: 2 });
   });
 
+  it('splits the home feed by chip: team, and everything else, each in feed order', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const isTeam = (p: { community: { kind: string } }) => p.community.kind === 'team';
+    for (const u of w.users) {
+      const all = w.feed(u);
+      for (const [scope, wanted] of [
+        ['team', all.filter(isTeam)],
+        ['communities', all.filter((p) => !isTeam(p))],
+      ] as const) {
+        const got = walk((cursor) => w.feedPage(u, { cursor, limit: 2, scope }), 2, wanted);
+        expect(got, `${u.firstName}, ${scope}`).toEqual(wanted);
+      }
+    }
+    const jordan = w.feedPage(USERS.jordan, { limit: 20, scope: 'communities' })!.items;
+    expect(jordan.some((p) => p.community.id === TEAM_IMPACT)).toBe(true);
+  });
+
+  it('never widens what a chip shows past the communities the reader reads', () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const coach = w.feedPage(USERS.coach, { limit: 100, scope: 'communities' })!.items;
+    expect(coach.length).toBeGreaterThan(0);
+    expect(coach.some((p) => p.community.id === MEDICAL)).toBe(false);
+  });
+
+  it('refuses a cursor from another chip', async () => {
+    const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
+    const team = w.feedPage(USERS.jordan, { limit: 1, scope: 'team' })!;
+    expect(team.nextCursor).not.toBeNull();
+    const cursor = team.nextCursor!;
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1, scope: 'communities' })).toBeNull();
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1 })).toBeNull();
+    expect(w.feedPage(USERS.jordan, { cursor, limit: 1, scope: 'team' })).not.toBeNull();
+
+    const { as } = await world();
+    const jordan = await as('athlete');
+    const first = (await jordan.get('/feed?scope=team&limit=1')).body;
+    const q = new URLSearchParams({ scope: 'communities', cursor: first.nextCursor });
+    expect((await jordan.get(`/feed?${q}`)).status).toBe(400);
+    expect((await jordan.get('/feed?scope=bogus')).status).toBe(400);
+  });
+
   it('refuses a cursor from another feed, even one the reader can’t see', () => {
     const w = new MockWorld({ identitySearch: true, medicalCommunities: true });
     const home = w.feedPage(USERS.jordan, { limit: 1 })!;

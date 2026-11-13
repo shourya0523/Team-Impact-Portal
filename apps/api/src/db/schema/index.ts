@@ -6,3 +6,4 @@ export * from './cards';
 export * from './community';
 export * from './employer';
 export * from './safety';
+export * from './auth';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CalendarDate, Id, Timestamp } from './common';
+import { CalendarDate, Id, PageQuery, Timestamp } from './common';
 import { type Community, CommunitySummary, type CommunityKind } from './communities';
 import { ModerationStatus } from './moderation';
 import type { Role } from './roles';
@@ -57,6 +57,18 @@ export type CreatePostRequest = z.infer<typeof CreatePostRequest>;
 /** Body of `POST /communities/:id/posts`: the community is in the path. */
 export const NewPostRequest = CreatePostRequest.omit({ communityId: true });
 export type NewPostRequest = z.infer<typeof NewPostRequest>;
+
+/**
+ * Which part of the home feed (the app's All, My team and Communities chips): `team` is your team
+ * communities, `communities` everything else you read, Team Impact's included. Filtered before
+ * paging, so every page is full; it only narrows what you already read.
+ */
+export const FeedScope = z.enum(['all', 'team', 'communities']);
+export type FeedScope = z.infer<typeof FeedScope>;
+
+/** Query of `GET /feed`. */
+export const FeedQuery = PageQuery.extend({ scope: FeedScope.default('all') });
+export type FeedQuery = z.input<typeof FeedQuery>;
 
 /**
  * Whether `role` may post into a community it sees (PRD §5 "Who can do what"): staff, coaches,
