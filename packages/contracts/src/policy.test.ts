@@ -107,6 +107,24 @@ describe('contacts', () => {
     );
   });
 
+  it('athletes’ family contacts go to approved parents on the team, never across a block', () => {
+    const parent = actor('parent', ['t1']);
+    expect(can(parent, 'team.athleteContacts', { teamId: 't1', blocked: false })).toBe(true);
+    expect(can(parent, 'team.athleteContacts', { teamId: 't1', blocked: true })).toBe(false);
+    expect(
+      can(actor('parent', ['t2']), 'team.athleteContacts', { teamId: 't1', blocked: false }),
+    ).toBe(false);
+    expect(can(actor('parent'), 'team.athleteContacts', { teamId: 't1', blocked: false })).toBe(
+      false,
+    );
+    for (const role of ['teen', 'athlete', 'coach', 'staff', 'recruiter'] as const) {
+      expect(
+        can(actor(role, ['t1']), 'team.athleteContacts', { teamId: 't1', blocked: false }),
+        role,
+      ).toBe(false);
+    }
+  });
+
   it('family contacts on a roster go to the team’s coaches only', () => {
     expect(can(actor('coach', ['t1']), 'team.familyContacts', { teamId: 't1' })).toBe(true);
     expect(can(actor('coach', ['t2']), 'team.familyContacts', { teamId: 't1' })).toBe(false);
