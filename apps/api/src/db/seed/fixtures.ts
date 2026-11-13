@@ -54,10 +54,10 @@ export const fixtureRows = (now = Date.now()) => {
       id: u.id,
       userType: u.role,
       email: u.email,
-      passwordHash: DEV_PASSWORD_HASH,
       firstName: u.firstName,
       lastName: u.lastName,
       dob: DOB[u.role] ?? '1998-03-01',
+      emailVerified: true,
       emailVerifiedAt: date(u.createdAt),
       createdAt: date(u.createdAt),
       openToRecruiting: card?.visibility.openToRecruiting ?? false,
@@ -72,6 +72,15 @@ export const fixtureRows = (now = Date.now()) => {
       gradYear: card?.face.classYear ?? null,
     };
   });
+
+  // Every seeded account signs in with email and password (Better Auth's "credential" account).
+  const authAccounts: Row<typeof schema.authAccounts>[] = fx.ALL_USERS.map((u) => ({
+    userId: u.id,
+    accountId: u.id,
+    providerId: 'credential',
+    password: DEV_PASSWORD_HASH,
+    createdAt: date(u.createdAt),
+  }));
 
   const consentRecords: Row<typeof schema.consentRecords>[] = fx.ALL_USERS.flatMap((u) => [
     {
@@ -335,6 +344,7 @@ export const fixtureRows = (now = Date.now()) => {
     [schema.orgs, orgs],
     [schema.orgDomains, orgDomains],
     [schema.users, users],
+    [schema.authAccounts, authAccounts],
     [schema.consentRecords, consentRecords],
     [schema.teams, teams],
     [schema.coachInvites, coachInvites],

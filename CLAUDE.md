@@ -9,7 +9,7 @@ Sprint board.
 - pnpm workspaces + Turborepo monorepo, TypeScript everywhere (TS 6.0; typescript-eslint doesn't support 7 yet)
 - `apps/athlete`: Expo SDK 57. Read `apps/athlete/AGENTS.md` first. Add native deps with `npx expo install`, never `pnpm add`
 - `apps/portal`: React 19 + Vite
-- `apps/api`: Fastify 5 + Drizzle + postgres-js. Auth is ours (argon2, signed cookies), no auth provider
+- `apps/api`: Fastify 5 + Drizzle + postgres-js. Auth is Better Auth (TI-101): an open-source library running inside the API, with all data in our Postgres (`users` plus `auth_*` tables), argon2 passwords and HttpOnly cookie sessions. No hosted auth provider. Our product rules (age gate, recruiter domains, suspensions) live in its hooks in `apps/api/src/identity`
 - `packages/contracts`: Zod 4 schemas shared by API and clients. No OpenAPI or codegen
 - `packages/ui-tokens`: plain numbers/hex only, must work on native, RN Web and the portal. Primitives (Button, Input, Card, Avatar, Badge, Sheet) are NOT here: they need RN or the DOM, so they live in `apps/athlete/src/ui` and `apps/portal/src/ui`, built only from these tokens (matches Notion TI-12)
 - Hosting: DigitalOcean (App Platform, Managed Postgres, Valkey, Spaces). No provider-specific primitives

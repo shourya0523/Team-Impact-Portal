@@ -1,11 +1,11 @@
 # Data model
 
 The schema TI-14 implements: the TI-4 v2 model (PRD v2, see the TI-4 v2 validation doc) plus PRD
-v2.1 team onboarding (TI-148/TI-149) and PRD v2.3 communities (migration `0003_communities`).
-**32 tables.** Source of truth is
+v2.1 team onboarding (TI-148/TI-149), PRD v2.3 communities (migration `0003_communities`) and
+Better Auth's tables (TI-101, migration `0004_better_auth`). **35 tables.** Source of truth is
 `apps/api/src/db/schema/`; this page explains it. If you change the schema, update the diagrams here.
 
-## How the count gets to 32
+## How the count gets to 35
 
 | Step                                                                                                 | Tables |
 | ---------------------------------------------------------------------------------------------------- | ------ |
@@ -14,7 +14,8 @@ v2.1 team onboarding (TI-148/TI-149) and PRD v2.3 communities (migration `0003_c
 | + `children`, `join_codes`, `join_requests`, `blocks`, `org_domains`, `contact_visibility` (TI-4 v2) | 31     |
 | − `seats`, `contact_requests` (gone in PRD v2)                                                       | 29     |
 | + `coach_invites` (PRD v2.1); `schools` renamed `colleges`                                           | 30     |
-| + `community_join_requests`, `notifications` (PRD v2.3); `groups` renamed `communities`              | **32** |
+| + `community_join_requests`, `notifications` (PRD v2.3); `groups` renamed `communities`              | 32     |
+| + `auth_sessions`, `auth_accounts`, `auth_verifications` (TI-101, Better Auth)                       | **35** |
 
 Identity-search auditing is an `events_log` event (`search.identity_filter`), not its own table.
 Event names and properties are defined once, in `packages/contracts/src/analytics.ts`.
@@ -350,6 +351,20 @@ erDiagram
         text body
     }
 ```
+
+## Sign-in (TI-101, Better Auth)
+
+Better Auth uses `users` itself as its user table, and adds three tables of its own
+(`db/schema/auth.ts`, migration `0004_better_auth`). Everything stays in our Postgres.
+
+- `users` loses `password_hash`. Passwords (argon2) live in `auth_accounts`, one row per way of
+  signing in; email and password is `provider_id = 'credential'`. The migration copies every
+  existing hash across before dropping the column, so seeded and existing accounts keep working.
+- `users` gains `email_verified` (Better Auth's flag; `email_verified_at` still records when),
+  `image` (avatar URL) and `updated_at`. Better Auth's `name` is `first_name`.
+- `auth_sessions`: one row per signed-in device. Deleting the row ends the session at once.
+- `auth_verifications`: short-lived values behind emailed links, such as password resets.
+- All three cascade on user deletion, so the 30-day erasure job removes them too.
 
 ## Decisions beyond the TI-4 doc
 
