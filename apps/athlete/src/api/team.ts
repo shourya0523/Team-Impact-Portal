@@ -5,6 +5,7 @@ import type {
   QrCodeJoin,
   RemoveMemberResult,
   Team,
+  TeamAthleteContacts,
   TeamQrCode,
   TeamRoster,
   UpdateTeamRequest,
@@ -14,6 +15,9 @@ import { post, request } from './client';
 /** Coach team management: approvals, roster, QR codes, coach invites, team edits. */
 export const team = {
   roster: (teamId: string) => request<TeamRoster>(`/teams/${teamId}/members`),
+  /** Parents on the team only: what each athlete shares with families (403 for anyone else). */
+  athleteContacts: (teamId: string) =>
+    request<TeamAthleteContacts>(`/teams/${teamId}/athlete-contacts`),
   removeMember: (teamId: string, userId: string) =>
     request<RemoveMemberResult>(`/teams/${teamId}/members/${userId}`, { method: 'DELETE' }),
   updateTeam: (teamId: string, body: UpdateTeamRequest) =>

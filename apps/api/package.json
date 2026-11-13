@@ -19,12 +19,16 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@better-auth/expo": "1.7.12",
     "@fastify/cookie": "^11.1.2",
     "@fastify/cors": "^11.3.0",
     "@team-impact/contracts": "workspace:*",
     "@team-impact/ui-tokens": "workspace:*",
+    "argon2": "^0.45.1",
+    "better-auth": "1.7.12",
     "drizzle-orm": "^0.45.3",
     "fastify": "^5.12.5",
+    "nodemailer": "^10.2.1",
     "postgres": "^3.4.9",
     "zod": "^4.6.5"
   },
@@ -32,6 +36,7 @@
     "@electric-sql/pglite": "^0.5.8",
     "@faker-js/faker": "^10.6.0",
     "@types/node": "^22.0.0",
+    "@types/nodemailer": "^8.0.2",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
     "tsx": "^4.23.15",

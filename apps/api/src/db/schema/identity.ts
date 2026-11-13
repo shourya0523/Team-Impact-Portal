@@ -33,16 +33,26 @@ export const users = pgTable(
     id: id(),
     userType: userType('user_type').notNull(),
     email: text('email').notNull().unique(),
-    passwordHash: text('password_hash').notNull(),
+    // Better Auth (TI-101) owns sign-in: passwords live in auth_accounts, never here. It reads the
+    // user's display name from `firstName` (its `name` field) and needs `emailVerified`, `image`
+    // and `updatedAt`; see src/identity/auth.ts.
+    emailVerified: boolean('email_verified').notNull().default(false),
     firstName: text('first_name').notNull(),
     lastName: text('last_name').notNull(),
     dob: date('dob', { mode: 'string' }).notNull(),
+    // When the email was verified; set alongside `emailVerified` by the auth hooks.
     emailVerifiedAt: at('email_verified_at'),
+    // Avatar URL (Better Auth's `image`).
+    image: text('image'),
     status: userStatus('status').notNull().default('active'),
     // Requires a published card; enforced in the access layer.
     openToRecruiting: boolean('open_to_recruiting').notNull().default(false),
     channelPreference: channelPreference('channel_preference').notNull().default('both'),
     createdAt: createdAt(),
+    updatedAt: at('updated_at')
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
     // Account deletion: hidden as soon as this is set, hard-deleted with cascade after 30 days (TI-79).
     deletedAt: at('deleted_at'),
 
