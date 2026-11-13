@@ -22,14 +22,14 @@ const byKeyword = vi.fn<Screen>(async ({ text }) =>
 
 type Method = 'GET' | 'POST';
 
-/** One mock API screened by `byKeyword`, with several signed-in clients. */
-const world = async () => {
+/** One mock API screened by `screen` (default `byKeyword`), with several signed-in clients. */
+const world = async (screen: Screen = byKeyword) => {
   byKeyword.mockClear();
   const app = await buildApp({
     sessionSecret: 'x'.repeat(32),
     corsOrigins: [],
     mock: true,
-    screen: byKeyword,
+    screen,
   });
   close = () => app.close();
   const as = async (role: Role) => {
@@ -188,5 +188,32 @@ describe('screening comments, events and communities', () => {
     expect((await make('Threat club')).status).toBe(422);
     expect((await make('Rude jokes')).body.moderation).toBe('in_review');
     expect((await make('Chess')).body.moderation).toBe('approved');
+  });
+
+  it('lets only one of two creates racing on the same name through the screen', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const slow = vi.fn<Screen>(async () => {
+      await gate;
+      return { outcome: 'allow', flags: [] };
+    });
+    const { as } = await world(slow);
+    const athlete = await as('athlete');
+    const coach = await as('coach');
+    const body = { kind: 'interest', name: 'Night owls', about: 'Late lifts', private: false };
+
+    const both = Promise.all([
+      athlete.post('/communities', body),
+      coach.post('/communities', body),
+    ]);
+    // Both passed the first name check and are waiting on the screen.
+    await vi.waitFor(() => expect(slow).toHaveBeenCalledTimes(2));
+    release();
+    const statuses = (await both).map((r) => r.status).sort();
+    expect(statuses).toEqual([201, 409]);
+    const named = (await athlete.get('/communities')).body.filter(
+      (c: { name: string }) => c.name === 'Night owls',
+    );
+    expect(named).toHaveLength(1);
   });
 });

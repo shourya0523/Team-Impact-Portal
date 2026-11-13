@@ -1,11 +1,18 @@
 /**
- * Automated screening of new posts, comments, events and community names (PRD §9). Each item is
- * screened before anyone but its author sees it, and the screen decides what happens next:
- * `allow` publishes it, `hold` queues it for staff, `block` takes it down at once. Team Impact
- * staff content is exempt and never sent here (`../mock/activity.ts`).
+ * Automated screening of new posts, comments, events and communities (PRD §9, CLAUDE.md). Each
+ * item is screened before anyone but its author sees it:
  *
- * The screen fails closed: when OpenAI can't be reached or answers with something unexpected, the
- * item is held for staff, never let through.
+ * - not flagged: `allow`, published at once;
+ * - flagged with lower confidence: `hold`, queued for staff review (`in_review`);
+ * - flagged with high confidence: `block`, never published (staff still see it, resolved).
+ *
+ * A category is flagged when OpenAI flags it or its score reaches `holdAt`; it is high confidence
+ * at `blockAt`. `sexual/minors` blocks whenever it is flagged, whatever its score. Team Impact
+ * staff content is exempt and never sent here (`./mock/activity.ts`).
+ *
+ * The screen fails closed: when OpenAI can't be reached, times out, answers with something
+ * unexpected, or no key is configured, the item is held for staff, never let through. Only the
+ * item's text, and a post photo's URL, are sent (docs/moderation.md).
  */
 
 export interface ScreenInput {
@@ -23,22 +30,20 @@ export interface Verdict {
 export type Screen = (input: ScreenInput) => Promise<Verdict>;
 
 export interface Thresholds {
-  /** Any category scoring this or more is held for staff. */
+  /** A category scoring this or more counts as flagged, even if OpenAI didn't flag it: held. */
   holdAt: number;
-  /** Any category scoring this or more is blocked outright. */
+  /** A flagged category scoring this or more is high confidence: blocked. */
   blockAt: number;
 }
 
+/**
+ * Defaults for `MODERATION_HOLD_AT` and `MODERATION_BLOCK_AT`. Cautious for a platform with
+ * children: a 0.3 score is already worth a person's look, and 0.85 is clear enough to block.
+ */
 export const DEFAULT_THRESHOLDS: Thresholds = { holdAt: 0.3, blockAt: 0.85 };
 
-/** No tolerance on a platform with children: anything worth holding is blocked. */
-const BLOCK_AT_HOLD = new Set(['sexual/minors']);
-
-/**
- * Never blocked, only held: someone writing about self-harm may need help, and staff should see
- * it and reach out rather than the post silently disappearing.
- */
-const NEVER_BLOCK = new Set(['self-harm', 'self-harm/intent', 'self-harm/instructions']);
+/** No tolerance on a platform with children: blocked whenever flagged, whatever the score. */
+const ALWAYS_BLOCK = new Set(['sexual/minors']);
 
 /** Without OpenAI configured every item waits for staff, as before screening existed. */
 export const holdEverything: Screen = async () => ({ outcome: 'hold', flags: [] });
@@ -46,19 +51,24 @@ export const holdEverything: Screen = async () => ({ outcome: 'hold', flags: [] 
 /** Staff content, and anything else exempt from screening. */
 export const ALLOWED: Verdict = { outcome: 'allow', flags: [] };
 
-/** The decision for one set of OpenAI category scores. */
+/**
+ * The decision for one OpenAI result: its category scores, and the categories OpenAI itself
+ * flagged (`categories`, true when flagged).
+ */
 export const verdictFrom = (
   scores: Record<string, number>,
   { holdAt, blockAt }: Thresholds = DEFAULT_THRESHOLDS,
+  flaggedByOpenAi: Record<string, boolean> = {},
 ): Verdict => {
-  const over = Object.entries(scores)
-    .filter(([, score]) => score >= holdAt)
+  const categories = new Set([...Object.keys(scores), ...Object.keys(flaggedByOpenAi)]);
+  const flagged = [...categories]
+    .map((category) => [category, scores[category] ?? 0] as const)
+    .filter(([category, score]) => score >= holdAt || flaggedByOpenAi[category] === true)
     .sort(([, a], [, b]) => b - a);
-  const flags = over.map(([category]) => category);
-  const blocked = over.some(
-    ([category, score]) =>
-      !NEVER_BLOCK.has(category) && (BLOCK_AT_HOLD.has(category) || score >= blockAt),
+  const blocked = flagged.some(
+    ([category, score]) => ALWAYS_BLOCK.has(category) || score >= blockAt,
   );
+  const flags = flagged.map(([category]) => category);
   return { outcome: blocked ? 'block' : flags.length ? 'hold' : 'allow', flags };
 };
 
@@ -74,7 +84,10 @@ export interface OpenAiScreenOptions {
 
 const MODERATIONS_URL = 'https://api.openai.com/v1/moderations';
 
-/** Screens with OpenAI's moderation endpoint (free, text and images in one call). */
+/**
+ * Screens with OpenAI's moderation endpoint (free, text and images in one call). Sends only the
+ * text and photo URL, with no account, name or other identifier.
+ */
 export const openAiScreen = ({
   apiKey,
   thresholds = DEFAULT_THRESHOLDS,
@@ -99,11 +112,18 @@ export const openAiScreen = ({
       });
       if (!res.ok) throw new Error(`OpenAI moderation answered ${res.status}`);
       const body = (await res.json()) as {
-        results?: { category_scores?: Record<string, number> }[];
+        results?: {
+          categories?: Record<string, boolean>;
+          category_scores?: Record<string, number>;
+        }[];
       };
-      const scores = body.results?.[0]?.category_scores;
-      if (!scores || typeof scores !== 'object') throw new Error('OpenAI moderation: no scores');
-      return verdictFrom(scores, thresholds);
+      const result = body.results?.[0];
+      const scores = result?.category_scores;
+      if (!scores || typeof scores !== 'object' || Object.keys(scores).length === 0) {
+        throw new Error('OpenAI moderation: no scores');
+      }
+      const flagged = typeof result?.categories === 'object' ? (result.categories ?? {}) : {};
+      return verdictFrom(scores, thresholds, flagged);
     } catch (error) {
       onError(error);
       return { outcome: 'hold', flags: [] };

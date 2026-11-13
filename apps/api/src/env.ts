@@ -23,7 +23,10 @@ const EnvSchema = z
     FLAG_MEDICAL_COMMUNITIES: z.stringbool().default(true),
     /** Screens new content with OpenAI moderation. Without it, everything waits for staff. */
     OPENAI_API_KEY: z.string().min(1).optional(),
-    /** OpenAI category scores (0 to 1) at which new content is held for staff, or blocked. */
+    /**
+     * OpenAI category scores (0 to 1). Content OpenAI flags, or scoring `MODERATION_HOLD_AT` or
+     * more, is held for staff; flagged content scoring `MODERATION_BLOCK_AT` or more is blocked.
+     */
     MODERATION_HOLD_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.holdAt),
     MODERATION_BLOCK_AT: z.coerce.number().min(0).max(1).default(DEFAULT_THRESHOLDS.blockAt),
   })

@@ -33,11 +33,17 @@ export const registerCommunityCreateRoutes = (
         throw httpError(403, 'You can’t create this kind of community');
       }
       // Names are unique per kind, ignoring case; held names count, removed ones don't.
-      const taken = world.communities.some(
-        (c) => c.kind === kind && c.moderation !== 'removed' && sameName(c.name, name),
-      );
-      if (taken) throw httpError(409, 'A community with that name already exists');
+      const refuseTaken = () => {
+        const taken = world.communities.some(
+          (c) => c.kind === kind && c.moderation !== 'removed' && sameName(c.name, name),
+        );
+        if (taken) throw httpError(409, 'A community with that name already exists');
+      };
+      // Checked before screening, so a taken name isn't sent out, and again after it: another
+      // request may have taken the name while this one waited on the screen.
+      refuseTaken();
       const verdict = await screenNew(world, u, { text: `${name}\n${about}` });
+      refuseTaken();
       const now = new Date().toISOString();
       const userMade = {
         id: world.newId(),

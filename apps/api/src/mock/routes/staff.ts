@@ -66,10 +66,16 @@ export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole
       if (decided && ticket.resolution !== resolution) {
         throw httpError(409, 'This ticket is already decided');
       }
+      // A retried request must not warn or suspend the author a second time from this ticket.
+      const action =
+        authorAction &&
+        !world.staffTools.log.some((e) => e.ticketId === ticket.id && e.action === authorAction)
+          ? authorAction
+          : undefined;
       // Check the author action first, so a refused suspension leaves the ticket untouched.
-      const author = authorAction ? authorOf(world, ticket.target) : null;
+      const author = action ? authorOf(world, ticket.target) : null;
       if (author && 'status' in author) throw httpError(author.status, author.message);
-      if (author && authorAction === 'suspend') {
+      if (author && action === 'suspend') {
         const refused = cannotSuspend(world, author);
         if (refused) throw httpError(refused.status, refused.message);
       }
@@ -86,8 +92,8 @@ export const registerStaffRoutes = (app: ZodApp, world: MockWorld, { requireRole
           { ticketId: ticket.id, note: note ?? null },
         );
       }
-      if (author && authorAction === 'warn') warn(world, staff, author, ticket, note ?? null);
-      if (author && authorAction === 'suspend') {
+      if (author && action === 'warn') warn(world, staff, author, ticket, note ?? null);
+      if (author && action === 'suspend') {
         suspend(world, staff, author, { reason: note ?? null, ticketId: ticket.id });
       }
       return ticket;

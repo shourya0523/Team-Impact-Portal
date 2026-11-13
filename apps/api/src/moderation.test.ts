@@ -23,9 +23,26 @@ describe('verdictFrom', () => {
     });
   });
 
-  it('never blocks self-harm, only holds it so staff can reach out', () => {
-    expect(verdictFrom({ ...clean, 'self-harm': 0.99, 'self-harm/intent': 0.97 })).toEqual({
+  it('blocks sexual content involving minors whenever OpenAI flags it, whatever the score', () => {
+    expect(
+      verdictFrom({ ...clean, 'sexual/minors': 0.05 }, undefined, { 'sexual/minors': true }),
+    ).toEqual({ outcome: 'block', flags: ['sexual/minors'] });
+  });
+
+  it('holds what OpenAI flags even under the hold threshold', () => {
+    expect(verdictFrom({ ...clean, harassment: 0.2 }, undefined, { harassment: true })).toEqual({
       outcome: 'hold',
+      flags: ['harassment'],
+    });
+    expect(verdictFrom(clean, undefined, { harassment: false })).toEqual({
+      outcome: 'allow',
+      flags: [],
+    });
+  });
+
+  it('blocks every category flagged with high confidence, self-harm included', () => {
+    expect(verdictFrom({ ...clean, 'self-harm': 0.99, 'self-harm/intent': 0.97 })).toEqual({
+      outcome: 'block',
       flags: ['self-harm', 'self-harm/intent'],
     });
   });
@@ -60,6 +77,20 @@ describe('openAiScreen', () => {
     ]);
   });
 
+  it('uses OpenAI’s own flags alongside the scores', async () => {
+    const fetch = answer({
+      results: [
+        {
+          flagged: true,
+          categories: { harassment: true, violence: false },
+          category_scores: { ...clean, harassment: 0.1 },
+        },
+      ],
+    });
+    const screen = openAiScreen({ apiKey: 'k', fetch });
+    expect(await screen({ text: 'x' })).toEqual({ outcome: 'hold', flags: ['harassment'] });
+  });
+
   it('decides on the scores with the configured thresholds', async () => {
     const fetch = answer({
       results: [{ flagged: true, category_scores: { ...clean, hate: 0.6 } }],
@@ -73,6 +104,10 @@ describe('openAiScreen', () => {
     const failing = [
       answer({ error: { message: 'rate limited' } }, 429),
       answer({ results: [] }),
+      answer({ results: [{ flagged: false, category_scores: {} }] }),
+      vi.fn<typeof fetch>(async () => {
+        throw new DOMException('The operation timed out.', 'TimeoutError');
+      }),
       vi.fn<typeof fetch>(async () => {
         throw new TypeError('fetch failed');
       }),
@@ -82,5 +117,18 @@ describe('openAiScreen', () => {
       expect(await screen({ text: 'x' })).toEqual({ outcome: 'hold', flags: [] });
     }
     expect(onError).toHaveBeenCalledTimes(failing.length);
+  });
+
+  it('gives up on a slow answer and holds for staff', async () => {
+    const hanging = vi.fn<typeof fetch>(
+      (_url, init) =>
+        new Promise((_resolve, reject) =>
+          init?.signal?.addEventListener('abort', () => reject(init.signal?.reason)),
+        ),
+    );
+    const onError = vi.fn();
+    const screen = openAiScreen({ apiKey: 'k', fetch: hanging, timeoutMs: 10, onError });
+    expect(await screen({ text: 'x' })).toEqual({ outcome: 'hold', flags: [] });
+    expect(onError).toHaveBeenCalledOnce();
   });
 });
