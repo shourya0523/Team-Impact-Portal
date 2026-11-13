@@ -57,9 +57,11 @@ export type NewEventRequest = z.infer<typeof NewEventRequest>;
 /**
  * Whether `role` may create an event in a community it sees (PRD §5): never parents or teens;
  * members otherwise. Recruiters belong to no community, so they host only in official interest
- * communities, the one place sponsors reach athletes.
+ * communities, the one place sponsors reach athletes. Nobody hosts in a community still waiting
+ * for review.
  */
 export const canCreateEventIn = (role: Role, community: Community) => {
+  if (community.moderation !== 'approved') return false;
   if (role === 'parent' || role === 'teen') return false;
   if (role === 'recruiter') return community.kind === 'interest' && community.official;
   return community.myMembership !== null;

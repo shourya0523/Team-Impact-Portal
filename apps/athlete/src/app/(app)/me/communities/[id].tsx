@@ -8,6 +8,7 @@ import { colors, layout, spacing } from '@team-impact/ui-tokens';
 import { api } from '@/api';
 import { describeError } from '@/api/errors';
 import { KIND_LABEL, ROLE_LABEL, shortDate } from '@/components/format';
+import { HeldNote } from '@/components/activity';
 import { ReportButton } from '@/components/Report';
 import { CommunityEvents, CommunityMembers } from '@/components/community-tabs';
 import { PostCard } from '@/components/post-card';
@@ -186,6 +187,9 @@ export default function CommunityDetail() {
           const userMade = x.kind === 'interest' || x.kind === 'medical' ? x : null;
           const isPrivate = userMade?.private ?? false;
           const isCreator = !!me && userMade?.createdBy.id === me.id;
+          // A new community waits for Team Impact to check its name and description; until then
+          // only its creator (and staff) can see it, so there's no one to post to or join with.
+          const held = x.moderation !== 'approved';
           const canPost = !!role && canPostIn(role, x);
           // Passed as an element, not a component made here, so a re-render doesn't remount it
           // (and reset the Events tab).
@@ -234,6 +238,8 @@ export default function CommunityDetail() {
                       {x.name}
                     </Text>
                     <Text color="secondary">{x.about}</Text>
+                    {/* Staff see every held community; the note is for the one who made it. */}
+                    {held && isCreator && <HeldNote what="community" />}
                   </View>
                   {userMade && !isCreator && (
                     <ReportButton target={{ kind: 'community', id: x.id }} />
@@ -257,6 +263,7 @@ export default function CommunityDetail() {
                     />
                   ) : (
                     !x.myMembership &&
+                    !held &&
                     role &&
                     canJoinCommunity(role, x.kind) &&
                     (userMade?.myJoinRequest ? (
