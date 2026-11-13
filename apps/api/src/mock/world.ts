@@ -9,6 +9,7 @@ import {
   consentFlags,
   type ContactSharing,
   type FeatureFlags,
+  type FeedScope,
   type IdentitySearchLogEntry,
   type Me,
   type NotificationPrefs,
@@ -376,9 +377,18 @@ export class MockWorld {
     return page && { items: this.shape(page.posts, communityOf, u), nextCursor: page.nextCursor };
   };
 
-  /** One page of `u`'s home feed. */
-  feedPage = (u: MockUser, request: PageRequest) =>
-    this.pageIn(this.homeCommunities(u), u, 'home', request);
+  /**
+   * One page of `u`'s home feed, or the part of it `scope` picks (the app's chips). Each scope is
+   * its own feed (`home:team`), so a cursor from one chip is refused on another.
+   */
+  feedPage = (u: MockUser, { scope = 'all', ...request }: PageRequest & { scope?: FeedScope }) => {
+    const home = this.homeCommunities(u);
+    const inScope =
+      scope === 'all'
+        ? home
+        : new Map([...home].filter(([, c]) => (c.kind === 'team') === (scope === 'team')));
+    return this.pageIn(inScope, u, scope === 'all' ? 'home' : `home:${scope}`, request);
+  };
 
   /** One page of a community's own feed: empty for anyone who doesn't read it. */
   communityFeedPage = (c: MockCommunity, u: MockUser, request: PageRequest) =>
