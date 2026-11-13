@@ -341,7 +341,7 @@ describe('pilot completion query', () => {
       addUser(),
       addUser(),
       addUser(),
-      addUser('alumni'),
+      addUser('alumni_athlete'),
     ]);
     const parent = await addUser('parent');
     for (const athlete of [fast!, slow!, unfinished!]) {
