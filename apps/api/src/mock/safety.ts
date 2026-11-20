@@ -213,6 +213,8 @@ export const deleteAccount = (world: MockWorld, u: MockUser): [number, string] |
   // Coaches they added stay on the team; who added them is no longer recorded (data model: set null).
   for (const m of world.teamMembers) if (m.addedById && gone(m.addedById)) m.addedById = null;
   removeWhere(world.blocks, (b) => gone(b.blockerId) || gone(b.blockedId));
+  // Their files go too, children's photos included (a parent owns their child's photo).
+  removeWhere(world.uploads, (x) => gone(x.ownerId));
   removeWhere(world.consentRecords, (r) => gone(r.userId));
   removeWhere(world.reports, (r) => gone(r.reporterId));
   for (const l of world.lists) {
