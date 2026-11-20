@@ -111,7 +111,7 @@ function ChildCard({ child }: { child: ChildProfile }) {
                 size="sm"
                 stretch
                 onPress={() =>
-                  router.push({ pathname: '/me/profile/[id]', params: { id: current.id } })
+                  router.push({ pathname: '/child/profile/[id]', params: { id: current.id } })
                 }
               />
             </View>
