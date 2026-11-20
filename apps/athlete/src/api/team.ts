@@ -20,6 +20,8 @@ export const team = {
     request<TeamAthleteContacts>(`/teams/${teamId}/athlete-contacts`),
   removeMember: (teamId: string, userId: string) =>
     request<RemoveMemberResult>(`/teams/${teamId}/members/${userId}`, { method: 'DELETE' }),
+  /** Parents only: takes the family off the team, children included. */
+  leaveTeam: (teamId: string) => post<void>(`/teams/${teamId}/leave`),
   updateTeam: (teamId: string, body: UpdateTeamRequest) =>
     request<Team>(`/teams/${teamId}`, { method: 'PATCH', body: JSON.stringify(body) }),
 

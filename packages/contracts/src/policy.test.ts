@@ -241,6 +241,14 @@ describe('teams', () => {
     expect(can(actor('coach', ['t1']), 'team.manage', { teamId: 't1' })).toBe(true);
     expect(can(actor('athlete', ['t1']), 'team.manage', { teamId: 't1' })).toBe(false);
   });
+
+  it('a parent can leave their own team; nobody else leaves on their own', () => {
+    expect(can(actor('parent', ['t1']), 'team.leave', { teamId: 't1' })).toBe(true);
+    expect(can(actor('parent', ['t2']), 'team.leave', { teamId: 't1' })).toBe(false);
+    for (const role of ['athlete', 'teen', 'coach', 'staff', 'recruiter'] as const) {
+      expect(can(actor(role, ['t1']), 'team.leave', { teamId: 't1' })).toBe(false);
+    }
+  });
 });
 
 describe('blocks', () => {

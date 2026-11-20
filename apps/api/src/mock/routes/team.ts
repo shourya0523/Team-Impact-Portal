@@ -142,6 +142,17 @@ export const registerTeamRoutes = (app: ZodApp, world: MockWorld, { viewer }: Gu
     },
   );
 
+  // A parent leaves on their own, and their children leave with them (see `removeMember`).
+  app.post('/teams/:id/leave', { schema: { params: IdParams } }, async (request, reply) => {
+    const u = visibleTeam(request, request.params.id);
+    if (!area.canLeaveTeam(world, u, request.params.id)) {
+      throw httpError(403, 'Ask one of the team’s coaches to take you off the team');
+    }
+    const result = area.removeMember(world, request.params.id, u.id);
+    if ('error' in result) throw httpError(result.status, result.error);
+    return reply.status(204).send();
+  });
+
   // QR codes --------------------------------------------------------------------------------------
 
   app.get(

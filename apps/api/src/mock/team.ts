@@ -215,6 +215,10 @@ export const isCoachOf = (world: MockWorld, u: MockUser, teamId: string) =>
 export const canManageTeam = (world: MockWorld, u: MockUser, teamId: string) =>
   can(actorOf(world, u), 'team.manage', { teamId });
 
+/** Parents can take their family off a team; everyone else is taken off by a coach. */
+export const canLeaveTeam = (world: MockWorld, u: MockUser, teamId: string) =>
+  can(actorOf(world, u), 'team.leave', { teamId });
+
 /** The roster is for the team itself and staff; everyone else gets a 404. */
 export const canSeeRoster = (world: MockWorld, u: MockUser, teamId: string) =>
   can(actorOf(world, u), 'team.roster', { teamId });
