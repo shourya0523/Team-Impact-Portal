@@ -48,7 +48,8 @@ const signIn = async (role: Role, { devOutbox = false } = {}) => {
     payload?: object,
   ) => {
     const r = await app.inject({ method, url, payload, cookies: { [cookie.name]: cookie.value } });
-    return { status: r.statusCode, body: r.json(), text: r.body };
+    // A 204 has no body to parse.
+    return { status: r.statusCode, body: r.body ? r.json() : undefined, text: r.body };
   };
   return { call };
 };
@@ -299,6 +300,35 @@ describe('team: removing members', () => {
     const { call } = await signIn('athlete');
     const res = await call('DELETE', `/teams/${TEAM}/members/${USERS.sam.id}`);
     expect(res.status).toBe(403);
+  });
+});
+
+describe('team: a parent leaving', () => {
+  it('takes the parent and their child off the team', async () => {
+    const { call } = await signIn('parent');
+    expect((await call('POST', `/teams/${TEAM}/leave`)).status).toBe(204);
+    expect((await call('GET', '/me')).body.teamIds).not.toContain(TEAM);
+    expect((await call('GET', `/teams/${TEAM}/members`)).status).toBe(404);
+    // Mateo is still Lisa's to see, but no longer on a team.
+    const mateo = await call('GET', `/profiles/${MATEO.id}`);
+    expect(mateo.status).toBe(200);
+    expect(mateo.body.team).toBeNull();
+    // Leaving again finds no team to leave.
+    expect((await call('POST', `/teams/${TEAM}/leave`)).status).toBe(404);
+  });
+
+  it('only parents leave on their own; the coach takes others off', async () => {
+    for (const role of ['athlete', 'teen', 'coach'] as const) {
+      const { call } = await signIn(role);
+      expect((await call('POST', `/teams/${TEAM}/leave`)).status, role).toBe(403);
+      expect((await call('GET', `/teams/${TEAM}/members`)).status, role).toBe(200);
+      await close?.();
+    }
+  });
+
+  it('is not found for anyone off the team', async () => {
+    const { call } = await signIn('recruiter');
+    expect((await call('POST', `/teams/${TEAM}/leave`)).status).toBe(404);
   });
 });
 

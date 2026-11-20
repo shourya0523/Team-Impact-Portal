@@ -336,6 +336,14 @@ export default function TeamScreen() {
                     Contact details stay private between athletes, families and coaches.
                   </Text>
                 )}
+                {parent && (
+                  <Button
+                    label="Leave team"
+                    variant="secondary"
+                    size="sm"
+                    onPress={() => router.push('/team/leave')}
+                  />
+                )}
               </>
             )
           }

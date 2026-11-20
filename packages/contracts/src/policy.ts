@@ -109,6 +109,7 @@ interface Targets {
    */
   'team.listMember': { teamId: string; memberId: string; blocked: boolean };
   'team.manage': { teamId: string };
+  'team.leave': { teamId: string };
   'team.familyContacts': { teamId: string };
   /**
    * One athlete's family-shared contacts on the team's Athletes list (PRD §6, F4). `blocked`: the
@@ -245,6 +246,11 @@ const RULES: { [A in Action]: (a: Actor, t: Targets[A]) => boolean } = {
 
   // Approve, remove, edit, make codes and invite coaches.
   'team.manage': (a, t) => a.role === 'staff' || (a.role === 'coach' && onTeam(a, t.teamId)),
+
+  // A parent can take their family off the team (their children go with them). Athletes and
+  // teens are on a team because they play for it, so the coach takes them off; a coach leaves
+  // through staff, since a team always keeps a coach.
+  'team.leave': (a, t) => a.role === 'parent' && onTeam(a, t.teamId),
 
   // The team's own coaches only. Staff manage the team but don't need a family's phone.
   'team.familyContacts': (a, t) => a.role === 'coach' && onTeam(a, t.teamId),
