@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { Community, FeedScope } from '@team-impact/contracts';
@@ -118,6 +118,11 @@ export default function Home() {
   const feed = usePaged((cursor) => api.feed(cursor, filter), [filter]);
   useRefreshOnPostsChanged(feed.refresh);
   const communities = useApi(() => api.communities());
+  // The bell's dot means something unread; checked again whenever Home is back in view, so it
+  // clears after reading them on the notifications screen.
+  const notifications = useApi(() => api.notifications());
+  useFocusEffect(notifications.reload);
+  const unread = notifications.state.status === 'ready' ? notifications.state.data.unreadCount : 0;
   const canPost = role !== 'parent' && role !== 'recruiter';
 
   return (
@@ -128,8 +133,8 @@ export default function Home() {
         <View style={styles.actions}>
           <IconButton
             icon="bell"
-            label="Notifications"
-            dot
+            label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
+            dot={unread > 0}
             onPress={() => router.push('/home/notifications')}
           />
           {me && (
